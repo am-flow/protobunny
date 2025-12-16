@@ -1,0 +1,14 @@
+/*
+This .proto file contains protobuf message definitions for tests
+*/
+syntax = "proto3";
+import "commons.proto";
+
+package tests.tasks;
+
+
+message TaskMessage {
+  string content = 10;
+  repeated float bbox = 30 [packed = true];
+  optional commons.JsonContent options=40;
+}
