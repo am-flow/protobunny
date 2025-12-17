@@ -16,6 +16,9 @@ class TestIntegration:
     log_msg = None
     msg = pb.tests.TestMessage(content="test", number=123, color=pb.tests.Color.GREEN)
 
+    def teardown_class(self) -> None:
+        pb.stop_connection()
+
     def teardown_method(self):
         self.received = None
         self.log_msg = None
