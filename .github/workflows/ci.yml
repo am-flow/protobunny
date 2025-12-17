@@ -83,10 +83,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - name: Wait for RabbitMQ
-        run: |
-          echo "Waiting for RabbitMQ to be ready..."
-          timeout 60 bash -c 'until curl -f http://localhost:15672/api/healthchecks/node >/dev/null 2>&1; do sleep 2; done'
 
       - name: Setup RabbitMQ virtual host
         run: |
