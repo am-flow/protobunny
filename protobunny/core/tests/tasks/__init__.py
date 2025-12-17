@@ -17,6 +17,4 @@ class TaskMessage(base.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     weights: List[float] = betterproto.float_field(30)
     bbox: List[int] = betterproto.int64_field(40)
-    options: Optional[Union["__commons__.JsonContent", Dict]] = betterproto.message_field(
-        50, optional=True
-    )
+    options: __commons__.JsonContent | dict | None = betterproto.message_field(50, optional=True)

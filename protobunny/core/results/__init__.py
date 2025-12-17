@@ -26,6 +26,4 @@ class Result(base.MessageMixin, betterproto.Message):
     source_message: "betterproto_lib_google_protobuf.Any" = betterproto.message_field(1)
     return_code: "ReturnCode" = betterproto.enum_field(2)
     error: Optional[str] = betterproto.string_field(3, optional=True)
-    return_value: Optional[Union["_commons__.JsonContent", Dict]] = betterproto.message_field(
-        4, optional=True
-    )
+    return_value: _commons__.JsonContent | dict | None = betterproto.message_field(4, optional=True)

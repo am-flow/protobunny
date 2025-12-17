@@ -164,44 +164,6 @@ def replace_typing_import(source: str, new_import: str) -> str:
     return pattern.sub(repl, source, count=1)
 
 
-def ensure_imports(source: str) -> str:
-    """Ensure that Union and Dict are imported from typing.
-
-    Args:
-        source: The __init__.py source code.
-    """
-    # Check if there's already a typing import
-    tree = ast.parse(source)
-    imported = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "typing":
-            for alias in node.names:
-                imported.add(alias.name)
-
-    if not imported:
-        # No typing import found, add one at the top
-        first_code_pattern = re.compile(r"^(import |from |class |def )", re.MULTILINE)
-        match = first_code_pattern.search(source)
-        insert_pos = match.start()
-        new_import = "from typing import Dict, Union\n\n"
-        source = source[:insert_pos] + new_import + source[insert_pos:]
-    else:
-        # There's already a typing import, check if Union and Dict are there
-        needs_union = "Union" not in imported
-        needs_dict = "Dict" not in imported
-        if needs_union or needs_dict:
-            # Add missing imports
-            if needs_union:
-                imported.add("Union")
-            if needs_dict:
-                imported.add("Dict")
-        imported = list(imported)
-        imported.sort()
-        new_import = f"from typing import ({', '.join(imported)})"
-        source = replace_typing_import(source, new_import)
-    return source
-
-
 def ensure_dict_type(source: str) -> str:
     """Add Dict type annotation to JsonContent fields.
 
@@ -216,32 +178,22 @@ def ensure_dict_type(source: str) -> str:
     )
     # Pattern 2: _commons__.JsonContent (without Optional)
     # Matches: options: _commons__.JsonContent = betterproto.message_field(
-    # But NOT if it's already wrapped in Optional or Union
     pattern2 = re.compile(
-        r"(\w+):\s*(?!Optional|Union)(_*commons__\.JsonContent)\s*=\s*betterproto\.message_field\(",
+        r"(\w+):\s*\"(_*commons__\.JsonContent)\"\s*=\s*betterproto\.message_field\(",
         re.MULTILINE,
     )
-    hits = 0
 
     def replace1(match):
-        nonlocal hits
-        hits += 1
         field_name = match.group(1)
         type_name = match.group(2)
-        return f'{field_name}: Optional[Union["{type_name}", Dict]] = betterproto.message_field('
+        return f'{field_name}: {type_name} | dict | None = betterproto.message_field('
 
     def replace2(match):
-        nonlocal hits
-        hits += 1
         field_name = match.group(1)
         type_name = match.group(2)
-        return f"{field_name}: Union[{type_name}, Dict] = betterproto.message_field("
-
+        return f"{field_name}: {type_name} | dict = betterproto.message_field("
     new_source = pattern1.sub(replace1, source)
     new_source = pattern2.sub(replace2, new_source)
-    if hits:
-        # Ensure Union and Dict are imported from typing
-        new_source = ensure_imports(new_source)
     return new_source
 
 

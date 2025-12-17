@@ -32,6 +32,7 @@ from .config import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
+    load_config,
 )
 from .connection import (  # noqa
     RequeueMessage,

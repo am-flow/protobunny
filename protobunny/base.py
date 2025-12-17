@@ -88,7 +88,7 @@ class MessageMixin:
         return [
             field_name
             for field_name, clz in self._betterproto.cls_by_field.items()
-            if clz is pb.commons.JsonContent
+            if "JsonContent" in clz.__name__
         ]
 
     def __bytes__(self: ProtoBunnyMessage) -> bytes:
@@ -290,8 +290,8 @@ class MessageMixin:
         )
 
     def serialize_json_content(self: ProtoBunnyMessage) -> ProtoBunnyMessage:
+        json_content_fields = self.json_content_fields
         msg = copy.deepcopy(self)
-        json_content_fields = msg.json_content_fields
         for field in json_content_fields:
             value = getattr(msg, field)
             serialized_content = to_json_content(value)

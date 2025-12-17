@@ -28,9 +28,7 @@ class TestMessage(base.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     number: int = betterproto.int64_field(20)
     detail: Optional[str] = betterproto.string_field(30, optional=True)
-    options: Optional[Union["_commons__.JsonContent", Dict]] = betterproto.message_field(
-        40, optional=True
-    )
+    options: _commons__.JsonContent | dict | None = betterproto.message_field(40, optional=True)
     color: Optional["Color"] = betterproto.enum_field(50, optional=True)
 
 

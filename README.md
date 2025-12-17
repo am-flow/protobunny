@@ -15,22 +15,51 @@ It focuses on a clean “message-first” API:
 
 ---
 
-## Installation
+## Setup
 
-### With `uv`
-```bash
-uv add protobunny
+### pyproject.toml
+Add `protobunny` to your `pyproject.toml` dependencies:
+
+`uv add protobunny`
+or
+`poetry add protobunny`
+
+You can also add it manually to pyproject.toml dependencies:
+```toml
+dependencies = [
+  "protobunny>=0.1.0",
+  # your other dependencies ...
+]
 ```
-### With `pip`
+Configure the library in pyproject.toml:
+```toml
+[tool.protobunny]
+messages-directory = "messages"
+messages-prefix = "acme"
+generated-package-name = "mymessagelib.codegen"
+```
+
+### Install the library with `uv`, `poetry` or `pip`
 ```bash
-pip install protobunny
+uv lock  # or poetry lock
+uv sync  # or poetry sync/install
+```
+### RabbitMQ connection
+Protobunny connects to RabbitMQ using environment variables.
+
+```yaml
+env:
+  RABBITMQ_HOST: localhost
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: guest
+  RABBITMQ_PASS: guest
 ```
 ---
 
 ## Requirements
 
-- Python 3.10+
-- A running RabbitMQ instance
+- Python >= 3.10, < 3.13
+- A running RabbitMQ instance (v4.0+ is preferred)
 
 ---
 
@@ -38,13 +67,15 @@ pip install protobunny
 
 ### Topics
 
-Every message class is associated with a **topic string**. Publishing sends your message to that topic; subscribing binds a queue to the same topic pattern.
+Every message class is associated with a **topic string**. 
+
+Publishing sends your message to that topic; subscribing binds a queue to the same topic pattern.
 
 Typical patterns:
 
 - Exact topic: `pb.some.Package.Message`
 - Wildcards: `pb.#` (subscribe to everything under `pb.`)
-- Package-level subscription: subscribe to a module/package to receive multiple message types
+- Package-level subscription: subscribe to a module/package to receive multiple message types eg. `pb.some`
 
 ### Shared “task” queues vs broadcast subscriptions
 
@@ -70,21 +101,21 @@ A result typically contains:
 
 ## Quickstart
 
-### 1) Publish a message
+### 1) Subscribe to a message
 ```python
 import protobunny as pb
-
-msg = pb.tests.TestMessage(content="hello", number=1)
-pb.publish(msg)
-```
-### 2) Subscribe to a message
-```python
-import protobunny as pb
-
-def on_message(message: pb.tests.TestMessage) -> None:
+import mymessagelib as mml
+def on_message(message: mml.test.TestMessage) -> None:
     print("Got:", message)
 
-pb.subscribe(pb.tests.TestMessage, on_message)
+pb.subscribe( mml.test.TestMessage, on_message)
+```
+### 2) Publish a message
+```python
+import protobunny as pb
+import mymessagelib as mml
+msg =  mml.test.TestMessage(content="hello", number=1, data={"test": "test"})
+pb.publish(msg)
 ```
 
 ---
@@ -169,16 +200,6 @@ pb.subscribe_logger(log_callback)
 ```
 ---
 
-## Configuration
-
-Protobunny connects to RabbitMQ via AMQP URL configuration.
-
-Common knobs include:
-
-- Host / port
-- Credentials
-- Heartbeats / timeouts
-- Exchange / DLQ/DLX setup (handled by the library connection setup)
 
 If you need explicit connection lifecycle control, you can access the shared connection object:
 ```python
