@@ -204,7 +204,7 @@ class TestQueue:
             "pb.tests.tasks.TaskMessage", ANY, shared=True
         )
         q.unsubscribe()
-        mock_connection_obj.unsubscribe.assert_called_once_with(ANY)
+        mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=True)
 
     def test_receive_result(
         self,
@@ -230,7 +230,7 @@ class TestQueue:
             "pb.tests.tasks.TaskMessage.result", ANY, shared=False
         )
         q.unsubscribe_results()
-        mock_connection_obj.unsubscribe.assert_called_once_with(ANY)
+        mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=False)
 
 
 def test_logger(mock_connection_obj: MagicMock) -> None:

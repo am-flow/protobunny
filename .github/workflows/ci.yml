@@ -98,7 +98,7 @@ jobs:
 
       - name: Setup RabbitMQ virtual host
         run: |
-          echo "Creating virtual host /test and granting guest user permissions..."
+          echo "Creating virtual host /test and granting user permissions..."
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl add_vhost /test
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 

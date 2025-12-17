@@ -379,10 +379,10 @@ class Queue:
         func = functools.partial(self._receive, callback)
         self.subscription = get_connection().subscribe(self.topic, func, shared=self.shared_queue)
 
-    def unsubscribe(self) -> None:
+    def unsubscribe(self, if_unused: bool = True) -> None:
         """Unsubscribe from the queue."""
         if self.subscription is not None:
-            get_connection().unsubscribe(self.subscription)
+            get_connection().unsubscribe(self.subscription, if_unused=if_unused)
             self.subscription = None
 
     def publish_result(
@@ -447,7 +447,7 @@ class Queue:
     def unsubscribe_results(self):
         """Unsubscribe from results."""
         if self.result_subscription is not None:
-            get_connection().unsubscribe(self.result_subscription)
+            get_connection().unsubscribe(self.result_subscription, if_unused=False)
             self.result_subscription = None
 
     def purge(self) -> None:
@@ -560,6 +560,7 @@ class LoggingQueue(Queue):
 
 # subscriptions registry
 subscriptions: dict[tp.Any, Queue] = dict()
+results_subscriptions: dict[tp.Any, Queue] = dict()
 
 
 def get_topic(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType) -> Topic:
@@ -699,41 +700,48 @@ def subscribe(
     return q
 
 
-def unsubscribe(message: ProtoBunnyMessage | type[Message] | ModuleType) -> None:
+def subscribe_results(
+    pkg_or_msg: ProtoBunnyMessage | type[Message] | ModuleType,
+    callback: tp.Callable[["pb.results.Result"], tp.Any],
+) -> Queue:
+    """Subscribe a callback function to the result topic.
+
+    Args:
+        pkg_or_msg:
+        callback:
+    """
+    q = get_queue(pkg_or_msg)
+    q.subscribe_results(callback)
+    # register subscription to unsubscribe later
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    results_subscriptions[sub_key] = q
+    return q
+
+
+def unsubscribe(pkg_or_msg: ProtoBunnyMessage | type[Message] | ModuleType, if_unused=True) -> None:
     """Remove all in-process subscriptions for a message/package"""
-    for q in subscriptions.values():
-        q.unsubscribe()
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    if sub_key in subscriptions:
+        q = subscriptions.pop(sub_key)
+        q.unsubscribe(if_unused)
 
 
-def unsubscribe_results(message: ProtoBunnyMessage | type[Message] | ModuleType) -> None:
+def unsubscribe_results(pkg_or_msg: ProtoBunnyMessage | type[Message] | ModuleType) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    for q in subscriptions.values():
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    if sub_key in results_subscriptions:
+        q = subscriptions.pop(sub_key)
         q.unsubscribe_results()
 
 
 def unsubscribe_all() -> None:
     """Remove all in-process subscriptions"""
     for q in subscriptions.values():
-        q.unsubscribe()
+        q.unsubscribe(if_unused=False)
+    subscriptions.clear()
+    for q in results_subscriptions.values():
         q.unsubscribe_results()
-
-
-def subscribe_results(
-    message: ProtoBunnyMessage | type[Message] | ModuleType,
-    callback: tp.Callable[["pb.results.Result"], tp.Any],
-) -> Queue:
-    """Subscribe a callback function to the result topic.
-
-    Args:
-        message:
-        callback:
-    """
-    q = get_queue(message)
-    q.subscribe_results(callback)
-    # register subscription to unsubscribe later
-    sub_key = type(message) if isinstance(message, Message) else message
-    subscriptions[sub_key] = q
-    return q
+    results_subscriptions.clear()
 
 
 def get_message_count(msg_type: ProtoBunnyMessage | type[Message]) -> int:

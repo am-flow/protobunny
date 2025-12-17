@@ -319,12 +319,13 @@ class Connection(threading.Thread):
         return queue.declaration_result.message_count
 
     @run_in_loop
-    async def unsubscribe(self, tag):
+    async def unsubscribe(self, tag, if_unused: bool = True):
         """
         Unsubscribe an earlier subscription.
 
         Args:
             tag: the subscription identifier returned from subscribe()
+            if_unused: if False, delete the queue even if it is in use. Default is True.
         """
         # TODO(Sem Mulder): We check if the consumer and queues are still there. After upgrading to
         #  pika 7.1.0, sometimes queues are already deleted before this function is called. For now
@@ -341,7 +342,7 @@ class Connection(threading.Thread):
         await queue.cancel(tag)
         if queue.exclusive:
             self.queues.pop(queue.name)
-            await queue.delete()
+            await queue.delete(if_empty=if_unused, if_unused=if_unused)
 
     @run_in_loop
     async def stop(self):
@@ -355,8 +356,9 @@ class Connection(threading.Thread):
             queue = self.queues[queue_name]
             await queue.cancel(tag)
             if queue.exclusive:
+                # non shared queues are deleted automatically when consumer is removed
                 self.queues.pop(queue.name)
-                await queue.delete()
+                await queue.delete(if_unused=False, if_empty=False)
         self.executor.shutdown(wait=True)
         await self.connection.close()
 

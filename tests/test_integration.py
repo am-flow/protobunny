@@ -114,7 +114,7 @@ class TestIntegration:
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received == self.msg
         self.received = None
-        pb.unsubscribe(pb.tests.TestMessage)
+        pb.unsubscribe(pb.tests.TestMessage, if_unused=False)
         pb.publish(self.msg)
         assert self.received is None
 
@@ -123,7 +123,7 @@ class TestIntegration:
         pb.publish(pb.tests.TestMessage(number=63, content="test"))
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         self.received = None
-        pb.unsubscribe(pb.tests)
+        pb.unsubscribe(pb.tests, if_unused=False)
         pb.publish(self.msg)
         assert self.received is None
 
@@ -139,10 +139,9 @@ class TestIntegration:
         pb.publish(self.msg)  # this will reach callback_2 as well
         assert wait(lambda: self.received and received, timeout_seconds=1, sleep_seconds=0.5)
         assert self.received == received == self.msg
+        pb.unsubscribe_all()
         self.received = None
         received = None
-        pb.unsubscribe(pb.tests.TestMessage)
-        pb.unsubscribe(pb.tests)
         pb.publish(self.msg)
         assert self.received is None
         assert received is None
@@ -168,8 +167,8 @@ class TestIntegration:
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == msg
         assert received_result.return_code == pb.results.ReturnCode.FAILURE
-        received_result = None
         pb.unsubscribe_results(pb.tests.TestMessage)
+        received_result = None
         pb.publish(msg)
         assert received_result is None
 
@@ -195,18 +194,16 @@ class TestIntegration:
         pb.subscribe(pb.tests.tasks.TaskMessage, callback_2)
         # subscribe to a result topic
         pb.subscribe_results(pb.tests.TestMessage, callback_results)
-
         pb.publish(pb.tests.TestMessage(number=2, content="test"))
         pb.publish(pb.tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
         assert wait(lambda: received_message is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == pb.tests.TestMessage(number=2, content="test")
+
+        pb.unsubscribe_all()
         received_result = None
         received_message = None
-
-        # Unsubscribe from all
-        pb.unsubscribe_all()
-        pb.publish(pb.tests.TestMessage(number=2, content="test"))
         pb.publish(pb.tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb.publish(pb.tests.TestMessage(number=2, content="test"))
         assert received_message is None
         assert received_result is None
