@@ -155,8 +155,8 @@ class Connection(threading.Thread):
         vhost = urllib.parse.quote(vhost)
         self._url = f"amqp://{username}:{password}@{ip}:{port}/{vhost}?heartbeat=1200&timeout=1500&fail_fast=no"
         self._exchange_name = "amq.topic"
-        self._dl_exchange = "amvision-dlx"
-        self._dl_queue = "amvision-dlq"
+        self._dl_exchange = "protobunny-dlx"
+        self._dl_queue = "protobunny-dlq"
         self._exchange: AbstractRobustExchange | None = None
         self._connection: AbstractRobustConnection | None = None
         self._channel: AbstractRobustChannel | None = None

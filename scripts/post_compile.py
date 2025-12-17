@@ -186,7 +186,7 @@ def ensure_dict_type(source: str) -> str:
     def replace1(match):
         field_name = match.group(1)
         type_name = match.group(2)
-        return f'{field_name}: {type_name} | dict | None = betterproto.message_field('
+        return f'{field_name}: Optional["{type_name} | dict"] = betterproto.message_field('
 
     def replace2(match):
         field_name = match.group(1)

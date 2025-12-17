@@ -60,11 +60,11 @@ class TestConnection:
         conn.channel.declare_exchange.assert_has_calls(
             [
                 call("amq.topic", "topic", durable=True, auto_delete=False),
-                call("amvision-dlx", "fanout", durable=True, auto_delete=False),
+                call("protobunny-dlx", "fanout", durable=True, auto_delete=False),
             ]
         )
         conn.channel.declare_queue.assert_called_once_with(
-            "amvision-dlq", exclusive=False, durable=True, auto_delete=False
+            "protobunny-dlq", exclusive=False, durable=True, auto_delete=False
         )
         conn.stop()
         assert conn.stopped.is_set()
@@ -78,7 +78,7 @@ class TestConnection:
             exclusive=True,
             durable=False,
             auto_delete=True,
-            arguments={"x-dead-letter-exchange": "amvision-dlx"},
+            arguments={"x-dead-letter-exchange": "protobunny-dlx"},
         )
         q2 = await conn.setup_queue("test", shared=True)
         conn.channel.declare_queue.assert_called_with(
@@ -86,6 +86,6 @@ class TestConnection:
             exclusive=False,
             durable=True,
             auto_delete=False,
-            arguments={"x-dead-letter-exchange": "amvision-dlx"},
+            arguments={"x-dead-letter-exchange": "protobunny-dlx"},
         )
         assert q2.name in conn.queues

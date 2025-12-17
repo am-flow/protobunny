@@ -3,7 +3,10 @@
 # plugin: python-betterproto
 # This file has been @generated
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import (
+    List,
+    Optional,
+)
 
 import betterproto
 
@@ -17,4 +20,6 @@ class TaskMessage(base.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     weights: List[float] = betterproto.float_field(30)
     bbox: List[int] = betterproto.int64_field(40)
-    options: __commons__.JsonContent | dict | None = betterproto.message_field(50, optional=True)
+    options: Optional["__commons__.JsonContent | dict"] = betterproto.message_field(
+        50, optional=True
+    )
