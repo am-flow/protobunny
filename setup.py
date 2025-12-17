@@ -43,12 +43,12 @@ def generate_python_classes(install_dir):
 
 
 def post_compile(install_dir) -> None:
-    target_dir = str(os.path.join(f"{install_dir}", f"{PACKAGE_NAME}"))
-    post_compile_command = f"python {target_dir}/post_compile.py".split()
+    # Post-compile internal betterproto python classes
+    post_compile_command = f"python {install_dir}/scripts/post_compile.py".split()
     post_compile_args = (
-        f"--proto_pkg={ROOT_GENERATED_PACKAGE_NAME} --source_dir={install_dir}".split()
+        f"--proto-pkg={ROOT_GENERATED_PACKAGE_NAME} --source-dir={install_dir}".split()
     )
-    log.info(post_compile_command)
+    log.info(post_compile_command + post_compile_args)
     try:
         subprocess.check_output(post_compile_command + post_compile_args)
     except subprocess.CalledProcessError as e:
@@ -71,9 +71,10 @@ class GenerateProtoCommand(install):
 
 # Specify the package data
 package_data = {
-    "protobuf": [
+    "protobunny": [
         "protobunny/protobuf/*.proto",
         f"{PACKAGE_NAME}/__init__.py.j2",
+        "scripts/*.py",
     ],
 }
 packages = setuptools.find_namespace_packages() + [
@@ -88,11 +89,6 @@ setup(
     cmdclass={
         "install": GenerateProtoCommand,
     },
-    install_requires=[
-        "betterproto[compiler]==2.0.0b7",
-        "grpcio-tools>=1.62.2,<2",
-        "aio-pika>=9.4.1,<10",
-    ],
     python_requires=">=3.10,<3.14",
     description="Protobuf messages and python mqtt messaging toolkit",
     entry_points={

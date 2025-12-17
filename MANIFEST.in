@@ -1,3 +1,4 @@
 include protobunny/protobuf/*.proto
 include protobunny/__init__.py.j2
 include protobunny/__init__.py
+include scripts/*.py

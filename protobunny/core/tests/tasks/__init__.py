@@ -2,19 +2,21 @@
 # sources: tasks.proto
 # plugin: python-betterproto
 # This file has been @generated
-
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 
 import betterproto
 
+from protobunny import base as base
+
 from ... import commons as __commons__
 
 
 @dataclass(eq=False, repr=False)
-class TaskMessage(betterproto.Message):
+class TaskMessage(base.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
-    bbox: List[float] = betterproto.float_field(30)
+    weights: List[float] = betterproto.float_field(30)
+    bbox: List[int] = betterproto.int64_field(40)
     options: Optional[Union["__commons__.JsonContent", Dict]] = betterproto.message_field(
-        40, optional=True
+        50, optional=True
     )

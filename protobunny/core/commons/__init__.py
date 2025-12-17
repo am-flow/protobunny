@@ -2,32 +2,22 @@
 # sources: commons.proto
 # plugin: python-betterproto
 # This file has been @generated
-
 from dataclasses import dataclass
 
 import betterproto
 
-
-class Color(betterproto.Enum):
-    OFF = 0
-    GREEN = 1
-    ORANGE = 2
-    GREEN_ORANGE = 3
-    RED = 4
-    RED_GREEN = 5
-    RED_ORANGE = 6
-    RED_ORANGE_GREEN = 7
+from protobunny import base as base
 
 
 @dataclass(eq=False, repr=False)
-class JsonContent(betterproto.Message):
+class JsonContent(base.MessageMixin, betterproto.Message):
     """
     The JsonContent message is used as a field in other messages to hold dictionary/Json data.
-    Notes for Python:
+    Notes:
     Serialization/deserialization of am.commons.JsonContent fields happens transparently
     (no need to build the JsonContent message, just set the field with the dictionary).
 
-    Supported betterproto methods: __bytes__, parse, to_dict, from_dict
+    Supported betterproto methods: __bytes__, parse, to_dict, from_dict, to_pydict, to_json
     """
 
     content: bytes = betterproto.bytes_field(1)

@@ -6,11 +6,21 @@ import "commons.proto";
 
 package tests;
 
+enum Color {
+  OFF = 0;
+  GREEN = 1;
+  ORANGE = 2;
+  GREEN_ORANGE = 3;
+  RED = 4;
+  RED_GREEN = 5;
+  RED_ORANGE = 6;
+  RED_ORANGE_GREEN = 7;
+}
 
 message TestMessage {
   string content = 10;
   int64 number = 20;
   optional string detail=30;
   optional commons.JsonContent options=40;
-  optional commons.Color color=50;
+  optional Color color=50;
 }

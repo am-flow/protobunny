@@ -39,7 +39,7 @@ def test_required_fields() -> None:
         _ = bytes(pb.tests.TestMessage(detail="test"))
     assert (
         str(exc.value)
-        == "Required fields for message pb.tests.TestMessage were not set: content, number"
+        == "Non optional fields for message pb.tests.TestMessage were not set: content, number"
     )
 
 
@@ -84,12 +84,12 @@ def test_get_topic() -> None:
 
 def test_deserialize() -> None:
     message = pb.tests.TestMessage(
-        content="test", number=12, color=pb.commons.Color.GREEN, options={"test": "123"}
+        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
     )
     serialized = bytes(message)
     topic = get_topic(message)
     deserialized = deserialize_message(topic.name, serialized)
-    assert deserialized.color == pb.commons.Color.GREEN
+    assert deserialized.color == pb.tests.Color.GREEN
     assert deserialized == message
 
 
@@ -103,7 +103,7 @@ def test_get_queue() -> None:
 
 def test_to_dict() -> None:
     msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.commons.Color.GREEN, options={"test": "123"}
+        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
     )
     to_repr = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert to_repr == dict(
@@ -114,7 +114,7 @@ def test_to_dict() -> None:
 def test_to_pydict() -> None:
     # test simple messages
     msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.commons.Color.GREEN, options={"test": "123"}
+        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
     )
     to_repr = msg.to_pydict(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert to_repr == dict(
@@ -130,7 +130,7 @@ def test_to_pydict() -> None:
 def test_to_json() -> None:
     scan = uuid.uuid4()
     msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.commons.Color.GREEN, options={"scan": scan}
+        content="test", number=12, color=pb.tests.Color.GREEN, options={"scan": scan}
     )
     to_repr = msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert (
@@ -144,12 +144,12 @@ def test_enum_behavior() -> None:
     """
     Test enum behavior with ser/deser
     """
-    msg = pb.tests.TestMessage(content="test", number=123, color=pb.commons.Color.RED)
+    msg = pb.tests.TestMessage(content="test", number=123, color=pb.tests.Color.RED)
     ser = bytes(msg)
     deser = pb.tests.TestMessage().parse(ser)
     assert deser == msg
-    assert deser.color == pb.commons.Color.RED
-    assert deser.color == pb.commons.Color.RED.value
+    assert deser.color == pb.tests.Color.RED
+    assert deser.color == pb.tests.Color.RED.value
     assert isinstance(deser.color, int)
 
 
@@ -179,7 +179,7 @@ class TestQueue:
         pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
     ) -> None:
         cb = mocker.MagicMock()
-        msg = pb.tests.tasks.TaskMessage(content="test", bbox=[])
+        msg = pb.tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
         q = get_queue(msg)
         pika_message = pika_incoming_message(bytes(msg), q.topic)
         q._receive(cb, pika_message)
@@ -214,7 +214,7 @@ class TestQueue:
     ) -> None:
         cb = mocker.MagicMock()
         q = get_queue(pb.tests.tasks.TaskMessage)
-        source_message = pb.tests.tasks.TaskMessage(content="test", bbox=[])
+        source_message = pb.tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
         result_message = source_message.make_result()
         assert result_message.return_value is None
         pika_message = pika_incoming_message(bytes(result_message), q.result_topic)

@@ -9,6 +9,7 @@ package tests.tasks;
 
 message TaskMessage {
   string content = 10;
-  repeated float bbox = 30 [packed = true];
-  optional commons.JsonContent options=40;
+  repeated float weights = 30 [packed = true];
+  repeated int64 bbox = 40 [packed = true];
+  optional commons.JsonContent options=50;
 }

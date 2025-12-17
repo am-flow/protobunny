@@ -2,6 +2,7 @@
 import asyncio
 import functools
 import logging
+import os
 import threading
 import typing as tp
 import urllib
@@ -91,8 +92,8 @@ def stop_connection() -> None:
     set_stopped(True)
 
 
-def run_in_loop(async_func):
-    """Sync to async translator.
+def run_in_loop(async_func: tp.Callable) -> tp.Callable:
+    """Async to sync translator.
 
     Decorator that returns a wrapper to synchronously run a function in
     the async event loop and await its result.
@@ -125,9 +126,10 @@ class Connection(threading.Thread):
 
     def __init__(
         self,
-        username: str = "guest",
-        password: str = "guest",
-        ip: str = "127.0.0.1",
+        username: str | None = None,
+        password: str | None = None,
+        port: str | None = None,
+        ip: str | None = None,
         worker_threads: int = 2,
         prefetch_count: int = 1,
         requeue_delay: int = 3,
@@ -142,8 +144,16 @@ class Connection(threading.Thread):
             vhost: RabbitMQ virtual host
         """
         super().__init__(name="pika_connection")
+        username = username or os.environ.get(
+            "RABBITMQ_USERNAME", os.environ.get("RABBITMQ_DEFAULT_USER", "guest")
+        )
+        password = password or os.environ.get(
+            "RABBITMQ_PASSWORD", os.environ.get("RABBITMQ_DEFAULT_PASS", "guest")
+        )
+        ip = ip or os.environ.get("RABBITMQ_HOST", "127.0.0.1")
+        port = port or os.environ.get("RABBITMQ_PORT", "5672")
         vhost = urllib.parse.quote(vhost)
-        self._url = f"amqp://{username}:{password}@{ip}:5672/{vhost}?heartbeat=1200&timeout=1500&fail_fast=no"
+        self._url = f"amqp://{username}:{password}@{ip}:{port}/{vhost}?heartbeat=1200&timeout=1500&fail_fast=no"
         self._exchange_name = "amq.topic"
         self._dl_exchange = "amvision-dlx"
         self._dl_queue = "amvision-dlq"
@@ -188,7 +198,7 @@ class Connection(threading.Thread):
         """
         Establish RabbitMQ connection.
         """
-        self._connection = await aio_pika.connect_robust(self._url)
+        self._connection = await aio_pika.connect_robust(self._url, timeout=10.0)
         self._channel = await self.connection.channel()
         await self._channel.set_qos(prefetch_count=self.prefetch_count)
         self._exchange = await self._channel.declare_exchange(
@@ -235,14 +245,12 @@ class Connection(threading.Thread):
 
     @run_in_loop
     async def publish(self, topic: str, message: aio_pika.Message) -> None:
-        """
-        Publish a message to a queue.
+        """Publish a message to a queue.
 
         Args:
             topic:
             message:
         """
-        log.debug("Publishing msg to topic %s", topic)
         await self.exchange.publish(message, topic)
 
     async def on_message(self, _: str, callback: tp.Callable, message: aio_pika.IncomingMessage):
@@ -264,8 +272,7 @@ class Connection(threading.Thread):
 
     @run_in_loop
     async def subscribe(self, topic: str, callback: tp.Callable, shared: bool = False) -> str:
-        """
-        Subscribe to a queue.
+        """Subscribe to a queue.
 
         Args:
             topic: mqtt/queue topic
@@ -288,20 +295,17 @@ class Connection(threading.Thread):
 
     @run_in_loop
     async def purge(self, topic: str) -> None:
-        """
-        Empty a queue.
+        """Empty a queue.
 
         Args:
             topic: mqtt/queue topic
         """
-        log.debug("Purging topic %s", topic)
         await self.setup_queue(topic, True)
         await self.queues[topic].purge()
 
     @run_in_loop
     async def get_message_count(self, topic: str) -> int | None:
-        """
-        Get queue message count.
+        """Get queue message count.
 
         Args:
             topic: mqtt/queue topic
@@ -309,8 +313,6 @@ class Connection(threading.Thread):
         Returns:
             message count
         """
-
-        log.debug("Getting message count for topic %s", topic)
         queue = await self.channel.declare_queue(
             topic, exclusive=False, durable=True, auto_delete=False, passive=True
         )
@@ -330,8 +332,7 @@ class Connection(threading.Thread):
         #  and are encountering issues, that might be worth a look.
         if tag not in self.consumers:
             return
-        queue_name = self.consumers[tag]
-        del self.consumers[tag]
+        queue_name = self.consumers.pop(tag)
         if queue_name not in self.queues:
             return
         queue = self.queues[queue_name]

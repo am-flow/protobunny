@@ -15,14 +15,3 @@ Supported betterproto methods: __bytes__, parse, to_dict, from_dict, to_pydict, 
 message JsonContent {
   bytes content = 1;
 }
-
-enum Color {
-  OFF = 0;
-  GREEN = 1;
-  ORANGE = 2;
-  GREEN_ORANGE = 3;
-  RED = 4;
-  RED_GREEN = 5;
-  RED_ORANGE = 6;
-  RED_ORANGE_GREEN = 7;
-}

@@ -11,7 +11,7 @@ build:
 compile:
 	mkdir -p protobunny/core
 	uv run python -m grpc_tools.protoc -I protobunny/protobuf --python_betterproto_out=protobunny/core protobunny/protobuf/*.proto
-	uv run python protobunny/post_compile.py --proto_pkg=protobunny.core
+	uv run python scripts/post_compile.py --proto-pkg=protobunny.core
 	make format
 
 .PHONY: format

@@ -2,12 +2,13 @@
 # sources: results.proto
 # plugin: python-betterproto
 # This file has been @generated
-
 from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
 import betterproto
 import betterproto.lib.google.protobuf as betterproto_lib_google_protobuf
+
+from protobunny import base as base
 
 from .. import commons as _commons__
 
@@ -21,7 +22,7 @@ class ReturnCode(betterproto.Enum):
 
 
 @dataclass(eq=False, repr=False)
-class Result(betterproto.Message):
+class Result(base.MessageMixin, betterproto.Message):
     source_message: "betterproto_lib_google_protobuf.Any" = betterproto.message_field(1)
     return_code: "ReturnCode" = betterproto.enum_field(2)
     error: Optional[str] = betterproto.string_field(3, optional=True)

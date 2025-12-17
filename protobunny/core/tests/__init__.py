@@ -2,27 +2,39 @@
 # sources: tests.proto
 # plugin: python-betterproto
 # This file has been @generated
-
 from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
 import betterproto
 
+from protobunny import base as base
+
 from .. import commons as _commons__
 
 
+class Color(betterproto.Enum):
+    OFF = 0
+    GREEN = 1
+    ORANGE = 2
+    GREEN_ORANGE = 3
+    RED = 4
+    RED_GREEN = 5
+    RED_ORANGE = 6
+    RED_ORANGE_GREEN = 7
+
+
 @dataclass(eq=False, repr=False)
-class TestMessage(betterproto.Message):
+class TestMessage(base.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     number: int = betterproto.int64_field(20)
     detail: Optional[str] = betterproto.string_field(30, optional=True)
     options: Optional[Union["_commons__.JsonContent", Dict]] = betterproto.message_field(
         40, optional=True
     )
-    color: Optional["_commons__.Color"] = betterproto.enum_field(50, optional=True)
+    color: Optional["Color"] = betterproto.enum_field(50, optional=True)
 
 
 #######################################################
-# Dynamically added by post_compile.py
+# Dynamically added by protobunny post_compile.py
 
 from . import tasks  # noqa

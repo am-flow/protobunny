@@ -7,7 +7,15 @@ import pamqp
 import pytest
 from pytest_mock import MockerFixture
 
-from protobunny.connection import Connection, set_stopped, stop_connection
+from protobunny.connection import Connection, reset_connection, set_stopped, stop_connection
+
+
+@pytest.fixture(scope="session")
+def integration_test() -> tp.Generator[None, None, None]:
+    """Fixture for integration tests, to run in an environment with RabbitMQ service"""
+    reset_connection(vhost="/test")
+    yield
+    stop_connection()
 
 
 @pytest.fixture

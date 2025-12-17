@@ -1,7 +1,5 @@
-import logging
-
 from .base import (  # noqa
-    AMMessage,
+    ProtoBunnyMessage,
     LoggingQueue,
     MessageMixin,
     Queue,
@@ -32,8 +30,8 @@ from .{{ generated_package_name }} import (  # noqa
 from .config import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
-{#    PREFIX_MESSAGES,#}
     ROOT_GENERATED_PACKAGE_NAME,
+    load_config,
 )
 from .connection import (  # noqa
     RequeueMessage,
@@ -44,9 +42,3 @@ from .connection import (  # noqa
     set_stopped,
     stop_connection,
 )
-from .introspect import decorate_protobuf_classes  # noqa
-
-log = logging.getLogger(__name__)
-
-# Decorate generated betterproto.Message subclasses with Message Mixin;
-decorate_protobuf_classes()
