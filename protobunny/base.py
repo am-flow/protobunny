@@ -599,7 +599,7 @@ def get_topic(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleTy
     return Topic(name=topic_name, is_task_queue=is_task_queue)
 
 
-def get_queue(pkg: Message | type[Message] | ModuleType) -> Queue:
+def get_queue(pkg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType) -> Queue:
     """
 
     Args:
@@ -613,7 +613,7 @@ def get_queue(pkg: Message | type[Message] | ModuleType) -> Queue:
     return queue
 
 
-def deserialize_message(topic: str | None, body: bytes) -> Message | None:
+def deserialize_message(topic: str | None, body: bytes) -> ProtoBunnyMessage | None:
     """Deserialize the body of a serialized pika message.
 
     Args:

@@ -1,10 +1,12 @@
-<div>
-  <img src="./images/logo.png" alt="protobunny Logo" height="600">
-  <h1>Protobunny</h1>
+<div class="display-flex">
+  <img src="./images/logo.png" alt="protobunny Logo" height="512">
 </div>
 
+# Protobunny
 
-The protobunny library simplifies messaging for asynchronous tasks by providing:
+Note: The project is in early development.
+
+The `protobunny` library simplifies messaging for asynchronous tasks by providing:
 
 * connections facilities to RabbitMQ
 * Protocol Buffers messages serialization/deserialization.
@@ -21,6 +23,18 @@ It focuses on a clean “message-first” API:
 
 - Python >= 3.10, < 3.13
 - A running RabbitMQ instance (v4.0+ is preferred)
+
+## Project scope
+
+Protobunny is designed for teams who use messaging to coordinate work between microservices or different python processes and want:
+
+- A small API surface, easy to learn and use
+- Typed RabbitMQ messaging
+- Consistent topic naming and routing
+- Builtin task queue semantics and result messages
+- Builtin logging service
+- Transparent handling of JSON-like payload fields as plain dictionaries/lists
+- Optional validation of required fields
 ---
 
 ## Setup
@@ -165,8 +179,6 @@ A result typically contains:
 ---
 
 
-
-
 ## Task-style queues
 All messages that are under a `tasks` package are treated as shared queues.
 
@@ -190,31 +202,33 @@ message TaskMessage {
 ```
 
 If a message is treated as a "task queue" message by the library conventions, 
-subscribing will use a **shared queue** (multiple workers, one queue).
+`subscribe` will use a **shared queue** (multiple workers consuming messages from one queue).
 The load is distributed among workers (competing consumers).
 
 ```python
 import protobunny as pb
+import mymessagelib as mml
 
-def worker1(task: pb.tests.tasks.TaskMessage) -> None:
+def worker1(task: mml.main.tasks.TaskMessage) -> None:
     print("1- Working on:", task)
 
-def worker2(task: pb.tests.tasks.TaskMessage) -> None:
+def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
 
-pb.subscribe(pb.tests.tasks.TaskMessage, worker1)
-pb.subscribe(pb.tests.tasks.TaskMessage, worker2)
-pb.publish(pb.tests.tasks.TaskMessage(content="test1"))
-pb.publish(pb.tests.tasks.TaskMessage(content="test2"))
-pb.publish(pb.tests.tasks.TaskMessage(content="test3"))
+pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+pb.publish(mml.main.tasks.TaskMessage(content="test1"))
+pb.publish(mml.main.tasks.TaskMessage(content="test2"))
+pb.publish(mml.main.tasks.TaskMessage(content="test3"))
 ```
 
 You can also introspect/manage an underlying shared queue:
 ```python
 
 import protobunny as pb
+import mymessagelib as mml
 
-queue = pb.get_queue(pb.tests.tasks.TaskMessage)
+queue = pb.get_queue(mml.main.tasks.TaskMessage)
 
 # Only shared queues can be purged and counted
 count = queue.get_message_count()
@@ -228,12 +242,13 @@ queue.purge()
 ### Create and publish a result
 ```python
 import protobunny as pb
+import mymessagelib as mml
 
-source = pb.tests.TestMessage(content="hello", number=1)
+source = mml.test.TestMessage(content="hello", number=1)
 
 # create a result message from the source message
 result = source.make_result(return_value={"ok": True})
-
+# publish the result
 pb.publish_result(result)
 ```
 
@@ -241,6 +256,7 @@ pb.publish_result(result)
 ```python
 
 import protobunny as pb
+import mymessagelib as mml
 
 def on_result(res: pb.results.Result) -> None:
     print("Result for:", res.source)
@@ -248,7 +264,7 @@ def on_result(res: pb.results.Result) -> None:
     print("Return value:", res.return_value)
     print("Error:", res.error)
 
-pb.subscribe_results(pb.tests.TestMessage, on_result)
+pb.subscribe_results(mml.test.TestMessage, on_result)
 ```
 
 ---
@@ -267,7 +283,8 @@ This is particularly useful for metrics, metadata, and structured return values 
 
 ## Logging / debugging
 
-Protobunny includes a convenience subscription for logging message traffic (for example, subscribing to a broad wildcard topic and printing JSON-ish payloads):
+Protobunny includes a convenience subscription for logging message traffic by subscribing to a broad wildcard topic and printing JSON payloads:
+
 ```python
 import protobunny as pb
 
@@ -277,7 +294,6 @@ def log_callback(_incoming_message, body: str) -> None:
 pb.subscribe_logger(log_callback)
 ```
 ---
-
 
 If you need explicit connection lifecycle control, you can access the shared connection object:
 ```python
@@ -293,7 +309,7 @@ pb.stop_connection()
 
 ### Run tests
 ```bash
-uv run pytest
+make test
 ```
 
 ### Integration tests (RabbitMQ required)
@@ -301,22 +317,9 @@ uv run pytest
 Integration tests expect RabbitMQ to be running (for example via Docker Compose in this repo):
 ```bash
 docker compose up -d
-uv run pytest -m integration
+make integration_test
 ```
 ---
-
-## Project status / scope
-
-Protobunny is designed for teams who use messaging to coordinate work between microservices and want:
-
-- A small API surface, easy to learn and use
-- Typed RabbitMQ messaging
-- Consistent topic naming and routing
-- Builtin task queue semantics and result messages
-- Builtin logging service
-- Transparent handling of JSON-like payload fields as plain dictionaries/lists
-- Optional validation of required fields
-
 
 ### Future work
 
