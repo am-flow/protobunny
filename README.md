@@ -84,7 +84,7 @@ A message that uses JSON-like fields can look like this:
 ```protobuf
 /*test.proto*/
 syntax = "proto3";
-import "commons.proto";
+import "protobunny/commons.proto";
 
 package test;
 
@@ -175,7 +175,7 @@ All messages that are under a `tasks` package are treated as shared queues.
 This .proto file contains protobuf message definitions for testing tasks
 */
 syntax = "proto3";
-import "commons.proto";
+import "protobunny/commons.proto";
 
 // Define the tasks package
 package tests.tasks;

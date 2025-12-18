@@ -72,7 +72,7 @@ class GenerateProtoCommand(install):
 # Specify the package data
 package_data = {
     "protobunny": [
-        "protobunny/protobuf/*.proto",
+        "protobunny/protobuf/protobunny/*.proto",
         f"{PACKAGE_NAME}/__init__.py.j2",
         "scripts/*.py",
     ],

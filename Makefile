@@ -6,7 +6,7 @@ help : Makefile
 
 .PHONY: build
 build:
-	poetry install
+	uv sync
 
 compile:
 	mkdir -p protobunny/core
