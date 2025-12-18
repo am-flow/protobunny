@@ -24,6 +24,14 @@ class ReturnCode(betterproto.Enum):
 @dataclass(eq=False, repr=False)
 class Result(base.MessageMixin, betterproto.Message):
     source_message: "betterproto_lib_google_protobuf.Any" = betterproto.message_field(1)
+    """
+    * The source message. It is transparently deserialized by the `source` property
+    ex.
+    >>> msg = ml.mypackage.MyMessage(content="test")
+    >>> result = msg.make_result()
+    >>> assert msg == result.source
+    """
+
     return_code: "ReturnCode" = betterproto.enum_field(2)
     error: Optional[str] = betterproto.string_field(3, optional=True)
     return_value: Optional["_commons__.JsonContent | dict"] = betterproto.message_field(

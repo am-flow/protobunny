@@ -1,8 +1,8 @@
 /*
-This .proto file contains protobuf message definitions for tests
+This .proto file contains protobuf message definitions for testing tasks
 */
 syntax = "proto3";
-import "commons.proto";
+import "protobunny/commons.proto";
 
 package tests.tasks;
 

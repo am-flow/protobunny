@@ -10,7 +10,7 @@ build:
 
 compile:
 	mkdir -p protobunny/core
-	uv run python -m grpc_tools.protoc -I protobunny/protobuf --python_betterproto_out=protobunny/core protobunny/protobuf/*.proto
+	uv run python -m grpc_tools.protoc -I protobunny/protobuf/protobunny --python_betterproto_out=protobunny/core protobunny/protobuf/protobunny/*.proto
 	uv run python scripts/post_compile.py --proto-pkg=protobunny.core
 	make format
 
@@ -27,6 +27,8 @@ lint:
 
 .PHONY: test integration_test
 test:
+	uv run protobunny -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
 	uv run pytest tests/ -m "not integration"
 integration_test:
 	uv run pytest tests/test_integration.py

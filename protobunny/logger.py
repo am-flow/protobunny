@@ -1,8 +1,4 @@
-"""
-Example of usage for `amlogic_messages.subscribe_logger`
-to provide a logging tool
-that prints all messages to stdout.
-"""
+"""Start the logging service with python -m protobunny.logger"""
 
 import argparse
 import logging
@@ -16,6 +12,7 @@ import aio_pika
 
 import protobunny as pb
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 
@@ -42,7 +39,9 @@ def log_callback(max_length, regex, message: aio_pika.IncomingMessage, msg_conte
 
 def _get_parser():
     parser = argparse.ArgumentParser(description="MQTT Logger")
-    parser.add_argument("-f", "--filter", type=str, help="filter messages matching this regex")
+    parser.add_argument(
+        "-f", "--filter", type=str, help="filter messages matching this regex", required=False
+    )
     parser.add_argument(
         "-l", "--max-length", type=int, default=60, help="cut off messages longer that this"
     )
@@ -51,7 +50,7 @@ def _get_parser():
 
 def cli():
     args = _get_parser().parse_args()
-    regex = re.compile(args.filter)
+    regex = re.compile(args.filter) if args.filter else None
     func = partial(log_callback, args.max_length, regex)
 
     # If subscribe_logger is called without arguments,

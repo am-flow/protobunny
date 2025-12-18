@@ -20,9 +20,11 @@ from protobunny.introspect import (
     get_message_class_from_type_url,
 )
 
+from . import tests
+
 
 def test_json_serializer() -> None:
-    msg = pb.tests.TestMessage(
+    msg = tests.TestMessage(
         content="test",
         number=123,
         detail="test",
@@ -36,74 +38,74 @@ def test_json_serializer() -> None:
 def test_required_fields() -> None:
     """A MissingRequiredFields exception is raised on serialization if required fields are not set."""
     with pytest.raises(MissingRequiredFields) as exc:
-        _ = bytes(pb.tests.TestMessage(detail="test"))
+        _ = bytes(tests.TestMessage(detail="test"))
     assert (
         str(exc.value)
-        == "Non optional fields for message pb.tests.TestMessage were not set: content, number"
+        == "Non optional fields for message acme.tests.TestMessage were not set: content, number"
     )
 
 
 def test_message_classes() -> None:
-    msg = pb.tests.TestMessage(content="test", number=123)
-    assert issubclass(pb.tests.TestMessage, MessageMixin)
+    msg = tests.TestMessage(content="test", number=123)
+    assert issubclass(tests.TestMessage, MessageMixin)
     assert isinstance(msg, MessageMixin)
-    assert msg.topic == "pb.tests.TestMessage"
-    assert msg.type_url == "protobunny.core.tests.TestMessage"
+    assert msg.topic == "acme.tests.TestMessage"
+    assert msg.type_url == "tests.tests.TestMessage"
 
 
 def test_get_message_class_from_type_url() -> None:
-    msg = pb.tests.TestMessage(content="test", number=123)
+    msg = tests.TestMessage(content="test", number=123)
     msg_type = get_message_class_from_type_url(msg.type_url)
     # Assert mixin was dynamically applied
     assert issubclass(msg_type, MessageMixin)
     assert msg_type.parse is MessageMixin.parse
-    assert msg_type is pb.tests.TestMessage
+    assert msg_type is tests.TestMessage
 
 
 def test_check_json_content_fields() -> None:
-    msg = pb.tests.TestMessage()
-    assert msg.topic == "pb.tests.TestMessage"
+    msg = tests.TestMessage()
+    assert msg.topic == "acme.tests.TestMessage"
     assert msg.json_content_fields == ["options"]
 
 
 def test_message_class_from_topic() -> None:
-    msg_type = get_message_class_from_topic("pb.tests.TestMessage")
-    assert msg_type == pb.tests.TestMessage
+    msg_type = get_message_class_from_topic("acme.tests.TestMessage")
+    assert msg_type == tests.TestMessage
     msg_type = get_message_class_from_topic("pb.nonexisting.Message")
     assert msg_type is None
 
 
 def test_get_topic() -> None:
-    t = get_topic(pb.tests.tasks.TaskMessage())
-    assert t.name == "pb.tests.tasks.TaskMessage"
+    t = get_topic(tests.tasks.TaskMessage())
+    assert t.name == "acme.tests.tasks.TaskMessage"
     assert t.is_task_queue
-    t = get_topic(pb.tests.TestMessage())
-    assert t.name == "pb.tests.TestMessage"
+    t = get_topic(tests.TestMessage())
+    assert t.name == "acme.tests.TestMessage"
     assert not t.is_task_queue
 
 
 def test_deserialize() -> None:
-    message = pb.tests.TestMessage(
-        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
+    message = tests.TestMessage(
+        content="test", number=12, color=tests.Color.GREEN, options={"test": "123"}
     )
     serialized = bytes(message)
     topic = get_topic(message)
     deserialized = deserialize_message(topic.name, serialized)
-    assert deserialized.color == pb.tests.Color.GREEN
+    assert deserialized.color == tests.Color.GREEN
     assert deserialized == message
 
 
 def test_get_queue() -> None:
-    q = get_queue(pb.tests.tasks.TaskMessage())
+    q = get_queue(tests.tasks.TaskMessage())
     assert q.shared_queue
-    q = get_queue(pb.tests.TestMessage())
+    q = get_queue(tests.TestMessage())
     assert not q.shared_queue
-    assert get_queue(pb.tests.TestMessage()) == get_queue(pb.tests.TestMessage)
+    assert get_queue(tests.TestMessage()) == get_queue(tests.TestMessage)
 
 
 def test_to_dict() -> None:
-    msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
+    msg = tests.TestMessage(
+        content="test", number=12, color=tests.Color.GREEN, options={"test": "123"}
     )
     to_repr = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert to_repr == dict(
@@ -113,14 +115,14 @@ def test_to_dict() -> None:
 
 def test_to_pydict() -> None:
     # test simple messages
-    msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.tests.Color.GREEN, options={"test": "123"}
+    msg = tests.TestMessage(
+        content="test", number=12, color=tests.Color.GREEN, options={"test": "123"}
     )
     to_repr = msg.to_pydict(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert to_repr == dict(
         content="test", number=12, color="GREEN", options={"test": "123"}, detail=None
     )
-    msg = pb.tests.TestMessage(content="test", number=12, options={"test": "123"}, detail="Test")
+    msg = tests.TestMessage(content="test", number=12, options={"test": "123"}, detail="Test")
     to_repr = msg.to_pydict(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert to_repr == dict(
         content="test", number=12, color=None, options={"test": "123"}, detail="Test"
@@ -129,8 +131,8 @@ def test_to_pydict() -> None:
 
 def test_to_json() -> None:
     scan = uuid.uuid4()
-    msg = pb.tests.TestMessage(
-        content="test", number=12, color=pb.tests.Color.GREEN, options={"scan": scan}
+    msg = tests.TestMessage(
+        content="test", number=12, color=tests.Color.GREEN, options={"scan": scan}
     )
     to_repr = msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
     assert (
@@ -144,30 +146,32 @@ def test_enum_behavior() -> None:
     """
     Test enum behavior with ser/deser
     """
-    msg = pb.tests.TestMessage(content="test", number=123, color=pb.tests.Color.RED)
+    msg = tests.TestMessage(content="test", number=123, color=tests.Color.RED)
     ser = bytes(msg)
-    deser = pb.tests.TestMessage().parse(ser)
+    deser = tests.TestMessage().parse(ser)
     assert deser == msg
-    assert deser.color == pb.tests.Color.RED
-    assert deser.color == pb.tests.Color.RED.value
+    assert deser.color == tests.Color.RED
+    assert deser.color == tests.Color.RED.value
     assert isinstance(deser.color, int)
 
 
 class TestQueue:
     def test_get_message_count(self, mock_connection_obj: MagicMock) -> None:
-        q = get_queue(pb.tests.tasks.TaskMessage)
+        q = get_queue(tests.tasks.TaskMessage)
         q.get_message_count()
-        mock_connection_obj.get_message_count.assert_called_once_with("pb.tests.tasks.TaskMessage")
-        q = get_queue(pb.tests.TestMessage)
+        mock_connection_obj.get_message_count.assert_called_once_with(
+            "acme.tests.tasks.TaskMessage"
+        )
+        q = get_queue(tests.TestMessage)
         with pytest.raises(RuntimeError) as exc:
             q.get_message_count()
         assert str(exc.value) == "Can only get count of shared queues"
 
     def test_purge(self, mock_connection_obj: MagicMock) -> None:
-        q = get_queue(pb.tests.tasks.TaskMessage)
+        q = get_queue(tests.tasks.TaskMessage)
         q.purge()
-        mock_connection_obj.purge.assert_called_once_with("pb.tests.tasks.TaskMessage")
-        q = get_queue(pb.tests.TestMessage)
+        mock_connection_obj.purge.assert_called_once_with("acme.tests.tasks.TaskMessage")
+        q = get_queue(tests.TestMessage)
         with pytest.raises(RuntimeError) as exc:
             q.purge()
         assert str(exc.value) == "Can only purge shared queues"
@@ -179,7 +183,7 @@ class TestQueue:
         pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
     ) -> None:
         cb = mocker.MagicMock()
-        msg = pb.tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
+        msg = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
         q = get_queue(msg)
         pika_message = pika_incoming_message(bytes(msg), q.topic)
         q._receive(cb, pika_message)
@@ -198,10 +202,10 @@ class TestQueue:
 
     def test_subscribe(self, mocker: MockerFixture, mock_connection_obj: MagicMock) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(pb.tests.tasks.TaskMessage)
+        q = get_queue(tests.tasks.TaskMessage)
         q.subscribe(cb)
         mock_connection_obj.subscribe.assert_called_once_with(
-            "pb.tests.tasks.TaskMessage", ANY, shared=True
+            "acme.tests.tasks.TaskMessage", ANY, shared=True
         )
         q.unsubscribe()
         mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=True)
@@ -213,8 +217,8 @@ class TestQueue:
         pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
     ) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(pb.tests.tasks.TaskMessage)
-        source_message = pb.tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
+        q = get_queue(tests.tasks.TaskMessage)
+        source_message = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
         result_message = source_message.make_result()
         assert result_message.return_value is None
         pika_message = pika_incoming_message(bytes(result_message), q.result_topic)
@@ -224,10 +228,10 @@ class TestQueue:
 
     def test_subscribe_results(self, mocker: MockerFixture, mock_connection_obj: MagicMock) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(pb.tests.tasks.TaskMessage)
+        q = get_queue(tests.tasks.TaskMessage)
         q.subscribe_results(cb)
         mock_connection_obj.subscribe.assert_called_once_with(
-            "pb.tests.tasks.TaskMessage.result", ANY, shared=False
+            "acme.tests.tasks.TaskMessage.result", ANY, shared=False
         )
         q.unsubscribe_results()
         mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=False)
@@ -235,4 +239,4 @@ class TestQueue:
 
 def test_logger(mock_connection_obj: MagicMock) -> None:
     pb.subscribe_logger()
-    mock_connection_obj.subscribe.assert_called_once_with("pb.#", ANY, shared=False)
+    mock_connection_obj.subscribe.assert_called_once_with("acme.#", ANY, shared=False)

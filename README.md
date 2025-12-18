@@ -1,18 +1,26 @@
-<div align="center">
-  <img src="./images/logo.png" alt="Protobunny Logo" height="600">
+<div>
+  <img src="./images/logo.png" alt="protobunny Logo" height="600">
   <h1>Protobunny</h1>
 </div>
 
-Protobunny is a Python library for building **publisher/subscriber** and **producer/consumer** workflows on top of **RabbitMQ**, using **Protocol Buffers** messages as the contract.
+
+The protobunny library simplifies messaging for asynchronous tasks by providing:
+
+* connections facilities to RabbitMQ
+* Protocol Buffers messages serialization/deserialization.
 
 It focuses on a clean “message-first” API:
 
 - Publish protobuf messages to **topic exchanges**
 - Subscribe callbacks to message topics (including wildcard / package-level topics)
 - Support “task-like” queues (shared/competing consumers) vs broadcast subscriptions
-- Generate and consume **Result** messages (success/failure + optional return payload)
-- Transparently serialize “JSON-like” payload fields (dicts/lists/numpy-friendly) when your schema uses a JSON content wrapper
+- Generate and consume `Result` messages (success/failure + optional return payload)
+- Transparently serialize "JSON-like" payload fields (numpy-friendly)
 
+## Requirements
+
+- Python >= 3.10, < 3.13
+- A running RabbitMQ instance (v4.0+ is preferred)
 ---
 
 ## Setup
@@ -20,9 +28,11 @@ It focuses on a clean “message-first” API:
 ### pyproject.toml
 Add `protobunny` to your `pyproject.toml` dependencies:
 
-`uv add protobunny`
-or
-`poetry add protobunny`
+```shell
+uv add protobunny
+# or
+poetry add protobunny
+```
 
 You can also add it manually to pyproject.toml dependencies:
 ```toml
@@ -44,8 +54,13 @@ generated-package-name = "mymessagelib.codegen"
 uv lock  # or poetry lock
 uv sync  # or poetry sync/install
 ```
+
 ### RabbitMQ connection
 Protobunny connects to RabbitMQ using environment variables.
+
+```shell
+export RABBITMQ_HOST=localhost RABBITMQ_PORT=5672 RABBITMQ_USER=guest RABBITMQ_PASS=guest
+```
 
 ```yaml
 env:
@@ -54,14 +69,64 @@ env:
   RABBITMQ_USER: guest
   RABBITMQ_PASS: guest
 ```
----
-
-## Requirements
-
-- Python >= 3.10, < 3.13
-- A running RabbitMQ instance (v4.0+ is preferred)
 
 ---
+
+## Quick example
+
+### Create a folder in your project with your protobuf messages
+```shell
+mkdir messages
+mkdir messages/acme
+# etc.
+```
+A message that uses JSON-like fields can look like this:
+```protobuf
+/*test.proto*/
+syntax = "proto3";
+import "commons.proto";
+
+package test;
+
+message TestMessage {
+  string content = 10;
+  int64 number = 20;
+  commons.JsonContent data = 25;
+  /* Field with JSON-like content */
+  optional string detail=30;
+  /* Optional field */
+}
+```
+### Generate your message library with `protobunny`
+The library comes with a `protoc` wrapper that generates Python code from your protobuf messages 
+and executes a postcompilation step to manipulate the generated code. 
+Important note: the arguments must reflect the configuration in `pyproject.toml` in the section `tool.protobunny`, as showed above.
+
+```shell
+protobunny -I messages --python_betterproto_out=mymessagelib/codegen messages/**/*.proto messages/*.proto
+```
+In `mymessagelib/codegen` you should see the generated message classes, mirroring the `package` declaration in your protobuf files.
+
+### Subscribe to a message
+```python
+import protobunny as pb
+import mymessagelib as mml
+def on_message(message: mml.test.TestMessage) -> None:
+    print("Got:", message)
+
+pb.subscribe(mml.test.TestMessage, on_message)
+# Prints 
+# 'Got: TestMessage(content="hello", number=1, data={"test": "test"}, detail=None)' 
+# when a message is received
+```
+### Publish a message
+The following code can run in another process or thread and publishes a message to the topic `acme.test.TestMessage`.
+```python
+import protobunny as pb
+import mymessagelib as mml
+msg =  mml.test.TestMessage(content="hello", number=1, data={"test": "test"})
+pb.publish(msg)
+```
 
 ## Concepts
 
@@ -99,47 +164,59 @@ A result typically contains:
 
 ---
 
-## Quickstart
 
-### 1) Subscribe to a message
-```python
-import protobunny as pb
-import mymessagelib as mml
-def on_message(message: mml.test.TestMessage) -> None:
-    print("Got:", message)
 
-pb.subscribe( mml.test.TestMessage, on_message)
-```
-### 2) Publish a message
-```python
-import protobunny as pb
-import mymessagelib as mml
-msg =  mml.test.TestMessage(content="hello", number=1, data={"test": "test"})
-pb.publish(msg)
-```
-
----
 
 ## Task-style queues
+All messages that are under a `tasks` package are treated as shared queues.
 
-If a message is treated as a “task queue” message by the library conventions, subscribing will use a **shared queue** (multiple workers, one queue).
+```protobuf
+/*
+This .proto file contains protobuf message definitions for testing tasks
+*/
+syntax = "proto3";
+import "commons.proto";
+
+// Define the tasks package
+package tests.tasks;
+
+
+message TaskMessage {
+  string content = 10;
+  repeated float weights = 30 [packed = true];
+  repeated int64 bbox = 40 [packed = true];
+  optional commons.JsonContent options=50;
+}
+```
+
+If a message is treated as a "task queue" message by the library conventions, 
+subscribing will use a **shared queue** (multiple workers, one queue).
+The load is distributed among workers (competing consumers).
+
 ```python
 import protobunny as pb
 
-def worker(task: pb.tests.tasks.TaskMessage) -> None:
-    print("Working on:", task)
+def worker1(task: pb.tests.tasks.TaskMessage) -> None:
+    print("1- Working on:", task)
 
-pb.subscribe(pb.tests.tasks.TaskMessage, worker)
+def worker2(task: pb.tests.tasks.TaskMessage) -> None:
+    print("2- Working on:", task)
+
+pb.subscribe(pb.tests.tasks.TaskMessage, worker1)
+pb.subscribe(pb.tests.tasks.TaskMessage, worker2)
+pb.publish(pb.tests.tasks.TaskMessage(content="test1"))
+pb.publish(pb.tests.tasks.TaskMessage(content="test2"))
+pb.publish(pb.tests.tasks.TaskMessage(content="test3"))
 ```
 
-You can also introspect/manage the underlying queue:
+You can also introspect/manage an underlying shared queue:
 ```python
 
 import protobunny as pb
 
 queue = pb.get_queue(pb.tests.tasks.TaskMessage)
 
-# shared queues can be purged and counted
+# Only shared queues can be purged and counted
 count = queue.get_message_count()
 print("Queued:", count)
 queue.purge()
@@ -159,6 +236,7 @@ result = source.make_result(return_value={"ok": True})
 
 pb.publish_result(result)
 ```
+
 ### Subscribe to results for a message type
 ```python
 
@@ -229,19 +307,26 @@ uv run pytest -m integration
 
 ## Project status / scope
 
-Protobunny is designed for teams who use messaging to coordinate work between microservices and want
+Protobunny is designed for teams who use messaging to coordinate work between microservices and want:
 
-- A small API surface
-- Strongly-typed RabbitMQ messaging
+- A small API surface, easy to learn and use
+- Typed RabbitMQ messaging
 - Consistent topic naming and routing
 - Builtin task queue semantics and result messages
+- Builtin logging service
 - Transparent handling of JSON-like payload fields as plain dictionaries/lists
+- Optional validation of required fields
 
 
 ### Future work
 
-- Support RabbitMQ certificates (through `pika`)
-- Support more backends (Kafka, Python Queues)
+- Support sync/async grcp
+- Support for RabbitMQ certificates (through `pika`)
+- More backends:
+  - Redis
+  - multiprocessing.Queue or queue.Queue for simple local scenarios
+  - NATS
+  - Cloud providers (AWS SQS/SNS)
 ---
 
 ## License

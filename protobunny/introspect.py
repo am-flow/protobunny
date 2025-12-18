@@ -24,7 +24,7 @@ def _get_submodule(
         paths: Path to submodule/class expressed as list (e.g. ['vision', 'control', 'Start'])
 
     Note: you can get the path list by splitting the topic
-    >>> msg = pb.vision.control.Start()
+    >>> msg = acme.vision.control.Start()
     >>> paths = msg.topic.split('.')  # ['vision', 'control', 'Start']
 
     Returns: the submodule
@@ -50,15 +50,9 @@ def get_message_class_from_topic(topic: str) -> type[ProtoBunnyMessage] | None:
     if topic.endswith(".result"):
         message_type = pb.results.Result
     else:
-        topic = topic.removeprefix(f"{configuration.message_prefix}.")
-        if len(configuration.generated_package_name.split(".")) == 1:
-            codegen = importlib.import_module(configuration.generated_package_name)
-            # codegen = importlib.import_module(
-            #     f".{configuration.generated_package_name}", package=configuration.project_root
-            # )
-        else:
-            codegen = importlib.import_module(configuration.generated_package_name)
-        message_type = _get_submodule(codegen, topic.split("."))
+        topic = topic.removeprefix(f"{configuration.messages_prefix}.")
+        codegen_module = importlib.import_module(configuration.generated_package_name)
+        message_type = _get_submodule(codegen_module, topic.split("."))
     return message_type
 
 
@@ -73,7 +67,9 @@ def get_message_class_from_type_url(url: str) -> type[ProtoBunnyMessage]:
     """
     module_path, clz = url.rsplit(".", 1)
     if not module_path.startswith(configuration.generated_package_name):
-        raise ValueError("Invalid type url")
+        raise ValueError(
+            f"Invalid type url {url}, must start with {configuration.generated_package_name}."
+        )
     module = importlib.import_module(module_path)
     message_type = getattr(module, clz)
     return message_type
@@ -89,7 +85,7 @@ def build_routing_key(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | 
         build_routing_key(mymessaginglib.vision.control.Start()) -> "vision.control.Start" direct routing
 
     Args:
-        pkg_or_msg: a Message instance, class or module to amlogic_messages.codegen packages
+        pkg_or_msg: a Message instance, class or module to mymessaginglib codegen packages
 
     Returns: a routing key based on the type of message or package
 
@@ -107,9 +103,11 @@ def build_routing_key(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | 
         class_name = "#"
     routing_key = f"{module_name}.{class_name}"
     if not routing_key.startswith(configuration.generated_package_name):
-        raise ValueError("Invalid topic %s", routing_key)
+        raise ValueError(
+            f"Invalid topic {routing_key}, must start with {configuration.generated_package_name}."
+        )
     # As convention, we set the topic name to the message class name,
     # left-stripped of the root generated package name
     # (e.g. mymessaginglib.codegen.vision.control.Start => vision.control.Start)
-    routing_key = routing_key.split(f"{configuration.generated_package_name}.")[1]
+    routing_key = routing_key.split(f"{configuration.generated_package_name}.", maxsplit=1)[1]
     return routing_key

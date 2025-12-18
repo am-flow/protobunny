@@ -7,7 +7,42 @@ import pamqp
 import pytest
 from pytest_mock import MockerFixture
 
+# Create test config
+import protobunny.config
+
+test_config = protobunny.config.Config(
+    messages_directory="tests/proto",
+    messages_prefix="acme",
+    generated_package_name="tests",
+    project_name="test",
+    project_root="./",
+    force_required_fields=True,
+)
+
+# Overwrite the module-level configuration
+import protobunny.base
+import protobunny.introspect
+
+protobunny.introspect.configuration = test_config
+protobunny.base.configuration = test_config
+
 from protobunny.connection import Connection, reset_connection, set_stopped, stop_connection
+
+# @pytest.fixture(autouse=True)
+# def mock_config(mocker: MockerFixture) -> tp.Generator[None, None, None]:
+#     test_config = protobunny.config.Config(
+#         messages_directory="tests/proto",
+#         messages_prefix="acme",
+#         generated_package_name="tests",
+#         project_name="test",
+#         project_root="./",
+#         force_required_fields=True,
+#     )
+#     mocker.patch.object(protobunny.introspect.configuration, return_value=test_config)
+#     # mocker.patch("protobunny.introspect.load_config.__wrapped__", return_value=test_config)
+#     # mocker.patch("protobunny.load_config.__wrapped__", return_value=test_config)
+#     # mocker.patch("protobunny.base.load_config.__wrapped__", return_value=test_config)
+#     yield
 
 
 @pytest.fixture(scope="session")

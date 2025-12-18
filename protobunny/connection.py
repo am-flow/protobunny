@@ -285,7 +285,6 @@ class Connection(threading.Thread):
         Returns:
             tag: subscription identifier that will be needed to unsubscribe later.
         """
-
         queue = await self.setup_queue(topic, shared)
         log.info("Subscribing to %s", topic)
         func = functools.partial(self.on_message, topic, callback)

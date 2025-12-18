@@ -7,6 +7,8 @@ from waiting import wait
 
 import protobunny as pb
 
+from . import tests
+
 
 @pytest.mark.integration
 class TestIntegration:
@@ -14,7 +16,7 @@ class TestIntegration:
 
     received = None
     log_msg = None
-    msg = pb.tests.TestMessage(content="test", number=123, color=pb.tests.Color.GREEN)
+    msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
     def teardown_class(self) -> None:
         pb.stop_connection()
@@ -25,11 +27,12 @@ class TestIntegration:
         pb.unsubscribe_all()
 
     def setup_method(self):
+        pb.reset_connection("/test")
         self.simple_queue = pb.subscribe(self.msg, self.callback)
-        self.task_queue = pb.subscribe(pb.tests.tasks.TaskMessage, self.callback)
+        self.task_queue = pb.subscribe(tests.tasks.TaskMessage, self.callback)
         self.logger_queue = pb.subscribe_logger(self.log_callback)
 
-    def callback(self, msg: pb.tests.TestMessage) -> Any:
+    def callback(self, msg: tests.TestMessage) -> Any:
         self.received = msg
 
     def log_callback(self, _: aio_pika.IncomingMessage, body: str) -> None:
@@ -51,7 +54,7 @@ class TestIntegration:
             == '{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
         )
 
-        msg = pb.tests.tasks.TaskMessage(
+        msg = tests.tasks.TaskMessage(
             content="test",
             bbox=[1, 2, 3, 4],
         )
@@ -76,7 +79,7 @@ class TestIntegration:
         }
 
     def test_count_messages(self, integration_test: None) -> None:
-        msg = pb.tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
+        msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
         queue = self.task_queue
         queue.purge()  # remove past messages
@@ -94,7 +97,7 @@ class TestIntegration:
     def test_logger_int64(self, integration_test: None) -> None:
         # Ensure that uint64/int64 values are not converted to strings in the LoggerQueue callbacks
         pb.publish(
-            pb.tests.tasks.TaskMessage(
+            tests.tasks.TaskMessage(
                 content="test", bbox=[1, 2, 3, 4], weights=[1.0, 2.0, -100, -20]
             )
         )
@@ -104,7 +107,7 @@ class TestIntegration:
             self.log_msg
             == '{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
         )
-        pb.publish(pb.tests.TestMessage(number=63, content="test"))
+        pb.publish(tests.TestMessage(number=63, content="test"))
         assert wait(
             lambda: self.log_msg
             == '{"content": "test", "number": 63, "detail": null, "options": null, "color": null}',
@@ -117,16 +120,16 @@ class TestIntegration:
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received == self.msg
         self.received = None
-        pb.unsubscribe(pb.tests.TestMessage, if_unused=False)
+        pb.unsubscribe(tests.TestMessage, if_unused=False)
         pb.publish(self.msg)
         assert self.received is None
 
         # unsubscribe from a package-level topic
-        pb.subscribe(pb.tests, self.callback)
-        pb.publish(pb.tests.TestMessage(number=63, content="test"))
+        pb.subscribe(tests, self.callback)
+        pb.publish(tests.TestMessage(number=63, content="test"))
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         self.received = None
-        pb.unsubscribe(pb.tests, if_unused=False)
+        pb.unsubscribe(tests, if_unused=False)
         pb.publish(self.msg)
         assert self.received is None
 
@@ -137,8 +140,8 @@ class TestIntegration:
             nonlocal received
             received = m
 
-        pb.subscribe(pb.tests.TestMessage, self.callback)
-        pb.subscribe(pb.tests, callback_2)
+        pb.subscribe(tests.TestMessage, self.callback)
+        pb.subscribe(tests, callback_2)
         pb.publish(self.msg)  # this will reach callback_2 as well
         assert wait(lambda: self.received and received, timeout_seconds=1, sleep_seconds=0.5)
         assert self.received == received == self.msg
@@ -152,7 +155,7 @@ class TestIntegration:
     def test_unsubscribe_results(self, integration_test: None) -> None:
         received_result: pb.results.Result | None = None
 
-        def callback(_: pb.tests.TestMessage) -> None:
+        def callback(_: tests.TestMessage) -> None:
             # The receiver catches the error in callback and will send a Result.FAILURE message
             # to the result topic
             raise RuntimeError("error in callback")
@@ -162,29 +165,29 @@ class TestIntegration:
             received_result = m
 
         pb.unsubscribe_all()
-        pb.subscribe(pb.tests.TestMessage, callback)
+        pb.subscribe(tests.TestMessage, callback)
         # subscribe to the result topic
-        pb.subscribe_results(pb.tests.TestMessage, callback_results)
-        msg = pb.tests.TestMessage(number=63, content="test")
+        pb.subscribe_results(tests.TestMessage, callback_results)
+        msg = tests.TestMessage(number=63, content="test")
         pb.publish(msg)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == msg
         assert received_result.return_code == pb.results.ReturnCode.FAILURE
-        pb.unsubscribe_results(pb.tests.TestMessage)
+        pb.unsubscribe_results(tests.TestMessage)
         received_result = None
         pb.publish(msg)
         assert received_result is None
 
     def test_unsubscribe_all(self, integration_test: None) -> None:
-        received_message: pb.tests.tasks.TaskMessage | None = None
+        received_message: tests.tasks.TaskMessage | None = None
         received_result: pb.results.Result | None = None
 
-        def callback_1(_: pb.tests.TestMessage) -> None:
+        def callback_1(_: tests.TestMessage) -> None:
             # The receiver catches the error in callback and will send a Result.FAILURE message
             # to the result topic
             raise RuntimeError("error in callback")
 
-        def callback_2(m: pb.tests.tasks.TaskMessage) -> None:
+        def callback_2(m: tests.tasks.TaskMessage) -> None:
             nonlocal received_message
             received_message = m
 
@@ -193,20 +196,24 @@ class TestIntegration:
             received_result = m
 
         pb.unsubscribe_all()
-        pb.subscribe(pb.tests.TestMessage, callback_1)
-        pb.subscribe(pb.tests.tasks.TaskMessage, callback_2)
+        q1 = pb.subscribe(tests.TestMessage, callback_1)
+        q2 = pb.subscribe(tests.tasks.TaskMessage, callback_2)
+        assert q1.topic == "acme.tests.TestMessage"
+        assert q2.topic == "acme.tests.tasks.TaskMessage"
+        assert q1.subscription is not None
+        assert q2.subscription is not None
         # subscribe to a result topic
-        pb.subscribe_results(pb.tests.TestMessage, callback_results)
-        pb.publish(pb.tests.TestMessage(number=2, content="test"))
-        pb.publish(pb.tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb.subscribe_results(tests.TestMessage, callback_results)
+        pb.publish(tests.TestMessage(number=2, content="test"))
+        pb.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
         assert wait(lambda: received_message is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
-        assert received_result.source == pb.tests.TestMessage(number=2, content="test")
+        assert received_result.source == tests.TestMessage(number=2, content="test")
 
         pb.unsubscribe_all()
         received_result = None
         received_message = None
-        pb.publish(pb.tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
-        pb.publish(pb.tests.TestMessage(number=2, content="test"))
+        pb.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb.publish(tests.TestMessage(number=2, content="test"))
         assert received_message is None
         assert received_result is None

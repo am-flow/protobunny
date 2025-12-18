@@ -13,9 +13,11 @@ from protobunny.introspect import (
     get_message_class_from_type_url,
 )
 
+from . import tests
+
 
 def test_serdeser_result() -> None:
-    msg: ProtoBunnyMessage = pb.tests.TestMessage(content="test", number=123)
+    msg: ProtoBunnyMessage = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     assert result.source_message.value == bytes(msg)
     assert result.return_value == {"test": "value"}
@@ -32,14 +34,14 @@ def test_serdeser_result() -> None:
     assert msg == message_type().parse(bytes(msg))
 
     queue = pb.get_queue(msg)
-    assert "pb.tests.TestMessage.result" == queue.result_topic
+    assert "acme.tests.TestMessage.result" == queue.result_topic
 
     # Serialize result
     # The return_value dictionary is first converted
     # to a commons.JsonContent before being serialized
     ser = bytes(result)
     deser = deserialize_result_message(ser)
-    assert deser.source_message.type_url == "protobunny.core.tests.TestMessage"
+    assert deser.source_message.type_url == "tests.tests.TestMessage"
     assert deser.source_message.type_url == msg.type_url
     # The return value is a commons.JsonContent object
     # and it transparently returns to a dict once deserialized
@@ -49,10 +51,10 @@ def test_serdeser_result() -> None:
 
 
 def test_topics(mock_connection_obj: MagicMock) -> None:
-    msg = pb.tests.TestMessage(content="test", number=123)
+    msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
-    assert q.result_topic == "pb.tests.TestMessage.result"
+    assert q.result_topic == "acme.tests.TestMessage.result"
     pb.publish_result(result)
     expected_payload = aio_pika.Message(
         bytes(result),
@@ -60,5 +62,5 @@ def test_topics(mock_connection_obj: MagicMock) -> None:
         delivery_mode=DeliveryMode.NOT_PERSISTENT,
     )
     mock_connection_obj.publish.assert_called_once_with(
-        "pb.tests.TestMessage.result", expected_payload
+        "acme.tests.TestMessage.result", expected_payload
     )

@@ -34,6 +34,15 @@ class TestMessage(base.MessageMixin, betterproto.Message):
     color: Optional["Color"] = betterproto.enum_field(50, optional=True)
 
 
+@dataclass(eq=False, repr=False)
+class ComplexTestMessage(base.MessageMixin, betterproto.Message):
+    x: int = betterproto.int64_field(10)
+    y: Optional[int] = betterproto.int64_field(20, optional=True)
+    a: bool = betterproto.bool_field(1, group="group")
+    b: int = betterproto.int32_field(2, group="group")
+    c: str = betterproto.string_field(3, group="group")
+
+
 #######################################################
 # Dynamically added by protobunny post_compile.py
 

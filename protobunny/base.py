@@ -9,6 +9,7 @@ import logging
 import textwrap
 import typing as tp
 import uuid
+from collections import defaultdict
 from decimal import Decimal
 from io import BytesIO
 from types import ModuleType
@@ -27,12 +28,13 @@ from .connection import RequeueMessage, get_connection
 from .introspect import (
     ProtoBunnyMessage,
     build_routing_key,
-    configuration,
     get_message_class_from_topic,
     get_message_class_from_type_url,
 )
 
 log = logging.getLogger(__name__)
+
+configuration = load_config()
 
 
 class ProtobunnyJsonEncoder(json.JSONEncoder):
@@ -64,14 +66,12 @@ class MissingRequiredFields(Exception):
 class MessageMixin:
     """Utility mixin for protobunny messages."""
 
-    conf = load_config()
-
     def validate_required_fields(self: ProtoBunnyMessage) -> None:
         """Raises a MissingRequiredFields if non optional fields are missing.
         Note: Ignore missing repeated fields.
         This check happens during serialization (see MessageMixin.__bytes__ method).
         """
-        if not self.conf.force_required_fields:
+        if not configuration.force_required_fields:
             return
         defaults = self._betterproto.default_gen
         missing = [
@@ -487,9 +487,28 @@ class Queue:
 
 
 class LoggingQueue(Queue):
+    """Represents a specialized queue for logging purposes.
+
+    >>> import protobunny as pb
+    >>> pb.subscribe_logger()  # it uses the default logger_callback
+
+    You can add a custom callback that accepts message: aio_pika.IncomingMessage, msg_content: str as arguments.
+
+    >>> def log_callback(message: aio_pika.IncomingMessage, msg_content: str):
+    >>>     print(message.body)
+    >>> pb.subscribe_logger(log_callback)
+
+    You can use functools.partial to add more arguments
+
+    >>> def log_callback_with_args(message: aio_pika.IncomingMessage, msg_content: str, maxlength: int):
+    >>>     print(message.body[maxlength])
+    >>> import functools
+    >>> functools.partial(log_callback_with_args, maxlength=100)
+    >>> pb.subscribe_logger(log_callback_with_args)
+    """
+
     def __init__(self) -> None:
-        conf = load_config()
-        super().__init__(Topic(f"{conf.message_prefix}.#"))
+        super().__init__(Topic(f"{configuration.messages_prefix}.#"))
 
     @property
     def result_topic(self) -> str:
@@ -558,9 +577,10 @@ class LoggingQueue(Queue):
 # Base Methods
 ########################
 
-# subscriptions registry
+# subscriptions registries
 subscriptions: dict[tp.Any, Queue] = dict()
 results_subscriptions: dict[tp.Any, Queue] = dict()
+tasks_subscriptions: dict[tp.Any, list[Queue]] = defaultdict(list)
 
 
 def get_topic(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType) -> Topic:
@@ -574,7 +594,7 @@ def get_topic(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleTy
 
     Returns: Topic
     """
-    topic_name = f"{configuration.message_prefix}.{build_routing_key(pkg_or_msg)}"
+    topic_name = f"{configuration.messages_prefix}.{build_routing_key(pkg_or_msg)}"
     is_task_queue = ".tasks." in topic_name
     return Topic(name=topic_name, is_task_queue=is_task_queue)
 
@@ -660,8 +680,8 @@ def publish(message: ProtoBunnyMessage) -> None:
     Args:
         message:
     """
-    q = get_queue(message)
-    q.publish(message)
+    queue = get_queue(message)
+    queue.publish(message)
 
 
 def publish_result(
@@ -675,8 +695,8 @@ def publish_result(
             Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
         correlation_id:
     """
-    q = get_queue(result.source)
-    q.publish_result(result, topic, correlation_id)
+    queue = get_queue(result.source)
+    queue.publish_result(result, topic, correlation_id)
 
 
 def subscribe(
@@ -693,11 +713,18 @@ def subscribe(
         The Queue object. You can access the subscription via its `subscription` attribute.
     """
     sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
-    q = get_queue(pkg_or_msg) if sub_key not in subscriptions else subscriptions[sub_key]
-    q.subscribe(callback)
-    # register subscription to unsubscribe later
-    subscriptions[sub_key] = q
-    return q
+    module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
+    if "tasks" in module_name.split("."):
+        # It's a task. Handle multiple subscriptions
+        queue = get_queue(pkg_or_msg)
+        queue.subscribe(callback)
+        tasks_subscriptions[sub_key].append(queue)
+    else:
+        queue = get_queue(pkg_or_msg) if sub_key not in subscriptions else subscriptions[sub_key]
+        queue.subscribe(callback)
+        # register subscription to unsubscribe later
+        subscriptions[sub_key] = queue
+    return queue
 
 
 def subscribe_results(
@@ -724,6 +751,11 @@ def unsubscribe(pkg_or_msg: ProtoBunnyMessage | type[Message] | ModuleType, if_u
     if sub_key in subscriptions:
         q = subscriptions.pop(sub_key)
         q.unsubscribe(if_unused)
+    module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
+    if "tasks" in module_name.split("."):
+        queues = tasks_subscriptions.pop(sub_key)
+        for q in queues:
+            q.unsubscribe(if_unused)
 
 
 def unsubscribe_results(pkg_or_msg: ProtoBunnyMessage | type[Message] | ModuleType) -> None:
@@ -742,6 +774,9 @@ def unsubscribe_all() -> None:
     for q in results_subscriptions.values():
         q.unsubscribe_results()
     results_subscriptions.clear()
+    for queues in tasks_subscriptions.values():
+        for q in queues:
+            q.unsubscribe(if_unused=False)
 
 
 def get_message_count(msg_type: ProtoBunnyMessage | type[Message]) -> int:
