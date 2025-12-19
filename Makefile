@@ -31,4 +31,4 @@ test:
 	make format
 	uv run pytest tests/ -m "not integration"
 integration_test:
-	uv run pytest tests/test_integration.py
+	uv run pytest tests/ -m "integration"

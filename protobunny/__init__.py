@@ -1,21 +1,23 @@
 from .base import (  # noqa
-    ProtoBunnyMessage,
-    LoggingQueue,
-    MessageMixin,
-    Queue,
-    Topic,
-    _deserialize_content,
     get_message_count,
     get_queue,
     publish,
     publish_result,
     subscribe,
     subscribe_logger,
+    subscribe_logger_sync,
     subscribe_results,
-    to_json_content,
     unsubscribe,
     unsubscribe_all,
     unsubscribe_results,
+    publish_sync,
+    publish_result_sync,
+    subscribe_sync,
+    subscribe_results_sync,
+    unsubscribe_sync,
+    unsubscribe_all_sync,
+    unsubscribe_results_sync,
+    get_message_count_sync,
 )
 
 #######################################################
@@ -33,12 +35,16 @@ from .config import (  # noqa
     ROOT_GENERATED_PACKAGE_NAME,
     load_config,
 )
-from .connection import (  # noqa
+
+# TODO autogenerate this based on `backend` configuration
+# RabbitMQ is the only backend
+from .backends.rabbitmq import (  # noqa
     RequeueMessage,
-    get_connection,
-    is_connected,
-    is_stopped,
+    ConnectionError,
+    reset_connection_sync,
     reset_connection,
-    set_stopped,
-    stop_connection,
+    get_connection_sync,
+    get_connection,
+    disconnect,
+    disconnect_sync,
 )

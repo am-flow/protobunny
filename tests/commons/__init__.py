@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 import betterproto
 
-from protobunny import base as base
+from protobunny import models as models
 
 
 @dataclass(eq=False, repr=False)
-class JsonContent(base.MessageMixin, betterproto.Message):
+class JsonContent(models.MessageMixin, betterproto.Message):
     """
     The JsonContent message is used as a field in other messages to hold dictionary/Json data.
     Notes:

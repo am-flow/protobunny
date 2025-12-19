@@ -14,7 +14,8 @@ dependencies = [
     "betterproto[compiler]>=2.0.0b7,<3",
     "grpcio-tools>=1.62.0,<2",
     "numpy>=1.26",
-    "tomli ; python_version < '3.11'"
+    "pytest-env>=1.1.3",
+    "tomli ; python_version < '3.11'",
 ]
 
 [project.scripts]
@@ -50,6 +51,13 @@ markers = [
     "integration: tests requiring a real connection to the amqp server. They don't run in CI",
 ]
 cache_dir = ".cache/pytest"
+
+[tool.pytest_env]
+RABBITMQ_HOST = "localhost"
+RABBITMQ_PORT = 5672
+RABBITMQ_USER = "guest"
+RABBITMQ_PASS = "guest"
+RABBITMQ_VHOST = "/test"
 
 [tool.coverage.run]
 omit = ["test.py", "*/tests/*"]

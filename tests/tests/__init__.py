@@ -7,7 +7,7 @@ from typing import Optional
 
 import betterproto
 
-from protobunny import base as base
+from protobunny import models as models
 
 from .. import commons as _commons__
 
@@ -24,7 +24,7 @@ class Color(betterproto.Enum):
 
 
 @dataclass(eq=False, repr=False)
-class TestMessage(base.MessageMixin, betterproto.Message):
+class TestMessage(models.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     number: int = betterproto.int64_field(20)
     detail: Optional[str] = betterproto.string_field(30, optional=True)
@@ -35,7 +35,7 @@ class TestMessage(base.MessageMixin, betterproto.Message):
 
 
 @dataclass(eq=False, repr=False)
-class ComplexTestMessage(base.MessageMixin, betterproto.Message):
+class ComplexTestMessage(models.MessageMixin, betterproto.Message):
     x: int = betterproto.int64_field(10)
     y: Optional[int] = betterproto.int64_field(20, optional=True)
     a: bool = betterproto.bool_field(1, group="group")

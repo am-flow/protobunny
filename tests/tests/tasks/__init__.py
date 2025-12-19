@@ -10,13 +10,13 @@ from typing import (
 
 import betterproto
 
-from protobunny import base as base
+from protobunny import models as models
 
 from ... import commons as __commons__
 
 
 @dataclass(eq=False, repr=False)
-class TaskMessage(base.MessageMixin, betterproto.Message):
+class TaskMessage(models.MessageMixin, betterproto.Message):
     content: str = betterproto.string_field(10)
     weights: List[float] = betterproto.float_field(30)
     bbox: List[int] = betterproto.int64_field(40)

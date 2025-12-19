@@ -1,24 +1,19 @@
-import typing as tp
 import uuid
-from unittest.mock import ANY, MagicMock
 
-import aio_pika
 import betterproto
 import pytest
-from pytest_mock import MockerFixture
 
-import protobunny as pb
 from protobunny.base import (
+    get_queue,
+)
+from protobunny.models import (
     MessageMixin,
     MissingRequiredFields,
-    deserialize_message,
-    get_queue,
-    get_topic,
-)
-from protobunny.introspect import (
     get_message_class_from_topic,
     get_message_class_from_type_url,
+    get_topic,
 )
+from protobunny.queues import deserialize_message
 
 from . import tests
 
@@ -153,90 +148,3 @@ def test_enum_behavior() -> None:
     assert deser.color == tests.Color.RED
     assert deser.color == tests.Color.RED.value
     assert isinstance(deser.color, int)
-
-
-class TestQueue:
-    def test_get_message_count(self, mock_connection_obj: MagicMock) -> None:
-        q = get_queue(tests.tasks.TaskMessage)
-        q.get_message_count()
-        mock_connection_obj.get_message_count.assert_called_once_with(
-            "acme.tests.tasks.TaskMessage"
-        )
-        q = get_queue(tests.TestMessage)
-        with pytest.raises(RuntimeError) as exc:
-            q.get_message_count()
-        assert str(exc.value) == "Can only get count of shared queues"
-
-    def test_purge(self, mock_connection_obj: MagicMock) -> None:
-        q = get_queue(tests.tasks.TaskMessage)
-        q.purge()
-        mock_connection_obj.purge.assert_called_once_with("acme.tests.tasks.TaskMessage")
-        q = get_queue(tests.TestMessage)
-        with pytest.raises(RuntimeError) as exc:
-            q.purge()
-        assert str(exc.value) == "Can only purge shared queues"
-
-    def test_receive(
-        self,
-        mocker: MockerFixture,
-        mock_connection_obj: MagicMock,
-        pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
-    ) -> None:
-        cb = mocker.MagicMock()
-        msg = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
-        q = get_queue(msg)
-        pika_message = pika_incoming_message(bytes(msg), q.topic)
-        q._receive(cb, pika_message)
-        cb.assert_called_once_with(msg)
-
-        with pytest.raises(ValueError) as e:
-            pika_message_no_routing = pika_incoming_message(bytes(msg), "")
-            q._receive(cb, pika_message_no_routing)
-        assert str(e.value) == "Routing key was not set. Invalid topic"
-
-        cb.reset_mock()
-        pika_message_result = pika_incoming_message(bytes(msg.make_result()), q.result_topic)
-        # callback not called on result messages
-        q._receive(cb, pika_message_result)
-        cb.assert_not_called()
-
-    def test_subscribe(self, mocker: MockerFixture, mock_connection_obj: MagicMock) -> None:
-        cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
-        q.subscribe(cb)
-        mock_connection_obj.subscribe.assert_called_once_with(
-            "acme.tests.tasks.TaskMessage", ANY, shared=True
-        )
-        q.unsubscribe()
-        mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=True)
-
-    def test_receive_result(
-        self,
-        mocker: MockerFixture,
-        mock_connection_obj: MagicMock,
-        pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
-    ) -> None:
-        cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
-        source_message = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
-        result_message = source_message.make_result()
-        assert result_message.return_value is None
-        pika_message = pika_incoming_message(bytes(result_message), q.result_topic)
-        q._receive_result(cb, pika_message)
-        assert result_message.return_value is None
-        cb.assert_called_once_with(result_message)
-
-    def test_subscribe_results(self, mocker: MockerFixture, mock_connection_obj: MagicMock) -> None:
-        cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
-        q.subscribe_results(cb)
-        mock_connection_obj.subscribe.assert_called_once_with(
-            "acme.tests.tasks.TaskMessage.result", ANY, shared=False
-        )
-        q.unsubscribe_results()
-        mock_connection_obj.unsubscribe.assert_called_once_with(ANY, if_unused=False)
-
-
-def test_logger(mock_connection_obj: MagicMock) -> None:
-    pb.subscribe_logger()
-    mock_connection_obj.subscribe.assert_called_once_with("acme.#", ANY, shared=False)

@@ -4,20 +4,16 @@ import aio_pika
 from aio_pika import DeliveryMode
 
 import protobunny as pb
-from protobunny.base import (
-    deserialize_result_message,
-)
-from protobunny.introspect import (
-    ProtoBunnyMessage,
-    get_message_class_from_topic,
-    get_message_class_from_type_url,
-)
+from protobunny.models import get_message_class_from_topic, get_message_class_from_type_url
+from protobunny.queues import configuration, deserialize_result_message
 
 from . import tests
 
+configuration.mode = "sync"
+
 
 def test_serdeser_result() -> None:
-    msg: ProtoBunnyMessage = tests.TestMessage(content="test", number=123)
+    msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     assert result.source_message.value == bytes(msg)
     assert result.return_value == {"test": "value"}
@@ -50,17 +46,17 @@ def test_serdeser_result() -> None:
     assert deser == result
 
 
-def test_topics(mock_connection_obj: MagicMock) -> None:
+def test_topics(mock_sync_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
     assert q.result_topic == "acme.tests.TestMessage.result"
-    pb.publish_result(result)
+    pb.publish_result_sync(result)
     expected_payload = aio_pika.Message(
         bytes(result),
         correlation_id=None,
         delivery_mode=DeliveryMode.NOT_PERSISTENT,
     )
-    mock_connection_obj.publish.assert_called_once_with(
+    mock_sync_connection.publish.assert_called_once_with(
         "acme.tests.TestMessage.result", expected_payload
     )

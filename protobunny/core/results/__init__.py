@@ -8,7 +8,7 @@ from typing import Optional
 import betterproto
 import betterproto.lib.google.protobuf as betterproto_lib_google_protobuf
 
-from protobunny import base as base
+from protobunny import models as models
 
 from .. import commons as _commons__
 
@@ -22,7 +22,7 @@ class ReturnCode(betterproto.Enum):
 
 
 @dataclass(eq=False, repr=False)
-class Result(base.MessageMixin, betterproto.Message):
+class Result(models.MessageMixin, betterproto.Message):
     source_message: "betterproto_lib_google_protobuf.Any" = betterproto.message_field(1)
     """
     * The source message. It is transparently deserialized by the `source` property

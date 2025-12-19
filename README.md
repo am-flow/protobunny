@@ -1,4 +1,4 @@
-<div class="display-flex">
+<div style="width: 50%; margin: 0 auto;">
   <img src="./images/logo.png" alt="protobunny Logo" height="512">
 </div>
 
@@ -8,16 +8,15 @@ Note: The project is in early development.
 
 The `protobunny` library simplifies messaging for asynchronous tasks by providing:
 
-* connections facilities to RabbitMQ
-* Protocol Buffers messages serialization/deserialization.
-
-It focuses on a clean “message-first” API:
-
-- Publish protobuf messages to **topic exchanges**
-- Subscribe callbacks to message topics (including wildcard / package-level topics)
-- Support “task-like” queues (shared/competing consumers) vs broadcast subscriptions
-- Generate and consume `Result` messages (success/failure + optional return payload)
-- Transparently serialize "JSON-like" payload fields (numpy-friendly)
+* A clean “message-first” API
+* Python class generation from Protobuf messages using betterproto
+* Connections facilities to RabbitMQ
+* Message publishing/subscribing with typed topics
+* Generate and consume `Result` messages (success/failure + optional return payload)
+* Protocol Buffers messages serialization/deserialization
+* Support “task-like” queues (shared/competing consumers) vs broadcast subscriptions 
+* Support async and sync contexts
+* Transparently serialize "JSON-like" payload fields (numpy-friendly)
 
 ## Requirements
 
@@ -28,7 +27,7 @@ It focuses on a clean “message-first” API:
 
 Protobunny is designed for teams who use messaging to coordinate work between microservices or different python processes and want:
 
-- A small API surface, easy to learn and use
+- A small API surface, easy to learn and use, both async and sync
 - Typed RabbitMQ messaging
 - Consistent topic naming and routing
 - Builtin task queue semantics and result messages
@@ -92,6 +91,7 @@ env:
 ```shell
 mkdir messages
 mkdir messages/acme
+mkdir messages/acme/tests
 # etc.
 ```
 A message that uses JSON-like fields can look like this:
@@ -100,7 +100,7 @@ A message that uses JSON-like fields can look like this:
 syntax = "proto3";
 import "protobunny/commons.proto";
 
-package test;
+package acme.tests;
 
 message TestMessage {
   string content = 10;
@@ -114,21 +114,27 @@ message TestMessage {
 ### Generate your message library with `protobunny`
 The library comes with a `protoc` wrapper that generates Python code from your protobuf messages 
 and executes a postcompilation step to manipulate the generated code. 
-Important note: the arguments must reflect the configuration in `pyproject.toml` in the section `tool.protobunny`, as showed above.
 
 ```shell
-protobunny -I messages --python_betterproto_out=mymessagelib/codegen messages/**/*.proto messages/*.proto
+protobunny -I messages messages/**/*.proto messages/*.proto
 ```
+
 In `mymessagelib/codegen` you should see the generated message classes, mirroring the `package` declaration in your protobuf files.
+
+If you need to generate the classes in another package, you can pass the `--python_betterproto_out` option:
+
+```shell
+protobunny -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
+```
 
 ### Subscribe to a message
 ```python
 import protobunny as pb
 import mymessagelib as mml
-def on_message(message: mml.test.TestMessage) -> None:
+def on_message(message: mml.tests.TestMessage) -> None:
     print("Got:", message)
 
-pb.subscribe(mml.test.TestMessage, on_message)
+pb.subscribe_sync(mml.tests.TestMessage, on_message)
 # Prints 
 # 'Got: TestMessage(content="hello", number=1, data={"test": "test"}, detail=None)' 
 # when a message is received
@@ -138,8 +144,8 @@ The following code can run in another process or thread and publishes a message 
 ```python
 import protobunny as pb
 import mymessagelib as mml
-msg =  mml.test.TestMessage(content="hello", number=1, data={"test": "test"})
-pb.publish(msg)
+msg =  mml.tests.TestMessage(content="hello", number=1, data={"test": "test"})
+pb.publish_sync(msg)
 ```
 
 ## Concepts
@@ -152,9 +158,9 @@ Publishing sends your message to that topic; subscribing binds a queue to the sa
 
 Typical patterns:
 
-- Exact topic: `pb.some.Package.Message`
-- Wildcards: `pb.#` (subscribe to everything under `pb.`)
-- Package-level subscription: subscribe to a module/package to receive multiple message types eg. `pb.some`
+- Exact topic: `acme.some.Package.Message`
+- Wildcards: `acme.#` (subscribe to everything under `acme.`)
+- Package-level subscription: subscribe to a module/package to receive multiple message types eg. `acme.some`
 
 ### Shared “task” queues vs broadcast subscriptions
 
@@ -215,11 +221,11 @@ def worker1(task: mml.main.tasks.TaskMessage) -> None:
 def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
 
-pb.subscribe(mml.main.tasks.TaskMessage, worker1)
-pb.subscribe(mml.main.tasks.TaskMessage, worker2)
-pb.publish(mml.main.tasks.TaskMessage(content="test1"))
-pb.publish(mml.main.tasks.TaskMessage(content="test2"))
-pb.publish(mml.main.tasks.TaskMessage(content="test3"))
+pb.subscribe_sync(mml.main.tasks.TaskMessage, worker1)
+pb.subscribe_sync(mml.main.tasks.TaskMessage, worker2)
+pb.publish_sync(mml.main.tasks.TaskMessage(content="test1"))
+pb.publish_sync(mml.main.tasks.TaskMessage(content="test2"))
+pb.publish_sync(mml.main.tasks.TaskMessage(content="test3"))
 ```
 
 You can also introspect/manage an underlying shared queue:
@@ -244,7 +250,7 @@ queue.purge()
 import protobunny as pb
 import mymessagelib as mml
 
-source = mml.test.TestMessage(content="hello", number=1)
+source = mml.tests.TestMessage(content="hello", number=1)
 
 # create a result message from the source message
 result = source.make_result(return_value={"ok": True})
@@ -264,7 +270,7 @@ def on_result(res: pb.results.Result) -> None:
     print("Return value:", res.return_value)
     print("Error:", res.error)
 
-pb.subscribe_results(mml.test.TestMessage, on_result)
+pb.subscribe_results(mml.tests.TestMessage, on_result)
 ```
 
 ---
@@ -299,9 +305,7 @@ If you need explicit connection lifecycle control, you can access the shared con
 ```python
 import protobunny as pb
 
-conn = pb.get_connection()
-# ...
-pb.stop_connection()
+conn = pb.get_connection_sync()
 ```
 ---
 

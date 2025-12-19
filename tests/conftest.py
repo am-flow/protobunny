@@ -1,5 +1,5 @@
 import typing as tp
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aio_pika
 import aiormq
@@ -7,8 +7,10 @@ import pamqp
 import pytest
 from pytest_mock import MockerFixture
 
+import protobunny
+
 # Create test config
-import protobunny.config
+from protobunny.backends.rabbitmq import AsyncConnection, SyncConnection
 
 test_config = protobunny.config.Config(
     messages_directory="tests/proto",
@@ -17,53 +19,61 @@ test_config = protobunny.config.Config(
     project_name="test",
     project_root="./",
     force_required_fields=True,
+    mode="sync",
 )
 
 # Overwrite the module-level configuration
-import protobunny.base
-import protobunny.introspect
+import protobunny.models
+import protobunny.queues
 
-protobunny.introspect.configuration = test_config
 protobunny.base.configuration = test_config
-
-from protobunny.connection import Connection, reset_connection, set_stopped, stop_connection
-
-# @pytest.fixture(autouse=True)
-# def mock_config(mocker: MockerFixture) -> tp.Generator[None, None, None]:
-#     test_config = protobunny.config.Config(
-#         messages_directory="tests/proto",
-#         messages_prefix="acme",
-#         generated_package_name="tests",
-#         project_name="test",
-#         project_root="./",
-#         force_required_fields=True,
-#     )
-#     mocker.patch.object(protobunny.introspect.configuration, return_value=test_config)
-#     # mocker.patch("protobunny.introspect.load_config.__wrapped__", return_value=test_config)
-#     # mocker.patch("protobunny.load_config.__wrapped__", return_value=test_config)
-#     # mocker.patch("protobunny.base.load_config.__wrapped__", return_value=test_config)
-#     yield
-
-
-@pytest.fixture(scope="session")
-def integration_test() -> tp.Generator[None, None, None]:
-    """Fixture for integration tests, to run in an environment with RabbitMQ service"""
-    reset_connection(vhost="/test")
-    yield
-    stop_connection()
+protobunny.models.configuration = test_config
+protobunny.queues.configuration = test_config
 
 
 @pytest.fixture
-def mock_connection_obj(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
-    mock = mocker.MagicMock(spec=Connection)
-    mocker.patch("protobunny.connection.Connection", return_value=mock)
+def mock_aio_pika():
+    """Mocks the entire aio_pika connection chain."""
+    with patch("aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        # Mock Connection
+        mock_conn = AsyncMock()
+        mock_connect.return_value = mock_conn
+
+        # Mock Channel
+        mock_channel = AsyncMock()
+        mock_conn.channel.return_value = mock_channel
+
+        # Mock Exchange
+        mock_exchange = AsyncMock()
+        mock_channel.declare_exchange.return_value = mock_exchange
+
+        # Mock Queue
+        mock_queue = AsyncMock()
+        mock_queue.name = "test-queue"
+        mock_queue.exclusive = False
+        mock_channel.declare_queue.return_value = mock_queue
+
+        yield {
+            "connect": mock_connect,
+            "connection": mock_conn,
+            "channel": mock_channel,
+            "exchange": mock_exchange,
+            "queue": mock_queue,
+        }
+
+
+@pytest.fixture
+def mock_sync_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
+    mock = mocker.MagicMock(spec=SyncConnection)
+    mocker.patch("protobunny.queues.get_connection_sync", return_value=mock)
     yield mock
-    # Reset connection
-    # otherwise the next test will try to assert a different mock instance,
-    # while the __CONNECTION variable remains set
-    # with the first MagicMock returned by this fixture
-    stop_connection()
-    set_stopped(False)
+
+
+@pytest.fixture
+async def mock_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
+    mock = mocker.AsyncMock(spec=AsyncConnection)
+    mocker.patch("protobunny.queues.get_connection", return_value=mock)
+    yield mock
 
 
 @pytest.fixture
@@ -79,18 +89,6 @@ def pika_incoming_message() -> tp.Callable[[bytes, str], aio_pika.IncomingMessag
         )
 
     return _incoming_message_factory
-
-
-@pytest.fixture
-async def mock_aiopika_connection(
-    mocker: MockerFixture,
-) -> tp.AsyncGenerator[AsyncMock, None]:
-    mocked_connection = mocker.AsyncMock(spec=aio_pika.RobustConnection)
-    mocked_channel = mocker.AsyncMock(spec=aio_pika.RobustChannel)
-    mocker.patch("aio_pika.connect", return_value=mocked_connection)
-    mocker.patch("aio_pika.connect_robust", return_value=mocked_connection)
-    mocked_connection.channel.return_value = mocked_channel()
-    yield mocked_connection
 
 
 @pytest.fixture

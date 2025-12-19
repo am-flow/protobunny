@@ -25,6 +25,11 @@ class Config:
     project_root: str = "./"
     force_required_fields: bool = False
     generated_package_name: str = "codegen"
+    mode: str = "sync"
+
+    @property
+    def use_async(self) -> bool:
+        return self.mode == "async"
 
 
 @functools.cache

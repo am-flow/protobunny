@@ -1,4 +1,4 @@
-from typing import Any
+import typing as tp
 
 import aio_pika
 import betterproto
@@ -9,6 +9,11 @@ import protobunny as pb
 
 from . import tests
 
+if tp.TYPE_CHECKING:
+    from protobunny.models import ProtoBunnyMessage
+
+from protobunny.queues import configuration
+
 
 @pytest.mark.integration
 class TestIntegration:
@@ -18,33 +23,30 @@ class TestIntegration:
     log_msg = None
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
-    def teardown_class(self) -> None:
-        pb.stop_connection()
+    @pytest.fixture(autouse=True)
+    def setup_connections(self):
+        configuration.mode = "sync"
+        conn = pb.get_connection_sync()
+        self.simple_queue = pb.subscribe_sync(self.msg, self.callback)
+        self.task_queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback)
+        self.logger_queue = pb.subscribe_logger_sync(self.log_callback)
+        yield
+        pb.unsubscribe_all_sync()
+        conn.disconnect()
 
-    def teardown_method(self):
-        self.received = None
-        self.log_msg = None
-        pb.unsubscribe_all()
-
-    def setup_method(self):
-        pb.reset_connection("/test")
-        self.simple_queue = pb.subscribe(self.msg, self.callback)
-        self.task_queue = pb.subscribe(tests.tasks.TaskMessage, self.callback)
-        self.logger_queue = pb.subscribe_logger(self.log_callback)
-
-    def callback(self, msg: tests.TestMessage) -> Any:
+    def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
 
     def log_callback(self, _: aio_pika.IncomingMessage, body: str) -> None:
         self.log_msg = body
 
-    def test_publish(self, integration_test: None) -> None:
-        pb.publish(self.msg)
+    def test_publish(self) -> None:
+        pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.number == self.msg.number
 
-    def test_to_dict(self, integration_test: None) -> None:
-        pb.publish(self.msg)
+    def test_to_dict(self) -> None:
+        pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
@@ -58,7 +60,7 @@ class TestIntegration:
             content="test",
             bbox=[1, 2, 3, 4],
         )
-        pb.publish(msg)
+        pb.publish_sync(msg)
         assert wait(lambda: self.received == msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
@@ -78,7 +80,7 @@ class TestIntegration:
             "options": None,
         }
 
-    def test_count_messages(self, integration_test: None) -> None:
+    def test_count_messages(self) -> None:
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
         queue = self.task_queue
@@ -86,17 +88,17 @@ class TestIntegration:
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
         queue.unsubscribe()
-        pb.publish(msg)
-        pb.publish(msg)
-        pb.publish(msg)
+        pb.publish_sync(msg)
+        pb.publish_sync(msg)
+        pb.publish_sync(msg)
         # and we can count them
         assert wait(
             lambda: 3 == queue.get_message_count(), timeout_seconds=1, sleep_seconds=0.1
         ), f"{queue.get_message_count()}"
 
-    def test_logger_int64(self, integration_test: None) -> None:
+    def test_logger_int64(self) -> None:
         # Ensure that uint64/int64 values are not converted to strings in the LoggerQueue callbacks
-        pb.publish(
+        pb.publish_sync(
             tests.tasks.TaskMessage(
                 content="test", bbox=[1, 2, 3, 4], weights=[1.0, 2.0, -100, -20]
             )
@@ -107,7 +109,7 @@ class TestIntegration:
             self.log_msg
             == '{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
         )
-        pb.publish(tests.TestMessage(number=63, content="test"))
+        pb.publish_sync(tests.TestMessage(number=63, content="test"))
         assert wait(
             lambda: self.log_msg
             == '{"content": "test", "number": 63, "detail": null, "options": null, "color": null}',
@@ -115,44 +117,44 @@ class TestIntegration:
             sleep_seconds=0.1,
         ), self.log_msg
 
-    def test_unsubscribe(self, integration_test: None) -> None:
-        pb.publish(self.msg)
+    def test_unsubscribe(self) -> None:
+        pb.publish_sync(self.msg)
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received == self.msg
         self.received = None
-        pb.unsubscribe(tests.TestMessage, if_unused=False)
-        pb.publish(self.msg)
+        pb.unsubscribe_sync(tests.TestMessage, if_unused=False, if_empty=False)
+        pb.publish_sync(self.msg)
         assert self.received is None
 
         # unsubscribe from a package-level topic
-        pb.subscribe(tests, self.callback)
-        pb.publish(tests.TestMessage(number=63, content="test"))
+        pb.subscribe_sync(tests, self.callback)
+        pb.publish_sync(tests.TestMessage(number=63, content="test"))
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         self.received = None
-        pb.unsubscribe(tests, if_unused=False)
-        pb.publish(self.msg)
+        pb.unsubscribe_sync(tests, if_unused=False, if_empty=False)
+        pb.publish_sync(self.msg)
         assert self.received is None
 
         # subscribe/unsubscribe two callbacks for two topics
         received = None
 
-        def callback_2(m: pb.ProtoBunnyMessage) -> None:
+        def callback_2(m: "ProtoBunnyMessage") -> None:
             nonlocal received
             received = m
 
-        pb.subscribe(tests.TestMessage, self.callback)
-        pb.subscribe(tests, callback_2)
-        pb.publish(self.msg)  # this will reach callback_2 as well
+        pb.subscribe_sync(tests.TestMessage, self.callback)
+        pb.subscribe_sync(tests, callback_2)
+        pb.publish_sync(self.msg)  # this will reach callback_2 as well
         assert wait(lambda: self.received and received, timeout_seconds=1, sleep_seconds=0.5)
         assert self.received == received == self.msg
-        pb.unsubscribe_all()
+        pb.unsubscribe_all_sync()
         self.received = None
         received = None
-        pb.publish(self.msg)
+        pb.publish_sync(self.msg)
         assert self.received is None
         assert received is None
 
-    def test_unsubscribe_results(self, integration_test: None) -> None:
+    def test_unsubscribe_results(self) -> None:
         received_result: pb.results.Result | None = None
 
         def callback(_: tests.TestMessage) -> None:
@@ -164,21 +166,21 @@ class TestIntegration:
             nonlocal received_result
             received_result = m
 
-        pb.unsubscribe_all()
-        pb.subscribe(tests.TestMessage, callback)
+        pb.unsubscribe_all_sync()
+        pb.subscribe_sync(tests.TestMessage, callback)
         # subscribe to the result topic
-        pb.subscribe_results(tests.TestMessage, callback_results)
+        pb.subscribe_results_sync(tests.TestMessage, callback_results)
         msg = tests.TestMessage(number=63, content="test")
-        pb.publish(msg)
+        pb.publish_sync(msg)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == msg
         assert received_result.return_code == pb.results.ReturnCode.FAILURE
-        pb.unsubscribe_results(tests.TestMessage)
+        pb.unsubscribe_results_sync(tests.TestMessage)
         received_result = None
-        pb.publish(msg)
+        pb.publish_sync(msg)
         assert received_result is None
 
-    def test_unsubscribe_all(self, integration_test: None) -> None:
+    def test_unsubscribe_all(self) -> None:
         received_message: tests.tasks.TaskMessage | None = None
         received_result: pb.results.Result | None = None
 
@@ -195,25 +197,25 @@ class TestIntegration:
             nonlocal received_result
             received_result = m
 
-        pb.unsubscribe_all()
-        q1 = pb.subscribe(tests.TestMessage, callback_1)
-        q2 = pb.subscribe(tests.tasks.TaskMessage, callback_2)
+        pb.unsubscribe_all_sync()
+        q1 = pb.subscribe_sync(tests.TestMessage, callback_1)
+        q2 = pb.subscribe_sync(tests.tasks.TaskMessage, callback_2)
         assert q1.topic == "acme.tests.TestMessage"
         assert q2.topic == "acme.tests.tasks.TaskMessage"
         assert q1.subscription is not None
         assert q2.subscription is not None
         # subscribe to a result topic
-        pb.subscribe_results(tests.TestMessage, callback_results)
-        pb.publish(tests.TestMessage(number=2, content="test"))
-        pb.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb.subscribe_results_sync(tests.TestMessage, callback_results)
+        pb.publish_sync(tests.TestMessage(number=2, content="test"))
+        pb.publish_sync(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
         assert wait(lambda: received_message is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == tests.TestMessage(number=2, content="test")
 
-        pb.unsubscribe_all()
+        pb.unsubscribe_all_sync()
         received_result = None
         received_message = None
-        pb.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
-        pb.publish(tests.TestMessage(number=2, content="test"))
+        pb.publish_sync(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb.publish_sync(tests.TestMessage(number=2, content="test"))
         assert received_message is None
         assert received_result is None

@@ -9,7 +9,6 @@ Note: It must be executed after code generation/post install script.
 """
 
 import argparse
-import ast
 import black
 import logging
 import os
@@ -198,8 +197,8 @@ def ensure_dict_type(source: str) -> str:
 
 
 def ensure_message_mixin(source: str) -> str:
-    new_source = source.replace("(betterproto.Message):", "(base.MessageMixin, betterproto.Message):")
-    new_source = f"from protobunny import base as base\n{new_source}"
+    new_source = source.replace("(betterproto.Message):", "(models.MessageMixin, betterproto.Message):")
+    new_source = f"from protobunny import models as models\n\n{new_source}\n"
     return new_source
 
 
