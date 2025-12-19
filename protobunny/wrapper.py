@@ -13,9 +13,8 @@ generated-package-name = "mymessagelib.codegen"  # or even "mymessagelib"
 The following command generates betterproto python classes in the `mymessagelib.codegen` directory:
 protobunny -I messages messages/**/*.proto messages/*.proto
 where `messages` is a directory containing the protobuf files
-
-
 """
+
 import os
 import subprocess
 import sys
@@ -48,7 +47,6 @@ def main():
         f"--proto_path={lib_proto_path}",
     ]
     # Generate py files with protoc for user protobuf messages
-
     result = subprocess.run(cmd)
     if result.returncode > 0:
         sys.exit(result.returncode)

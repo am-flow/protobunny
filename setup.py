@@ -89,7 +89,7 @@ setup(
     cmdclass={
         "install": GenerateProtoCommand,
     },
-    python_requires=">=3.10,<3.14",
+    python_requires=">=3.10,<3.13",
     description="Protobuf messages and python mqtt messaging toolkit",
     entry_points={
         "console_scripts": [
