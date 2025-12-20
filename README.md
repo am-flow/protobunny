@@ -1,6 +1,8 @@
 <div style="width: 50%; margin: 0 auto;">
-  <img src="./images/logo.png" alt="protobunny Logo" height="512">
+  <img src="https://raw.githubusercontent.com/am-flow/protobunny/main/images/logo.png" alt="protobunny logo">
 </div>
+
+---
 
 # Protobunny
 
@@ -66,6 +68,7 @@ make integration-test
 - Support for RabbitMQ certificates (through `pika`)
 - More backends:
   - multiprocessing.Queue or queue.Queue for simple local scenarios
+  - Mosquitto
   - Redis
   - NATS
   - Cloud providers (AWS SQS/SNS)

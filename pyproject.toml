@@ -1,10 +1,10 @@
 [project]
 name = "protobunny"
-version = "0.1.0"
+version = "0.1.1b"
 description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
-    { name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com" },
     { name = "Domenico Nappo", email = "domenico.nappo@am-flow.com" },
+    { name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com" },
     { name = "Sem Mulder", email = "sem.mulder@am-flow.com" },
 ]
 requires-python = ">=3.10,<3.14"

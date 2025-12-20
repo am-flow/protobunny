@@ -9,7 +9,7 @@
 project = "protobunny"
 copyright = "2026, AM-Flow"
 author = "Domenico Nappo, Sander Koelstra, Sem Mulder"
-release = "0.1.0"
+release = "0.1.1b"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
