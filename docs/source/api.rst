@@ -29,6 +29,6 @@ Logger service
 
 protobunny utility
 ------------------
-    .. automodule:: protobunny.swrapper
+    .. automodule:: protobunny.wrapper
        :members:
        :undoc-members:
