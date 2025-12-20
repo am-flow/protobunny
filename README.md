@@ -40,7 +40,7 @@ Protobunny is designed for teams who use messaging to coordinate work between mi
 
 See the [Quick example](QUICK_START.md) for installation and quick start guide.
 
-Full documentation is available at [https://amflow.github.io/protobunny/](https://amflow.github.io/protobunny/).
+Full documentation is available at [https://am-flow.github.io/protobunny/](https://amflow.github.io/protobunny/).
 
 ---
 

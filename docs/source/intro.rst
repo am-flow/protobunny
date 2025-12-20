@@ -1,8 +1,3 @@
-.. image:: _images/logo.png
-   :align: center
-   :width: 50%
-
-
 Intro
 =====
 

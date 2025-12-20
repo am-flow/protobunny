@@ -7,6 +7,8 @@
    :align: center
    :width: 50%
 
+.. include:: intro.rst
+
 protobunny documentation
 ========================
 
@@ -14,7 +16,6 @@ protobunny documentation
    :maxdepth: 2
    :caption: Contents:
 
-   intro
    quick_start
    concepts
    api
