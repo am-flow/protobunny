@@ -82,7 +82,7 @@ The library comes with a `protoc` wrapper that generates Python code from your p
 and executes a postcompilation step to manipulate the generated code. 
 
 ```shell
-protobunny -I messages messages/**/*.proto messages/*.proto
+protobunny generate
 ```
 
 In `mymessagelib/codegen` you should see the generated message classes, mirroring the `package` declaration in your protobuf files.
@@ -90,7 +90,7 @@ In `mymessagelib/codegen` you should see the generated message classes, mirrorin
 If you need to generate the classes in another package, you can pass the `--python_betterproto_out` option:
 
 ```shell
-protobunny -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
+protobunny generate -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
 ```
 
 ### Subscribe to a message
@@ -228,14 +228,14 @@ def log_callback(_incoming_message, body: str) -> None:
 
 pb.subscribe_logger(log_callback)
 ```
----
 
 You can start a logger worker with:
 
 ```shell
-uv run protobunny log
+protobunny log
 ```
 
+---
 
 If you need explicit connection lifecycle control, you can access the shared connection object:
 ```python
@@ -243,4 +243,3 @@ import protobunny as pb
 
 conn = pb.get_connection_sync()
 ```
----

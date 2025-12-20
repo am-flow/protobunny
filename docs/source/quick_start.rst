@@ -104,7 +104,7 @@ manipulate the generated code.
 
 .. code:: shell
 
-   protobunny -I messages messages/**/*.proto messages/*.proto
+   protobunny generate
 
 In ``mymessagelib/codegen`` you should see the generated message
 classes, mirroring the ``package`` declaration in your protobuf files.
@@ -275,6 +275,13 @@ payloads:
        print(body)
 
    pb.subscribe_logger(log_callback)
+
+
+You can start a logger worker with:
+
+.. code:: shell
+
+    protobunny log
 
 --------------
 
