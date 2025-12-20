@@ -286,5 +286,3 @@ shared connection object:
    import protobunny as pb
 
    conn = pb.get_connection_sync()
-
---------------
