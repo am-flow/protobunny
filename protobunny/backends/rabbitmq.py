@@ -472,10 +472,13 @@ class AsyncConnection:
             ConnectionError: If not connected
 
         Example:
-            def handle_message(message: aio_pika.IncomingMessage):
-                print(f"Received: {message.body.decode()}")
+            .. code-block:: python
 
-            tag = await conn.subscribe("my.events.*", handle_message)
+                def handle_message(message: aio_pika.IncomingMessage):
+                    print(f"Received: {message.body.decode()}")
+
+                tag = await conn.subscribe("my.events.*", handle_message)
+
         """
         if not await self.is_connected():
             raise ConnectionError("Not connected to RabbitMQ")
@@ -581,9 +584,12 @@ class SyncConnection:
     Manages a dedicated event loop in a background thread to run async operations.
 
     Example:
-        with SyncConnection() as conn:
-            conn.publish("my.topic", message)
-            tag = conn.subscribe("my.topic", callback)
+        .. code-block:: python
+
+            with SyncConnection() as conn:
+                conn.publish("my.topic", message)
+                tag = conn.subscribe("my.topic", callback)
+
     """
 
     _lock = threading.RLock()

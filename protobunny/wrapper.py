@@ -1,19 +1,38 @@
-"""grpc_tools wrapper
+"""
+Protobunny tool
 
-Automatically includes the path to the custom proto types and generates the python classes for the configured package (i.e. generated-package-name)
+.. code-block:: shell
 
-Usage
+    protobunny generate
+
+Generate betterproto classes and automatically includes the path to the custom proto types
+and add the ProtoBunny mixin for the configured package (i.e. ``generated-package-name``).
+
+
+.. code-block:: shell
+
+    protobunny log
+
+Start a logger in console
+
 Configuration for pyproject.toml
 
-[tool.protobunny]
-messages-directory = "messages"
-messages-prefix = "acme"
-generated-package-name = "mymessagelib.codegen"  # or even "mymessagelib"
+.. code-block:: toml
+
+    [tool.protobunny]
+    messages-directory = 'messages'
+    messages-prefix = 'acme'
+    generated-package-name = 'mymessagelib.codegen'
 
 The following command generates betterproto python classes in the `mymessagelib.codegen` directory:
-protobunny -I messages messages/**/*.proto messages/*.proto
-where `messages` is a directory containing the protobuf files
+
+.. code-block:: shell
+
+    protobunny generate
+
 """
+
+
 import argparse
 import asyncio
 import functools
