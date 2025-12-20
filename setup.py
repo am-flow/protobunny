@@ -84,6 +84,7 @@ packages = setuptools.find_namespace_packages() + [
 setup(
     name=PROJECT_NAME,
     version=VERSION,
+    author="Domenico Nappo, Sander Koelstra, Sem Mulder",
     include_package_data=True,
     package_data=package_data,
     packages=packages,

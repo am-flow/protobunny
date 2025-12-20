@@ -47,6 +47,7 @@ Future work
 -  More backends:
 
    -  multiprocessing.Queue or queue.Queue for simple local scenarios
+   -  Mosquitto
    -  Redis
    -  NATS
    -  Cloud providers (AWS SQS/SNS)

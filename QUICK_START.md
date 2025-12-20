@@ -28,7 +28,7 @@ generated-package-name = "mymessagelib.codegen"
 
 ### Install the library with `uv`, `poetry` or `pip`
 ```bash
-uv lock  # or poetry lock
+uv lock --prerelease=allow  # or poetry lock
 uv sync  # or poetry sync/install
 ```
 

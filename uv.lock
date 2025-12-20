@@ -1061,7 +1061,7 @@ wheels = [
 
 [[package]]
 name = "protobunny"
-version = "0.1.0"
+version = "0.1.1b0"
 source = { editable = "." }
 dependencies = [
     { name = "aio-pika" },
