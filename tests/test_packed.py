@@ -1,8 +1,10 @@
+from unittest.mock import ANY
+
 import betterproto
 import numpy as np
 import numpy.testing as npt
 
-import protobunny as pb
+from . import tests
 
 
 def test_complex_message() -> None:
@@ -63,7 +65,7 @@ def test_complex_message() -> None:
     }
 
     # Build the Evaluation message
-    msg = pb.tests.TestMessage(
+    msg = tests.TestMessage(
         content="test",
         number=12,
         detail="ed1b0017-1c49-4279-b3f3-c23195a4ed33",
@@ -73,22 +75,23 @@ def test_complex_message() -> None:
     # Serialize the Evaluation message. This will also serialize dictionaries
     # for JsonContent fields in the message.
     # Internally the dict is converted to a JsonContent value
-    # metrics: pb.commons.JsonContent = pb.json_content_from_dict(data)
     serialized = bytes(msg)
     # Deserialize (it will also deserialize the JsonContent to a dictionary
     # Note: numpy arrays are not preserved and are serialized back as lists.
-    deserialized = pb.tests.TestMessage().parse(serialized)
-    # We assert that deserialized.metrics == data
+    deserialized = tests.TestMessage().parse(serialized)
+    # We assert that deserialized.options == data
     # Since the original data has numpy arrays as values, we use np.assert_array_equal
     for k, v in deserialized.options.items():
+        npt.assert_array_equal(v, data[k])
+    # Test to_dict and to_pydict
+    res = msg.to_dict(casing=betterproto.Casing.SNAKE)
+    for k, v in res["options"].items():
         npt.assert_array_equal(v, data[k])
     assert msg.to_dict(casing=betterproto.Casing.SNAKE) == dict(
         content="test",
         number="12",
         detail="ed1b0017-1c49-4279-b3f3-c23195a4ed33",
-        # `options` is a pb.commons.JsonContent message instance
-        # and it's serialized internally by the library
-        options=data,
+        options=ANY,
     )
     logged = deserialized.to_pydict(casing=betterproto.Casing.SNAKE)
     for k, v in logged["options"].items():
@@ -96,12 +99,13 @@ def test_complex_message() -> None:
 
 
 def test_int_floats() -> None:
-    msg = pb.tests.tasks.TaskMessage(
+    msg = tests.tasks.TaskMessage(
         content="test",
-        bbox=[-1, -1.01, 1, 1.0],
+        bbox=[1, -1, 1, 100],
+        weights=[123.0, 0.5, 100_000],
     )
     # serialize
     ser = bytes(msg)
     # deserialize
-    deser = pb.tests.tasks.TaskMessage().parse(ser)
+    deser = tests.tasks.TaskMessage().parse(ser)
     assert msg.bbox == [round(v, 2) for v in deser.bbox]

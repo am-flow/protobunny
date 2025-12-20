@@ -6,12 +6,10 @@ help : Makefile
 
 .PHONY: build
 build:
-	poetry install
+	uv sync
 
 compile:
-	mkdir -p protobunny/core
-	uv run python -m grpc_tools.protoc -I protobunny/protobuf --python_betterproto_out=protobunny/core protobunny/protobuf/*.proto
-	uv run python protobunny/post_compile.py --proto_pkg=protobunny.core
+	uv run protobunny generate
 	make format
 
 .PHONY: format
@@ -24,9 +22,26 @@ lint:
 	uv run ruff check . --diff
 	uv run ruff format . --check --diff
 
-
-.PHONY: test integration_test
+.PHONY: test integration-test
 test:
+	uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
 	uv run pytest tests/ -m "not integration"
-integration_test:
-	uv run pytest tests/test_integration.py
+integration-test:
+	uv run pytest tests/ -m "integration"
+
+# Releasing
+.PHONY: docs clean build-package publish-test publish-pypi
+docs:
+	uv run sphinx-build -b html docs/source docs/build/html
+clean:
+	rm -rf dist build *.egg-info
+
+build-package: clean
+	uv build
+
+publish-test: build-package
+	uv publish --publish-url https://test.pypi.org/legacy/
+
+publish-pypi: build-package
+	uv publish

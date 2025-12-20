@@ -1,6 +1,7 @@
+/* This .proto file contains Result message definitions for reply-style messaging */
 syntax = "proto3";
 
-import "commons.proto";
+import "protobunny/commons.proto";
 import "google/protobuf/any.proto";
 
 package results;
@@ -15,6 +16,12 @@ enum ReturnCode {
 }
 
 message Result {
+    /** The source message. It is transparently deserialized by the `source` property
+    ex.
+    >>> msg = ml.mypackage.MyMessage(content="test")
+    >>> result = msg.make_result()
+    >>> assert msg == result.source
+    **/
     google.protobuf.Any source_message=1;
     ReturnCode return_code=2;
     optional string error=3;

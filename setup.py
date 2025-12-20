@@ -11,10 +11,10 @@ from setuptools.command.install import install
 
 # Add the package directory to sys.path to allow importing config during setup
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "protobunny")))
+import typing as tp
 
 from config import (
     GENERATED_PACKAGE_NAME,
-    MESSAGES_DIRECTORY,
     PACKAGE_NAME,
     PROJECT_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
@@ -24,10 +24,11 @@ from config import (
 log = logging.getLogger(__name__)
 
 
-def generate_python_classes(install_dir):
+def generate_python_classes(install_dir: str) -> None:
     # Compile internal protobuf files
     log.info("Generating betterproto classes for %s", PACKAGE_NAME)
-    proto_dir = str(os.path.join(install_dir, PACKAGE_NAME, MESSAGES_DIRECTORY))
+    # proto_dir = str(os.path.join(install_dir, PACKAGE_NAME, MESSAGES_DIRECTORY))
+    proto_dir = str(os.path.join(install_dir, PACKAGE_NAME, "protobuf"))
     proto_files = glob.glob(proto_dir + "/**/*.proto", recursive=True)
     target_dir = str(os.path.join(install_dir, PACKAGE_NAME, GENERATED_PACKAGE_NAME))
     Path(target_dir).mkdir(parents=True, exist_ok=True)
@@ -42,13 +43,13 @@ def generate_python_classes(install_dir):
         raise e
 
 
-def post_compile(install_dir) -> None:
-    target_dir = str(os.path.join(f"{install_dir}", f"{PACKAGE_NAME}"))
-    post_compile_command = f"python {target_dir}/post_compile.py".split()
+def post_compile(install_dir: str) -> None:
+    # Post-compile internal betterproto python classes
+    post_compile_command = f"python {install_dir}/scripts/post_compile.py".split()
     post_compile_args = (
-        f"--proto_pkg={ROOT_GENERATED_PACKAGE_NAME} --source_dir={install_dir}".split()
+        f"--proto-pkg={ROOT_GENERATED_PACKAGE_NAME} --source-dir={install_dir}".split()
     )
-    log.info(post_compile_command)
+    log.info(post_compile_command + post_compile_args)
     try:
         subprocess.check_output(post_compile_command + post_compile_args)
     except subprocess.CalledProcessError as e:
@@ -57,9 +58,9 @@ def post_compile(install_dir) -> None:
         raise e
 
 
-class GenerateProtoCommand(install):
+class GenerateProtoCommand(install):  # type: ignore
     description = "Generate protobuf files"
-    user_options = []
+    user_options: tp.ClassVar[list[tuple[str, str | None, str]]] = []
 
     def run(self) -> None:
         install_dir: str = os.path.abspath(self.build_lib)
@@ -71,9 +72,10 @@ class GenerateProtoCommand(install):
 
 # Specify the package data
 package_data = {
-    "protobuf": [
-        "protobunny/protobuf/*.proto",
+    "protobunny": [
+        "protobunny/protobuf/protobunny/*.proto",
         f"{PACKAGE_NAME}/__init__.py.j2",
+        "scripts/*.py",
     ],
 }
 packages = setuptools.find_namespace_packages() + [
@@ -88,12 +90,7 @@ setup(
     cmdclass={
         "install": GenerateProtoCommand,
     },
-    install_requires=[
-        "betterproto[compiler]==2.0.0b7",
-        "grpcio-tools>=1.62.2,<2",
-        "aio-pika>=9.4.1,<10",
-    ],
-    python_requires=">=3.10,<3.14",
+    python_requires=">=3.10,<3.13",
     description="Protobuf messages and python mqtt messaging toolkit",
     entry_points={
         "console_scripts": [

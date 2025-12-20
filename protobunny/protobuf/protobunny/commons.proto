@@ -1,28 +1,15 @@
-/*
-This .proto file contains enums and messages definitions shared among the packages
-*/
+/* This .proto file contains messages definitions shared among the packages */
 syntax = "proto3";
 
 package commons;
 
 /* The JsonContent message is used as a field in other messages to hold dictionary/Json data.
 Notes:
-Serialization/deserialization of am.commons.JsonContent fields happens transparently
+Serialization/deserialization of pb.commons.JsonContent fields happens transparently
 (no need to build the JsonContent message, just set the field with the dictionary).
 
 Supported betterproto methods: __bytes__, parse, to_dict, from_dict, to_pydict, to_json
 */
 message JsonContent {
   bytes content = 1;
-}
-
-enum Color {
-  OFF = 0;
-  GREEN = 1;
-  ORANGE = 2;
-  GREEN_ORANGE = 3;
-  RED = 4;
-  RED_GREEN = 5;
-  RED_ORANGE = 6;
-  RED_ORANGE_GREEN = 7;
 }

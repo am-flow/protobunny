@@ -5,15 +5,17 @@ description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
     { name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com" },
     { name = "Domenico Nappo", email = "domenico.nappo@am-flow.com" },
+    { name = "Sem Mulder", email = "sem.mulder@am-flow.com" },
 ]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 readme = "README.md"
 dependencies = [
     "aio-pika>=7.1.0",
     "betterproto[compiler]>=2.0.0b7,<3",
     "grpcio-tools>=1.62.0,<2",
     "numpy>=1.26",
-    "tomli ; python_version < '3.11'"
+    "pytest-env>=1.1.3",
+    "tomli ; python_version < '3.11'",
 ]
 
 [project.scripts]
@@ -22,6 +24,7 @@ protobunny = "protobunny.wrapper:main"
 [dependency-groups]
 dev = [
     "ipdb>=0.13.11,<0.14",
+    "waiting>=1.5.0,<2",
     "ipython>=8.11.0,<9",
     "pytest>=7.2.2,<8",
     "pytest-cov>=4.0.0,<5",
@@ -31,6 +34,10 @@ dev = [
     "ruff>=0.1.14,<0.2",
     "mypy>=1.9.0,<2",
     "types-protobuf>=4.25.0.20240410,<5",
+    "sphinx>=8.1.3",
+    "sphinx-rtd-theme>=0.5.1",
+    "furo>=2025.12.19",
+    "pypandoc>=1.16.2",
 ]
 
 [build-system]
@@ -38,8 +45,7 @@ requires = ["poetry-core>=1.0.0", "betterproto[compiler]==2.0.0b7", "grpcio-tool
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-data = {"protobuf" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2"]}
-
+package-data = {"protobunny" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2", "scripts/*.py"]}
 
 [tool.pytest.ini_options]
 addopts = "--junitxml=pytest_report.xml --cov=. --cov-report=term --cov-report=xml --cov-report html"
@@ -49,6 +55,13 @@ markers = [
     "integration: tests requiring a real connection to the amqp server. They don't run in CI",
 ]
 cache_dir = ".cache/pytest"
+
+[tool.pytest_env]
+RABBITMQ_HOST = "localhost"
+RABBITMQ_PORT = 5672
+RABBITMQ_USER = "guest"
+RABBITMQ_PASS = "guest"
+RABBITMQ_VHOST = "/test"
 
 [tool.coverage.run]
 omit = ["test.py", "*/tests/*"]
@@ -67,6 +80,12 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+exclude = "scripts|build|tests|todo"
+
 [tool.protobunny]
 messages-directory = "protobunny/protobuf"
 generated-package-name = "protobunny.core"
+force-required-fields = true

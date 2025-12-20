@@ -1,17 +1,18 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [ main ]
   push:
-    branches: [ main ]
+    branches-ignore:
+      - 'temp/**'
+      - 'gh-pages/**'
+  pull_request:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12']
 
     steps:
     - uses: actions/checkout@v4
@@ -21,10 +22,13 @@ jobs:
       with:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
+
     - name: Set up Python ${{ matrix.python-version }}
       run: uv python install ${{ matrix.python-version }}
+
     - name: Create virtual environment
       run: uv venv --python ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: uv sync
 
@@ -45,8 +49,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -64,3 +66,47 @@ jobs:
 
       - name: Run linting
         run: make lint
+  integration_test:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:4-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Setup RabbitMQ virtual host
+        run: |
+          echo "Creating virtual host /test and granting user permissions..."
+          docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl add_vhost /test
+          docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
+
+      - name: Run integration tests
+        run: make integration-test
+        env:
+          RABBITMQ_HOST: localhost
+          RABBITMQ_PORT: 5672
+          RABBITMQ_USER: guest
+          RABBITMQ_PASS: guest
+          RABBITMQ_VHOST: /test

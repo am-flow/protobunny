@@ -1,0 +1,15 @@
+/*
+This .proto file contains protobuf message definitions for testing tasks
+*/
+syntax = "proto3";
+import "protobunny/commons.proto";
+
+package tests.tasks;
+
+
+message TaskMessage {
+  string content = 10;
+  repeated float weights = 30 [packed = true];
+  repeated int64 bbox = 40 [packed = true];
+  optional commons.JsonContent options=50;
+}
