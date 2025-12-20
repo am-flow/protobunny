@@ -24,7 +24,7 @@ class Color(betterproto.Enum):
 
 
 @dataclass(eq=False, repr=False)
-class TestMessage(models.MessageMixin, betterproto.Message):
+class TestMessage(models.ProtoBunnyMessage):
     content: str = betterproto.string_field(10)
     number: int = betterproto.int64_field(20)
     detail: Optional[str] = betterproto.string_field(30, optional=True)
@@ -35,7 +35,7 @@ class TestMessage(models.MessageMixin, betterproto.Message):
 
 
 @dataclass(eq=False, repr=False)
-class ComplexTestMessage(models.MessageMixin, betterproto.Message):
+class ComplexTestMessage(models.ProtoBunnyMessage):
     x: int = betterproto.int64_field(10)
     y: Optional[int] = betterproto.int64_field(20, optional=True)
     a: bool = betterproto.bool_field(1, group="group")

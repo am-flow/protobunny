@@ -1,5 +1,6 @@
 """Implementation of amlogic-messages base queues."""
 import asyncio
+import inspect
 import logging
 import textwrap
 import threading
@@ -8,17 +9,19 @@ from collections import defaultdict
 from types import ModuleType
 
 import aio_pika
-from betterproto import Message
+import betterproto
 
 from .config import load_config
 
 if tp.TYPE_CHECKING:
     from .core.results import Result
     from .models import (
+        AsyncCallback,
         ProtoBunnyMessage,
+        SyncCallback,
     )
-from .models import get_topic
-from .queues import AsyncQueue, LoggingAsyncQueue, LoggingSyncQueue, Queue
+from .models import LoggerCallback, LogQueue, get_topic
+from .queues import AsyncQueue, LoggingAsyncQueue, LoggingSyncSyncQueue, SyncQueue
 
 log = logging.getLogger(__name__)
 
@@ -31,41 +34,62 @@ configuration = load_config()
 # subscriptions registries
 _registry_lock = threading.Lock()
 _async_registry_lock = asyncio.Lock()
-subscriptions: dict[tp.Any, "Queue | AsyncQueue"] = dict()
-results_subscriptions: dict[tp.Any, "Queue | AsyncQueue"] = dict()
-tasks_subscriptions: dict[tp.Any, list["Queue | AsyncQueue"]] = defaultdict(list)
+subscriptions: dict[tp.Any, "AsyncQueue"] = dict()
+results_subscriptions: dict[tp.Any, "AsyncQueue"] = dict()
+tasks_subscriptions: dict[tp.Any, list["AsyncQueue"]] = defaultdict(list)
+subscriptions_sync: dict[tp.Any, "SyncQueue"] = dict()
+results_subscriptions_sync: dict[tp.Any, "SyncQueue"] = dict()
+tasks_subscriptions_sync: dict[tp.Any, list["SyncQueue"]] = defaultdict(list)
+
+
+def get_queue_sync(
+    pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
+) -> "SyncQueue":
+    """Factory method to get a SyncQueue instance based on the message type.
+
+    Args:
+        pkg_or_msg: A message instance, a message class, or a module
+            containing message definitions.
+
+    Returns:
+        SyncQueue: A synchronous queue instance configured for the relevant topic.
+    """
+    return SyncQueue(get_topic(pkg_or_msg))
 
 
 def get_queue(
-    pkg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
-) -> "Queue | AsyncQueue":
-    """Factory method to get a Queue instance based on the message type
+    pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
+) -> "AsyncQueue":
+    """Factory method to get an AsyncQueue instance based on the message type.
 
     Args:
-        pkg:
+        pkg_or_msg: A message instance, a message class, or a module
+            containing message definitions.
 
-    Returns: a Queue instance
-
+    Returns:
+        AsyncQueue: An asynchronous queue instance configured for the relevant topic.
     """
-    topic = get_topic(pkg)
-    return AsyncQueue(topic) if configuration.use_async else Queue(topic)
+    return AsyncQueue(get_topic(pkg_or_msg))
 
 
 def publish_sync(message: "ProtoBunnyMessage") -> None:
-    """Publish the message on its own queue
+    """Synchronously publish a message to its corresponding queue.
+
+    This method automatically determines the correct topic based on the
+    protobuf message type.
 
     Args:
-        message:
+        message: The Protobuf message instance to be published.
     """
-    queue = get_queue(message)
+    queue = get_queue_sync(message)
     queue.publish(message)
 
 
 async def publish(message: "ProtoBunnyMessage") -> None:
-    """Publish the message on its own queue
+    """Asynchronously publish a message to its corresponding queue.
 
     Args:
-        message:
+        message: The Protobuf message instance to be published.
     """
     queue = get_queue(message)
     await queue.publish(message)
@@ -74,13 +98,14 @@ async def publish(message: "ProtoBunnyMessage") -> None:
 async def publish_result(
     result: "Result", topic: str | None = None, correlation_id: str | None = None
 ) -> None:
-    """Publish the result message to the result topic of the source message
+    """
+    Asynchronously publish a result message to a specific result topic.
 
     Args:
-        result: a Result instance.
-        topic: The topic to send the message to.
-            Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
-        correlation_id:
+        result: The Result object to publish.
+        topic: Optional override for the destination topic. Defaults to the
+            source message's result topic (e.g., "namespace.Message.result").
+        correlation_id: Optional ID to link the result to the original request.
     """
     queue = get_queue(result.source)
     await queue.publish_result(result, topic, correlation_id)
@@ -97,14 +122,14 @@ def publish_result_sync(
             Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
         correlation_id:
     """
-    queue = get_queue(result.source)
+    queue = get_queue_sync(result.source)
     queue.publish_result(result, topic, correlation_id)
 
 
 def subscribe_sync(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
-    callback: tp.Callable[["ProtoBunnyMessage"], tp.Any],
-) -> "Queue":
+    callback: "SyncCallback",
+) -> "SyncQueue":
     """Subscribe a callback function to the topic.
 
     Args:
@@ -115,38 +140,45 @@ def subscribe_sync(
         The Queue object. You can access the subscription via its `subscription` attribute.
     """
 
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
-    module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
+    obj = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
+    module_name = obj.__name__ if inspect.ismodule(obj) else obj.__module__
     with _registry_lock:
         if "tasks" in module_name.split("."):
             # It's a task. Handle multiple subscriptions
-            queue = get_queue(pkg_or_msg)
+            queue = get_queue_sync(pkg_or_msg)
             queue.subscribe(callback)
-            tasks_subscriptions[sub_key].append(queue)
+            tasks_subscriptions_sync[obj].append(queue)
         else:
             queue = (
-                get_queue(pkg_or_msg) if sub_key not in subscriptions else subscriptions[sub_key]
+                get_queue_sync(pkg_or_msg)
+                if obj not in subscriptions_sync
+                else subscriptions_sync[obj]
             )
             queue.subscribe(callback)
             # register subscription to unsubscribe later
-            subscriptions[sub_key] = queue
+            subscriptions_sync[obj] = queue
     return queue
 
 
 async def subscribe(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
-    callback: tp.Callable[["ProtoBunnyMessage"], tp.Any],
+    callback: "AsyncCallback",
 ) -> "AsyncQueue":
-    """Subscribe a callback function to the topic.
+    """
+    Subscribe an asynchronous callback to a specific topic or namespace.
+
+    If the module name contains '.tasks', it is treated as a shared task queue
+    allowing multiple subscribers. Otherwise, it is treated as a standard
+    subscription (exclusive queue).
 
     Args:
-        pkg_or_msg: The topic to subscribe to as message class or module.
-        callback: The callback function that consumes the received message.
+        pkg_or_msg: The message class, instance, or module to subscribe to.
+        callback: An async callable that accepts the received message.
 
     Returns:
-        The Queue object. You can access the subscription via its `subscription` attribute.
+        AsyncQueue: The queue object managing the subscription.
     """
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
     async with _async_registry_lock:
         if "tasks" in module_name.split("."):
@@ -165,8 +197,8 @@ async def subscribe(
 
 
 async def subscribe_results(
-    pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType",
-    callback: tp.Callable[["Result"], tp.Any],
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    callback: "AsyncCallback",
 ) -> "AsyncQueue":
     """Subscribe a callback function to the result topic.
 
@@ -177,79 +209,83 @@ async def subscribe_results(
     q = get_queue(pkg_or_msg)
     await q.subscribe_results(callback)
     # register subscription to unsubscribe later
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     async with _async_registry_lock:
         results_subscriptions[sub_key] = q
     return q
 
 
 def subscribe_results_sync(
-    pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType",
-    callback: tp.Callable[["Result"], tp.Any],
-) -> "Queue":
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    callback: "SyncCallback",
+) -> "SyncQueue":
     """Subscribe a callback function to the result topic.
 
     Args:
         pkg_or_msg:
         callback:
     """
-    q = get_queue(pkg_or_msg)
-    q.subscribe_results(callback)
+    queue = get_queue_sync(pkg_or_msg)
+    queue.subscribe_results(callback)
     # register subscription to unsubscribe later
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     with _registry_lock:
-        results_subscriptions[sub_key] = q
-    return q
+        results_subscriptions_sync[sub_key] = queue
+    return queue
 
 
 async def unsubscribe(
-    pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType",
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
-    """Remove all in-process subscriptions for a message/package"""
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    """Remove a subscription for a message/package"""
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
+    module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
     async with _async_registry_lock:
         if sub_key in subscriptions:
             q = subscriptions.pop(sub_key)
             await q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-        module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
-        if "tasks" in module_name.split("."):
+        elif "tasks" in module_name.split("."):
             queues = tasks_subscriptions.pop(sub_key)
             for q in queues:
                 await q.unsubscribe()
 
 
 def unsubscribe_sync(
-    pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType",
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
-    """Remove all in-process subscriptions for a message/package"""
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    """Remove a subscription for a message/package"""
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
+    module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
     with _registry_lock:
-        if sub_key in subscriptions:
-            q = subscriptions.pop(sub_key)
+        if sub_key in subscriptions_sync:
+            q = subscriptions_sync.pop(sub_key)
             q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-        module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
-        if "tasks" in module_name.split("."):
-            queues = tasks_subscriptions.pop(sub_key)
+        elif "tasks" in module_name.split("."):
+            queues = tasks_subscriptions_sync.pop(sub_key)
             for q in queues:
                 q.unsubscribe()
 
 
-def unsubscribe_results_sync(pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType") -> None:
+def unsubscribe_results_sync(
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     with _registry_lock:
-        if sub_key in results_subscriptions:
-            q = subscriptions.pop(sub_key)
+        if sub_key in results_subscriptions_sync:
+            q = results_subscriptions_sync.pop(sub_key)
             q.unsubscribe_results()
 
 
-async def unsubscribe_results(pkg_or_msg: "ProtoBunnyMessage | type[Message] | ModuleType") -> None:
+async def unsubscribe_results(
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, Message) else pkg_or_msg
+    sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     async with _async_registry_lock:
         if sub_key in results_subscriptions:
             q = subscriptions.pop(sub_key)
@@ -257,22 +293,32 @@ async def unsubscribe_results(pkg_or_msg: "ProtoBunnyMessage | type[Message] | M
 
 
 def unsubscribe_all_sync() -> None:
-    """Remove all in-process subscriptions"""
+    """
+    Remove all active in-process subscriptions.
+
+    This clears standard subscriptions, result subscriptions, and task
+    subscriptions, effectively stopping all message consumption for this process.
+    """
     with _registry_lock:
-        for q in subscriptions.values():
+        for q in subscriptions_sync.values():
             q.unsubscribe(if_unused=False, if_empty=False)
-        subscriptions.clear()
-        for q in results_subscriptions.values():
+        subscriptions_sync.clear()
+        for q in results_subscriptions_sync.values():
             q.unsubscribe_results()
-        results_subscriptions.clear()
-        for queues in tasks_subscriptions.values():
+        results_subscriptions_sync.clear()
+        for queues in tasks_subscriptions_sync.values():
             for q in queues:
                 q.unsubscribe()
-        tasks_subscriptions.clear()
+        tasks_subscriptions_sync.clear()
 
 
 async def unsubscribe_all() -> None:
-    """Remove all in-process subscriptions"""
+    """
+    Asynchronously remove all active in-process subscriptions.
+
+    This clears standard subscriptions, result subscriptions, and task
+    subscriptions, effectively stopping all message consumption for this process.
+    """
     async with _async_registry_lock:
         for q in subscriptions.values():
             await q.unsubscribe(if_unused=False, if_empty=False)
@@ -286,47 +332,52 @@ async def unsubscribe_all() -> None:
         tasks_subscriptions.clear()
 
 
-def get_message_count_sync(msg_type: "ProtoBunnyMessage | type[Message]") -> int:
-    q = get_queue(msg_type)
+def get_message_count_sync(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q = get_queue_sync(msg_type)
     count = q.get_message_count()
     return count
 
 
-async def get_message_count(msg_type: "ProtoBunnyMessage | type[Message]") -> int:
-    q = get_queue(msg_type)
+async def get_message_count(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q: AsyncQueue = get_queue(msg_type)
     count = await q.get_message_count()
     return count
 
 
-def default_log_callback_sync(message: aio_pika.IncomingMessage, msg_content: str):
-    """Log queue message to stdout."""
+def default_log_callback(message: aio_pika.IncomingMessage, msg_content: str) -> None:
+    """Default callback for the logging service"""
     log.info(
         "<%s>(cid:%s) %s",
         message.routing_key,
         message.correlation_id,
-        textwrap.shorten(msg_content, width=80),
+        textwrap.shorten(msg_content, width=120),
     )
 
 
-async def default_log_callback(message: aio_pika.IncomingMessage, msg_content: str) -> None:
-    default_log_callback_sync(message, msg_content)
+def _prepare_logger_queue(
+    queue_cls: type[LogQueue], log_callback: "LoggerCallback | None", prefix: str | None
+) -> tuple[LogQueue, "LoggerCallback"]:
+    """Initializes the requested queue class."""
+    resolved_callback = log_callback or default_log_callback
+    resolved_prefix = prefix or configuration.messages_prefix
+    return queue_cls(resolved_prefix), resolved_callback
 
 
 async def subscribe_logger(
-    log_callback: tp.Callable | None = None, prefix: str | None = None
+    log_callback: "LoggerCallback | None" = None, prefix: str | None = None
 ) -> "LoggingAsyncQueue":
-    log_callback = log_callback or default_log_callback
-    prefix = prefix or configuration.messages_prefix
-    q = LoggingAsyncQueue(prefix)
-    await q.subscribe(log_callback)
+    q, cb = _prepare_logger_queue(LoggingAsyncQueue, log_callback, prefix)
+    await q.subscribe(cb)
     return q
 
 
 def subscribe_logger_sync(
-    log_callback: tp.Callable = None, prefix: str | None = None
-) -> "LoggingSyncQueue":
-    log_callback = log_callback or default_log_callback_sync
-    prefix = prefix or configuration.messages_prefix
-    q = LoggingSyncQueue(prefix)
-    q.subscribe(log_callback)
+    log_callback: "LoggerCallback | None" = None, prefix: str | None = None
+) -> "LoggingSyncSyncQueue":
+    q, cb = _prepare_logger_queue(LoggingSyncSyncQueue, log_callback, prefix)
+    q.subscribe(cb)
     return q

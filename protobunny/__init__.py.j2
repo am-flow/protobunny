@@ -1,6 +1,63 @@
+"""
+A module providing support for messaging and communication using RabbitMQ as the backend.
+
+This module includes functionality for publishing, subscribing, and managing message queues,
+as well as dynamically managing imports and configurations for RabbitMQ-based communication
+logics. It enables both synchronous and asynchronous operations, while also supporting
+connection resetting and management.
+
+Modules and functionality are primarily imported from the core RabbitMQ backend, dynamically
+generated package-specific configurations, and other base utilities. Exports are adjusted
+as per the backend configuration.
+
+"""
+__all__ = [
+    # from .base
+    "get_message_count",
+    "get_queue",
+    "get_queue_sync",
+    "publish",
+    "publish_result",
+    "subscribe",
+    "subscribe_logger",
+    "subscribe_logger_sync",
+    "subscribe_results",
+    "unsubscribe",
+    "unsubscribe_all",
+    "unsubscribe_results",
+    "publish_sync",
+    "publish_result_sync",
+    "subscribe_sync",
+    "subscribe_results_sync",
+    "unsubscribe_sync",
+    "unsubscribe_all_sync",
+    "unsubscribe_results_sync",
+    "get_message_count_sync",
+    # from .{{ generated_package_name }}
+    {% for i in main_imports|sort %}
+    "{{ i }}",
+    {% endfor %}
+
+    # from .config
+    "GENERATED_PACKAGE_NAME",
+    "PACKAGE_NAME",
+    "ROOT_GENERATED_PACKAGE_NAME",
+    "load_config",
+    # from .backends.rabbitmq
+    "RequeueMessage",
+    "ConnectionError",
+    "reset_connection_sync",
+    "reset_connection",
+    "get_connection_sync",
+    "get_connection",
+    "disconnect",
+    "disconnect_sync",
+]
+
 from .base import (  # noqa
     get_message_count,
     get_queue,
+    get_queue_sync,
     publish,
     publish_result,
     subscribe,

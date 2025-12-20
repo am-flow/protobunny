@@ -34,6 +34,10 @@ dev = [
     "ruff>=0.1.14,<0.2",
     "mypy>=1.9.0,<2",
     "types-protobuf>=4.25.0.20240410,<5",
+    "sphinx>=8.1.3",
+    "sphinx-rtd-theme>=0.5.1",
+    "furo>=2025.12.19",
+    "pypandoc>=1.16.2",
 ]
 
 [build-system]
@@ -75,6 +79,11 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+exclude = "scripts|build|tests|todo"
 
 [tool.protobunny]
 messages-directory = "protobunny/protobuf"

@@ -34,7 +34,7 @@ async def test_async_publish(mock_aio_pika):
         await conn.publish("test.routing.key", msg)
 
         mock_aio_pika["exchange"].publish.assert_awaited_with(
-            msg, routing_key="test.routing.key", mandatory=False, immediate=False
+            msg, routing_key="test.routing.key", mandatory=True, immediate=False
         )
 
 

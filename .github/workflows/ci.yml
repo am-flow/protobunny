@@ -103,7 +103,7 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
       - name: Run integration tests
-        run: make integration_test
+        run: make integration-test
         env:
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: 5672

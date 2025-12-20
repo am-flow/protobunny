@@ -11,9 +11,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import aio_pika
 from aio_pika.abc import (
-    AbstractRobustChannel,
+    AbstractChannel,
+    AbstractExchange,
     AbstractRobustConnection,
-    AbstractRobustExchange,
     AbstractRobustQueue,
 )
 
@@ -107,28 +107,28 @@ class AsyncConnection:
             heartbeat: heartbeat interval in seconds
             timeout: connection timeout in seconds
         """
-        username = username or os.environ.get(
+        uname = username or os.environ.get(
             "RABBITMQ_USERNAME", os.environ.get("RABBITMQ_DEFAULT_USER", "guest")
         )
-        password = password or os.environ.get(
+        passwd = password or os.environ.get(
             "RABBITMQ_PASSWORD", os.environ.get("RABBITMQ_DEFAULT_PASS", "guest")
         )
         host = host or os.environ.get("RABBITMQ_HOST", "127.0.0.1")
-        port = port or os.environ.get("RABBITMQ_PORT", "5672")
+        port = port or int(os.environ.get("RABBITMQ_PORT", "5672"))
         # URL encode credentials and vhost to prevent injection
-        username = urllib.parse.quote(username, safe="")
-        password = urllib.parse.quote(password, safe="")
+        username = urllib.parse.quote(uname, safe="")
+        password = urllib.parse.quote(passwd, safe="")
         self.vhost = vhost
         clean_vhost = urllib.parse.quote(vhost, safe="")
         clean_vhost = clean_vhost.lstrip("/")
         self._url = f"amqp://{username}:{password}@{host}:{port}/{clean_vhost}?heartbeat={heartbeat}&timeout={timeout}&fail_fast=no"
-
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._exchange_name = exchange_name
         self._dl_exchange = dl_exchange
         self._dl_queue = dl_queue
-        self._exchange: AbstractRobustExchange | None = None
+        self._exchange: AbstractExchange | None = None
         self._connection: AbstractRobustConnection | None = None
-        self._channel: AbstractRobustChannel | None = None
+        self._channel: AbstractChannel | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
         self.queues: dict[str, AbstractRobustQueue] = {}
@@ -205,7 +205,7 @@ class AsyncConnection:
         return self._connection
 
     @property
-    def channel(self) -> AbstractRobustChannel:
+    def channel(self) -> AbstractChannel:
         if not self.is_connected_event.is_set() or self._channel is None:
             # In a sync context, this usually means connect() wasn't called
             # or it failed silently.
@@ -215,7 +215,7 @@ class AsyncConnection:
         return self._channel
 
     @property
-    def exchange(self) -> AbstractRobustExchange:
+    def exchange(self) -> AbstractExchange:
         """Get the exchange object.
 
         Raises:
@@ -311,10 +311,15 @@ class AsyncConnection:
                             queue = self.queues[queue_name]
                             await asyncio.wait_for(queue.cancel(tag), timeout=5.0)
                             if queue.exclusive:
-                                await asyncio.wait_for(queue.delete(), timeout=5.0)
-                                self.queues.pop(queue_name, None)
+                                log.debug("Force delete exclusive queue %s", queue_name)
+                                await asyncio.wait_for(
+                                    queue.delete(if_empty=False, if_unused=False), timeout=5.0
+                                )
+                            self.queues.pop(queue_name, None)
                     except asyncio.TimeoutError:
                         log.warning("Timeout cleaning up consumer %s", tag)
+                    except aio_pika.exceptions.ChannelInvalidStateError as e:
+                        log.warning("Invalid state for queue %s: %s", queue_name, str(e))
                     except Exception as e:
                         log.warning("Error cleaning up consumer %s: %s", tag, e)
                     finally:
@@ -323,7 +328,7 @@ class AsyncConnection:
                 # Shutdown executor
                 self.executor.shutdown(wait=False, cancel_futures=True)
 
-                # Close connection
+                # Close the underlying aio-pika connection
                 if self._connection and not self._connection.is_closed:
                     await asyncio.wait_for(self._connection.close(), timeout=timeout)
 
@@ -384,7 +389,7 @@ class AsyncConnection:
         self,
         topic: str,
         message: aio_pika.Message,
-        mandatory: bool = False,
+        mandatory: bool = True,
         immediate: bool = False,
     ) -> None:
         """Publish a message to a topic.
@@ -419,7 +424,7 @@ class AsyncConnection:
         """
         try:
             # 1. Check if the callback is a coroutine function
-            # Note: inspect.iscoroutinefunction works on partials too in modern Python
+            # Note: inspect.iscoroutinefunction works on partials too
             if inspect.iscoroutinefunction(callback):
                 # Run directly in the event loop
                 await callback(message)
@@ -494,20 +499,21 @@ class AsyncConnection:
         Raises:
             ValueError: If tag is not found
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
-        if tag not in self.consumers:
-            log.debug("Consumer tag '%s' not found, nothing to unsubscribe", tag)
-            return
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
+            if tag not in self.consumers:
+                log.debug("Consumer tag '%s' not found, nothing to unsubscribe", tag)
+                return
 
-        queue_name = self.consumers.pop(tag)
+            queue_name = self.consumers.pop(tag)
 
-        if queue_name not in self.queues:
-            log.debug("Queue '%s' not found, skipping cleanup", queue_name)
-            return
+            if queue_name not in self.queues:
+                log.debug("Queue '%s' not found, skipping cleanup", queue_name)
+                return
 
-        queue = self.queues[queue_name]
-        log.info("Unsubscribing from queue '%s' (tag=%s)", queue.name, tag)
+            queue = self.queues[queue_name]
+            log.info("Unsubscribing from queue '%s'", queue.name)
 
         try:
             await queue.cancel(tag)
@@ -537,7 +543,7 @@ class AsyncConnection:
         await self.setup_queue(topic, shared=True)
         await self.queues[topic].purge()
 
-    async def get_message_count(self, topic: str) -> int:
+    async def get_message_count(self, topic: str) -> int | None:
         """Get the number of messages in a queue.
 
         Args:
@@ -607,7 +613,7 @@ class SyncConnection:
                     cls._instance_by_vhost[vhost].connect()
         return cls._instance_by_vhost[vhost]
 
-    def _run_loop(self):
+    def _run_loop(self) -> None:
         """Run the event loop in a dedicated thread."""
         try:
             # Create a fresh loop for this specific thread
@@ -629,20 +635,20 @@ class SyncConnection:
             self._loop = None
             log.info("Event loop thread stopped")
 
-    async def _async_run_watcher(self):
+    async def _async_run_watcher(self) -> None:
         """Wait for the stop signal inside the loop."""
         self._stopped = asyncio.Event()
         await self._stopped.wait()
         asyncio.get_running_loop().stop()
 
-    async def _async_run(self):
+    async def _async_run(self) -> None:
         """Async event loop runner."""
         self._loop = asyncio.get_running_loop()
         self._stopped = asyncio.Event()
         self._loop.call_soon_threadsafe(self._ready.set)
         await self._stopped.wait()
 
-    def _ensure_loop(self):
+    def _ensure_loop(self) -> None:
         """Ensure event loop thread is running.
 
         Raises:

@@ -8,14 +8,23 @@ import typing as tp
 from io import BytesIO
 from types import ModuleType
 
+import aio_pika
 import betterproto
-from betterproto import Casing, Message
 from betterproto.lib.std.google.protobuf import Any
 
+if tp.TYPE_CHECKING:
+    from .queues import LoggingAsyncQueue, LoggingSyncSyncQueue
 from .config import load_config
 from .utils import ProtobunnyJsonEncoder
 
-ProtoBunnyMessage = tp.Union["Message", "MessageMixin"]
+# - types
+# ProtoBunnyMessage = tp.TypeVar("ProtoBunnyMessage", bound="MessageMixin | betterproto.Message")
+SyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Any]
+AsyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Awaitable[tp.Any]]
+ResultCallback: tp.TypeAlias = tp.Callable[["Result"], tp.Any]
+LogQueue = tp.TypeVar("LogQueue", "LoggingAsyncQueue", "LoggingSyncSyncQueue")
+LoggerCallback: tp.TypeAlias = tp.Callable[[aio_pika.IncomingMessage, str], tp.Any]
+
 log = logging.getLogger(__name__)
 
 configuration = load_config()
@@ -24,13 +33,18 @@ configuration = load_config()
 class MessageMixin:
     """Utility mixin for protobunny messages."""
 
+    # if tp.TYPE_CHECKING:
+    #     _betterproto: tp.Any
+    #     __name__: str
+
+    # def is_set(self, field_name: str) -> bool:
+    #     ...
+
     def validate_required_fields(self: "ProtoBunnyMessage") -> None:
         """Raises a MissingRequiredFields if non optional fields are missing.
         Note: Ignore missing repeated fields.
         This check happens during serialization (see MessageMixin.__bytes__ method).
         """
-        if not configuration.force_required_fields:
-            return
         defaults = self._betterproto.default_gen
         missing = [
             field_name
@@ -53,22 +67,23 @@ class MessageMixin:
         # Override Message.__bytes__ method
         # to support transparent serialization of dictionaries to JsonContent fields.
         # This method validates for required fields as well
-        self.validate_required_fields()
+        if configuration.force_required_fields:
+            self.validate_required_fields()
         msg = self.serialize_json_content()
         with BytesIO() as stream:
-            Message.dump(msg, stream)
+            betterproto.Message.dump(msg, stream)
             return stream.getvalue()
 
-    def from_dict(self: "ProtoBunnyMessage", value: dict[str, tp.Any]) -> "ProtoBunnyMessage":
+    def from_dict(self: "ProtoBunnyMessage", value: dict) -> "ProtoBunnyMessage":
         json_fields = {field: value.pop(field, None) for field in self.json_content_fields}
-        msg = Message.from_dict(self, value)
+        msg = betterproto.Message.from_dict(tp.cast(betterproto.Message, self), value)
         for field in json_fields:
             setattr(msg, field, json_fields[field])
         return msg
 
     def to_dict(
         self: "ProtoBunnyMessage",
-        casing: Casing = Casing.CAMEL,
+        casing: betterproto.Casing = betterproto.Casing.CAMEL,
         include_default_values: bool = False,
     ) -> dict[str, tp.Any]:
         """Returns a JSON serializable dict representation of this object.
@@ -76,7 +91,9 @@ class MessageMixin:
         Note: betterproto `to_dict` converts INT64 to strings, to allow js compatibility.
         """
         betterproto_func = functools.partial(
-            Message.to_dict, casing=casing, include_default_values=include_default_values
+            betterproto.Message.to_dict,
+            casing=casing,
+            include_default_values=include_default_values,
         )
         out_dict = self._to_dict_with_json_content(betterproto_func)
         return out_dict
@@ -93,7 +110,7 @@ class MessageMixin:
 
     def to_pydict(
         self: "ProtoBunnyMessage",
-        casing: Casing = Casing.CAMEL,
+        casing: betterproto.Casing = betterproto.Casing.CAMEL,
         include_default_values: bool = False,
     ) -> dict[str, tp.Any]:
         """Returns a dict representation of this object. Uses enum names instead of int values. Useful for logging
@@ -101,7 +118,9 @@ class MessageMixin:
         Conversely to the `to_dict` method, betterproto `to_pydict` doesn't convert INT64 to strings.
         """
         betterproto_func = functools.partial(
-            Message.to_pydict, casing=casing, include_default_values=include_default_values
+            betterproto.Message.to_pydict,
+            casing=casing,
+            include_default_values=include_default_values,
         )
         out_dict = self._to_dict_with_json_content(betterproto_func)
         # update the dict to use enum names instead of int values
@@ -119,7 +138,7 @@ class MessageMixin:
         note: to_pydict is used in LoggerQueue (am-mqtt-logger service)
         """
         # The original Message.to_pydict writes int values instead of names for Enum.
-        # Copying implementation from Message.to_dict to handle enums with names the same way
+        # Copying implementation from Message.to_dict to handle enums with names the same way as in to_dict
 
         updated_out_enums = out_dict
 
@@ -128,7 +147,7 @@ class MessageMixin:
             defaults = self._betterproto.default_gen
             field_is_repeated = defaults[field_name] is list
             if field_is_repeated:
-                enum_class = field_types[field_name].__args__[0]
+                enum_class = field_types[field_name].__args__[0]  # noqa
                 if isinstance(value, tp.Iterable) and not isinstance(value, str):
                     res = [enum_class(el).name for el in value]
                 else:
@@ -136,7 +155,7 @@ class MessageMixin:
                     res = [enum_class(value).name]
             elif meta.optional:
                 # get the real Enum class from Optional field
-                enum_class = field_types[field_name].__args__[0]
+                enum_class = field_types[field_name].__args__[0]  # noqa
                 res = enum_class(value).name
             else:
                 enum_class = field_types[field_name]  # noqa
@@ -165,7 +184,7 @@ class MessageMixin:
         self: "ProtoBunnyMessage",
         indent: None | int | str = None,
         include_default_values: bool = False,
-        casing: Casing = Casing.CAMEL,
+        casing: betterproto.Casing = betterproto.Casing.CAMEL,
     ) -> str:
         """Overwrite the betterproto to_json to use the custom encoder"""
         return json.dumps(
@@ -177,8 +196,8 @@ class MessageMixin:
     def parse(self: "ProtoBunnyMessage", data: bytes) -> "ProtoBunnyMessage":
         # Override Message.parse() method
         # to support transparent deserialization of JsonContent fields
-        json_content_fields = copy.copy(self.json_content_fields)
-        msg = Message.parse(self, data)
+        json_content_fields = list(self.json_content_fields)
+        msg = betterproto.Message.parse(self, data)
 
         for field in json_content_fields:
             json_content_value = getattr(msg, field)
@@ -195,7 +214,7 @@ class MessageMixin:
         return f"{self.__class__.__module__}.{self.__class__.__name__}"
 
     @property
-    def source(self: "Result") -> "ProtoBunnyMessage":
+    def source(self: "ProtoBunnyMessage") -> "ProtoBunnyMessage":
         """Return the source message from a Result
 
         The source message is stored as a protobuf.Any message, with its type info  and serialized value.
@@ -208,19 +227,19 @@ class MessageMixin:
         return source_message
 
     @functools.cached_property
-    def topic(self: ProtoBunnyMessage) -> str:
+    def topic(self: "ProtoBunnyMessage") -> str:
         """Build the topic name for the message."""
         return get_topic(self).name
 
     @functools.cached_property
-    def result_topic(self: ProtoBunnyMessage) -> str:
+    def result_topic(self: "ProtoBunnyMessage") -> str:
         """
         Build the result topic name for the message.
         """
         return f"{get_topic(self).name}.result"
 
     def make_result(
-        self: ProtoBunnyMessage,
+        self: "ProtoBunnyMessage",
         return_code: "ReturnCode | None" = None,
         error: str = "",
         return_value: dict[str, tp.Any] | None = None,
@@ -240,7 +259,7 @@ class MessageMixin:
         if isinstance(self, Result):
             log.warning("Message is already a Result. Returning it as is.")
             return self
-        any_message = Any(type_url=self.type_url, value=bytes(self))
+        any_message = Any(type_url=str(self.type_url), value=bytes(self))
         # The "return_value" argument is a dictionary.
         # It will be internally packed as commons.JsonContent field when serialized
         # and automatically deserialized to a dictionary during parsing
@@ -251,7 +270,7 @@ class MessageMixin:
             error=error,
         )
 
-    def serialize_json_content(self: ProtoBunnyMessage) -> ProtoBunnyMessage:
+    def serialize_json_content(self: "ProtoBunnyMessage") -> "ProtoBunnyMessage":
         json_content_fields = self.json_content_fields
         msg = copy.deepcopy(self)
         for field in json_content_fields:
@@ -261,16 +280,22 @@ class MessageMixin:
         return msg
 
 
+class ProtoBunnyMessage(MessageMixin, betterproto.Message):
+    """Base class for all protobunny messages."""
+
+    ...
+
+
 class MissingRequiredFields(Exception):
     """Exception raised by MessageMixin.validate_required_fields when required fields are missing."""
 
-    def __init__(self, msg: ProtoBunnyMessage, missing_fields: list[str]) -> None:
+    def __init__(self, msg: "ProtoBunnyMessage", missing_fields: list[str]) -> None:
         self.missing_fields = missing_fields
         missing = ", ".join(missing_fields)
         super().__init__(f"Non optional fields for message {msg.topic} were not set: {missing}")
 
 
-def to_json_content(data: dict[str, tp.Any]) -> "pb.commons.JsonContent | None":
+def to_json_content(data: dict) -> "JsonContent | None":
     """Serialize an object and build a JsonContent message.
 
     Args:
@@ -287,7 +312,7 @@ def to_json_content(data: dict[str, tp.Any]) -> "pb.commons.JsonContent | None":
     return content
 
 
-def _deserialize_content(msg: "pb.commons.JsonContent") -> dict[str, tp.Any]:
+def _deserialize_content(msg: "JsonContent") -> dict | None:
     """Deserialize a JsonContent message back into a dictionary.
 
     Note: To not use directly.
@@ -300,12 +325,12 @@ def _deserialize_content(msg: "pb.commons.JsonContent") -> dict[str, tp.Any]:
 
     """
     # Decode bytes back to JSON string and parse
-    return json.loads(msg.content.decode()) or None
+    return json.loads(msg.content.decode()) if msg.content else None
 
 
 def _get_submodule(
     package: ModuleType, paths: list[str]
-) -> type["ProtoBunnyMessage"] | ModuleType | None:
+) -> "type[ProtoBunnyMessage] | ModuleType | None":
     """Import module/class from package
 
     Args:
@@ -328,7 +353,7 @@ def _get_submodule(
 
 
 @functools.lru_cache
-def get_message_class_from_topic(topic: str) -> type["ProtoBunnyMessage"] | None:
+def get_message_class_from_topic(topic: str) -> "type[ProtoBunnyMessage] | None | Result":
     """Return the message class from a topic with lazy import of the user library
 
     Args:
@@ -368,7 +393,9 @@ def get_message_class_from_type_url(url: str) -> type["ProtoBunnyMessage"]:
     return message_type
 
 
-def build_routing_key(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType) -> str:
+def build_routing_key(
+    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> str:
     """Return a routing key based on a message instance, a message class, or a module.
     The string will be later composed with the configured message-prefix to build the exact topic name.
 
@@ -385,10 +412,10 @@ def build_routing_key(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | 
     """
     module_name = ""
     class_name = ""
-    if isinstance(pkg_or_msg, Message):
+    if isinstance(pkg_or_msg, betterproto.Message):
         module_name = pkg_or_msg.__module__
         class_name = pkg_or_msg.__class__.__name__
-    elif isinstance(pkg_or_msg, type(Message)):
+    elif isinstance(pkg_or_msg, type(betterproto.Message)):
         module_name = pkg_or_msg.__module__
         class_name = pkg_or_msg.__name__
     elif isinstance(pkg_or_msg, ModuleType):
@@ -414,7 +441,7 @@ class Topic:
     is_task_queue: bool = False
 
 
-def get_topic(pkg_or_msg: ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType) -> Topic:
+def get_topic(pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType") -> Topic:
     """Return a Topic dataclass object based on a Message (instance or class) or a ModuleType.
 
     It uses build_routing_key to determine the topic name.

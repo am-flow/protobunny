@@ -197,7 +197,7 @@ def ensure_dict_type(source: str) -> str:
 
 
 def ensure_message_mixin(source: str) -> str:
-    new_source = source.replace("(betterproto.Message):", "(models.MessageMixin, betterproto.Message):")
+    new_source = source.replace("(betterproto.Message):", "(models.ProtoBunnyMessage):")
     new_source = f"from protobunny import models as models\n\n{new_source}\n"
     return new_source
 

@@ -24,7 +24,7 @@ async def async_wait(condition_func, timeout_seconds=1.0, sleep_seconds=0.1):
 
 
 @pytest.mark.integration
-class TestAsyncIntegration:
+class TestIntegration:
     """Integration tests (to run with RabbitMQ up)"""
 
     received = None
@@ -49,8 +49,8 @@ class TestAsyncIntegration:
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
 
-    def log_callback(self, _: aio_pika.IncomingMessage, body: str) -> None:
-        self.log_msg = body
+    def log_callback(self, message: aio_pika.IncomingMessage, body: str) -> None:
+        self.log_msg = f"{message.routing_key} - {body}"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_publish(self) -> None:
@@ -65,7 +65,6 @@ class TestAsyncIntegration:
         assert self.received.number == self.msg.number
         assert self.received.content == "test"
 
-    @pytest.mark.asyncio
     async def test_to_dict(self) -> None:
         await pb.publish(self.msg)
 
@@ -109,7 +108,6 @@ class TestAsyncIntegration:
             "options": None,
         }
 
-    @pytest.mark.asyncio
     async def test_count_messages(self) -> None:
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
@@ -145,7 +143,7 @@ class TestAsyncIntegration:
         assert isinstance(self.log_msg, str)
         assert (
             self.log_msg
-            == '{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
+            == 'acme.tests.tasks.TaskMessage - {"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
         )
         self.log_msg = None
         await pb.publish(tests.TestMessage(number=63, content="test"))
@@ -157,10 +155,9 @@ class TestAsyncIntegration:
         assert isinstance(self.log_msg, str)
         assert (
             self.log_msg
-            == '{"content": "test", "number": 63, "detail": null, "options": null, "color": null}'
+            == 'acme.tests.TestMessage - {"content": "test", "number": 63, "detail": null, "options": null, "color": null}'
         )
 
-    @pytest.mark.asyncio
     async def test_unsubscribe(self) -> None:
         await pb.publish(self.msg)
 
@@ -186,7 +183,7 @@ class TestAsyncIntegration:
         # subscribe/unsubscribe two callbacks for two topics
         received = None
 
-        def callback_2(m: "ProtoBunnyMessage") -> None:
+        async def callback_2(m: "ProtoBunnyMessage") -> None:
             nonlocal received
             received = m
 
@@ -206,7 +203,6 @@ class TestAsyncIntegration:
         assert self.received is None
         assert received is None
 
-    @pytest.mark.asyncio
     async def test_unsubscribe_results(self) -> None:
         received_result: pb.results.Result | None = None
 

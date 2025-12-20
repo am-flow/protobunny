@@ -6,11 +6,19 @@ from abc import ABC, abstractmethod
 import aio_pika
 import betterproto
 from aio_pika import DeliveryMode, IncomingMessage
-from betterproto import Message
+
+import protobunny as pb
 
 from .backends.rabbitmq import RequeueMessage, get_connection, get_connection_sync
 from .config import load_config
-from .models import ProtoBunnyMessage, Topic, get_message_class_from_topic
+from .models import (
+    AsyncCallback,
+    LoggerCallback,
+    ProtoBunnyMessage,
+    SyncCallback,
+    Topic,
+    get_message_class_from_topic,
+)
 
 log = logging.getLogger(__name__)
 configuration = load_config()
@@ -31,33 +39,35 @@ class BaseQueue(ABC):
         Args:
             topic: a Topic value object
         """
-        self.topic = topic.name
-        self.shared_queue = topic.is_task_queue
-        self.subscription = None
-        self.result_subscription = None
+        self.topic: str = topic.name
+        self.shared_queue: bool = topic.is_task_queue
+        self.subscription: str | None = None
+        self.result_subscription: str | None = None
 
     @property
     def result_topic(self) -> str:
         return f"{self.topic}.result"
 
     @abstractmethod
-    def publish(self, message: "ProtoBunnyMessage") -> None:
+    def publish(self, message: "ProtoBunnyMessage") -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
     def _receive(
         self,
-        callback: tp.Callable[["ProtoBunnyMessage"], tp.Any],
+        callback: "SyncCallback | LoggerCallback",
         message: aio_pika.IncomingMessage,
     ) -> None:
         ...
 
     @abstractmethod
-    def subscribe(self, callback: tp.Callable[["ProtoBunnyMessage"], tp.Any]) -> None:
+    def subscribe(self, callback: "SyncCallback | LoggerCallback") -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def unsubscribe(self, if_unused: bool = True, if_empty: bool = True) -> None:
+    def unsubscribe(
+        self, if_unused: bool = True, if_empty: bool = True
+    ) -> None | tp.Awaitable[None]:
         ...
 
     @staticmethod
@@ -70,36 +80,34 @@ class BaseQueue(ABC):
     @abstractmethod
     def publish_result(
         self, result: "Result", topic: str | None = None, correlation_id: str | None = None
-    ) -> None:
+    ) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def _receive_result(
-        self, callback: tp.Callable[["Result"], tp.Any], message: aio_pika.IncomingMessage
-    ) -> None:
+    def _receive_result(self, callback: "SyncCallback", message: aio_pika.IncomingMessage) -> None:
         ...
 
     @abstractmethod
-    def subscribe_results(self, callback: tp.Callable[["pb.results.Result"], tp.Any]) -> None:
+    def subscribe_results(self, callback: "SyncCallback") -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def unsubscribe_results(self) -> None:
+    def unsubscribe_results(self) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def purge(self) -> None:
+    def purge(self) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def get_message_count(self) -> int:
+    def get_message_count(self) -> int | tp.Awaitable[int]:
         ...
 
 
-class Queue(BaseQueue):
+class SyncQueue(BaseQueue):
     """Message queue backed by pika and RabbitMQ."""
 
-    def publish(self, message: ProtoBunnyMessage) -> None:
+    def publish(self, message: "ProtoBunnyMessage") -> None:
         """Publish a message to the queue.
 
         Args:
@@ -108,7 +116,7 @@ class Queue(BaseQueue):
         self.send_message(self.topic, bytes(message))
 
     def _receive(
-        self, callback: tp.Callable[[ProtoBunnyMessage], tp.Any], message: aio_pika.IncomingMessage
+        self, callback: "SyncCallback | LoggerCallback", message: aio_pika.IncomingMessage
     ) -> None:
         """Handle a message from the queue.
 
@@ -135,7 +143,7 @@ class Queue(BaseQueue):
                 result, topic=msg.result_topic, correlation_id=message.correlation_id
             )
 
-    def subscribe(self, callback: tp.Callable[["ProtoBunnyMessage"], tp.Any]) -> None:
+    def subscribe(self, callback: "SyncCallback | LoggerCallback") -> None:
         """Subscribe to messages from the queue.
 
         Args:
@@ -219,7 +227,7 @@ class Queue(BaseQueue):
             self.result_topic, func, shared=False
         )
 
-    def unsubscribe_results(self):
+    def unsubscribe_results(self) -> None:
         """Unsubscribe from results. Will always delete the underlying queues"""
         if self.result_subscription is not None:
             get_connection_sync().unsubscribe(
@@ -273,7 +281,7 @@ class AsyncQueue(BaseQueue):
         await self.send_message(self.topic, bytes(message))
 
     async def _receive(
-        self, callback: tp.Callable[[ProtoBunnyMessage], tp.Any], message: aio_pika.IncomingMessage
+        self, callback: "AsyncCallback | LoggerCallback", message: aio_pika.IncomingMessage
     ) -> None:
         """Handle a message from the queue.
 
@@ -300,12 +308,15 @@ class AsyncQueue(BaseQueue):
                 result, topic=msg.result_topic, correlation_id=message.correlation_id
             )
 
-    async def subscribe(self, callback: tp.Callable[["ProtoBunnyMessage"], tp.Any]) -> None:
+    async def subscribe(self, callback: "AsyncCallback | LoggerCallback") -> None:
         """Subscribe to messages from the queue.
 
         Args:
-            callback:
+            callback: The user async callback to call when a message is received.
+              The callback should accept a single argument of type `ProtoBunnyMessage`.
 
+        Note: The real callback that consumes the incoming aio-pika message is the method AsyncConnection._on_message
+        The AsyncQueue._receive method is called from there to deserialize the message and in turn calls the user callback.
         """
 
         if self.subscription is not None:
@@ -342,7 +353,7 @@ class AsyncQueue(BaseQueue):
 
     async def _receive_result(
         self,
-        callback: tp.Callable[["Result"], tp.Any],
+        callback: "AsyncCallback",
         message: aio_pika.IncomingMessage,
     ) -> None:
         """Handle a message from the queue.
@@ -364,10 +375,10 @@ class AsyncQueue(BaseQueue):
             # >> message_type = get_message_class_from_type_url(result.source_message.type_url)
             # >> source_message = message_type().parse(result.source_message.value)
             await callback(result)
-        except Exception:  # pylint: disable=W0703
+        except Exception:
             log.exception("Could not process result: %s", str(message.body))
 
-    async def subscribe_results(self, callback: tp.Callable[["pb.results.Result"], tp.Any]) -> None:
+    async def subscribe_results(self, callback: "AsyncCallback") -> None:
         """Subscribe to results from the queue.
 
         See the deserialize_result method for return params.
@@ -381,7 +392,7 @@ class AsyncQueue(BaseQueue):
         conn = await get_connection()
         self.result_subscription = await conn.subscribe(self.result_topic, func, shared=False)
 
-    async def unsubscribe_results(self):
+    async def unsubscribe_results(self) -> None:
         """Unsubscribe from results. Will always delete the underlying queues"""
         if self.result_subscription is not None:
             conn = await get_connection()
@@ -395,7 +406,7 @@ class AsyncQueue(BaseQueue):
         conn = await get_connection()
         await conn.purge(self.topic)
 
-    async def get_message_count(self) -> int:
+    async def get_message_count(self) -> int | None:
         """Get current message count."""
         if not self.shared_queue:
             raise RuntimeError("Can only get count of shared queues")
@@ -405,7 +416,7 @@ class AsyncQueue(BaseQueue):
     @staticmethod
     async def send_message(
         topic: str, body: bytes, correlation_id: str | None = None, persistent: bool = True
-    ):
+    ) -> None:
         """Low-level message sending implementation.
 
         Args:
@@ -426,7 +437,7 @@ class AsyncQueue(BaseQueue):
         await conn.publish(topic, message)
 
 
-class LoggingSyncQueue(Queue):
+class LoggingSyncSyncQueue(SyncQueue):
     """Represents a specialized queue for logging purposes.
 
     >>> import protobunny as pb
@@ -454,12 +465,12 @@ class LoggingSyncQueue(Queue):
     def result_topic(self) -> str:
         return ""
 
-    def publish(self, message: Message) -> None:
+    def publish(self, message: "ProtoBunnyMessage") -> None:
         raise NotImplementedError
 
     def publish_result(
         self,
-        result: "pb.results.Result",
+        result: "Result",
         topic: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
@@ -467,7 +478,7 @@ class LoggingSyncQueue(Queue):
 
     def _receive(
         self,
-        log_callback: tp.Callable[[aio_pika.Message, str], tp.Any],
+        log_callback: "LoggerCallback",
         message: aio_pika.IncomingMessage,
     ):
         """Call the logging callback.
@@ -524,12 +535,12 @@ class LoggingAsyncQueue(AsyncQueue):
     def result_topic(self) -> str:
         return ""
 
-    async def publish(self, message: Message) -> None:
+    async def publish(self, message: "ProtoBunnyMessage") -> None:
         raise NotImplementedError
 
     async def publish_result(
         self,
-        result: "pb.results.Result",
+        result: "Result",
         topic: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
@@ -537,9 +548,9 @@ class LoggingAsyncQueue(AsyncQueue):
 
     async def _receive(
         self,
-        log_callback: tp.Callable[[aio_pika.Message, str], tp.Any],
+        log_callback: "LoggerCallback",  # the callback function for logging is always a sync function
         message: aio_pika.IncomingMessage,
-    ):
+    ) -> None:
         """Call the logging callback.
 
         Args:
@@ -562,7 +573,7 @@ class LoggingAsyncQueue(AsyncQueue):
             )
 
 
-def deserialize_message(topic: str | None, body: bytes) -> ProtoBunnyMessage | None:
+def deserialize_message(topic: str | None, body: bytes) -> "ProtoBunnyMessage | None":
     """Deserialize the body of a serialized pika message.
 
     Args:
@@ -574,7 +585,7 @@ def deserialize_message(topic: str | None, body: bytes) -> ProtoBunnyMessage | N
     """
     if not topic:
         raise ValueError("Routing key was not set. Invalid topic")
-    message_type: tp.Type[Message] = get_message_class_from_topic(topic)
+    message_type: type["ProtoBunnyMessage"] = get_message_class_from_topic(topic)
     return message_type().parse(body) if message_type else None
 
 
@@ -582,33 +593,39 @@ def deserialize_result_message(body: bytes) -> "Result":
     """Deserialize the result message.
 
     Args:
-        body: bytes. The serialized amlogic_messages.results.Result
+        body: bytes. The serialized protobunny.core.results.Result
 
     Returns:
-        Instance of amlogic_messages.results.Result
+        Instance of Result
     """
-    return Result().parse(body)
+    return tp.cast(Result, Result().parse(body))
 
 
 def get_body(message: IncomingMessage) -> str:
-    if message.routing_key.endswith(".result"):
+    """Get the json string representation of the message body to use for the logger service.
+    If message couldn't be parsed, it returns the raw content.
+    """
+    msg: ProtoBunnyMessage | None
+    body: str | bytes
+    if message.routing_key and message.routing_key.endswith(".result"):
         # log result message. Need to extract the source here
         result = deserialize_result_message(message.body)
-        # original message
+        # original message for which this result was generated
         msg = result.source
         return_code = ReturnCode(result.return_code).name
         # stringify to json
         source = msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
         if result.return_code != ReturnCode.SUCCESS:
-            body = f"{return_code} - {result.error} - {source}"
+            body = f"{return_code} - error: [{result.error}] - {source}"
         else:
             body = f"{return_code} - {source}"
     else:
-        msg: ProtoBunnyMessage | None = deserialize_message(message.routing_key, message.body)
+        msg = deserialize_message(message.routing_key, message.body)
+
         body = (
             msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
             if msg is not None
-            # can't parse the message but log the raw content
+            # can't parse the message - just log the raw content
             else message.body
         )
     return str(body)

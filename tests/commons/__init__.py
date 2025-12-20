@@ -10,7 +10,7 @@ from protobunny import models as models
 
 
 @dataclass(eq=False, repr=False)
-class JsonContent(models.MessageMixin, betterproto.Message):
+class JsonContent(models.ProtoBunnyMessage):
     """
     The JsonContent message is used as a field in other messages to hold dictionary/Json data.
     Notes:

@@ -8,8 +8,9 @@ from pytest_mock import MockerFixture
 import protobunny as pb
 from protobunny.base import (
     get_queue,
+    get_queue_sync,
 )
-from protobunny.queues import LoggingSyncQueue
+from protobunny.queues import LoggingSyncSyncQueue
 
 from . import tests
 
@@ -117,21 +118,21 @@ class TestQueue:
         assert not configuration.use_async
 
     def test_get_message_count(self, mock_sync_connection: MagicMock) -> None:
-        q = get_queue(tests.tasks.TaskMessage)
+        q = get_queue_sync(tests.tasks.TaskMessage)
         q.get_message_count()
         mock_sync_connection.get_message_count.assert_called_once_with(
             "acme.tests.tasks.TaskMessage"
         )
-        q = get_queue(tests.TestMessage)
+        q = get_queue_sync(tests.TestMessage)
         with pytest.raises(RuntimeError) as exc:
             q.get_message_count()
         assert str(exc.value) == "Can only get count of shared queues"
 
     def test_purge(self, mock_sync_connection: MagicMock) -> None:
-        q = get_queue(tests.tasks.TaskMessage)
+        q = get_queue_sync(tests.tasks.TaskMessage)
         q.purge()
         mock_sync_connection.purge.assert_called_once_with("acme.tests.tasks.TaskMessage")
-        q = get_queue(tests.TestMessage)
+        q = get_queue_sync(tests.TestMessage)
         with pytest.raises(RuntimeError) as exc:
             q.purge()
         assert str(exc.value) == "Can only purge shared queues"
@@ -143,7 +144,7 @@ class TestQueue:
     ) -> None:
         cb = mocker.MagicMock()
         msg = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
-        q = get_queue(msg)
+        q = get_queue_sync(msg)
         pika_message = pika_incoming_message(bytes(msg), q.topic)
         q._receive(cb, pika_message)
         cb.assert_called_once_with(msg)
@@ -161,7 +162,7 @@ class TestQueue:
 
     def test_subscribe(self, mocker: MockerFixture, mock_sync_connection: MagicMock) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
+        q = get_queue_sync(tests.tasks.TaskMessage)
         q.subscribe(cb)
         mock_sync_connection.subscribe.assert_called_once_with(
             "acme.tests.tasks.TaskMessage", ANY, shared=True
@@ -175,7 +176,7 @@ class TestQueue:
         pika_incoming_message: tp.Callable[[bytes, str], aio_pika.IncomingMessage],
     ) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
+        q = get_queue_sync(tests.tasks.TaskMessage)
         source_message = tests.tasks.TaskMessage(content="test", bbox=[], weights=[])
         result_message = source_message.make_result()
         assert result_message.return_value is None
@@ -188,7 +189,7 @@ class TestQueue:
         self, mocker: MockerFixture, mock_sync_connection: MagicMock
     ) -> None:
         cb = mocker.MagicMock()
-        q = get_queue(tests.tasks.TaskMessage)
+        q = get_queue_sync(tests.tasks.TaskMessage)
         q.subscribe_results(cb)
         mock_sync_connection.subscribe.assert_called_once_with(
             "acme.tests.tasks.TaskMessage.result", ANY, shared=False
@@ -200,6 +201,6 @@ class TestQueue:
 
     def test_logger(self, mock_sync_connection: MagicMock) -> None:
         q = pb.subscribe_logger_sync()
-        assert isinstance(q, LoggingSyncQueue)
+        assert isinstance(q, LoggingSyncSyncQueue)
         assert q.topic == "acme.#"
         mock_sync_connection.subscribe.assert_called_once_with("acme.#", ANY, shared=False)

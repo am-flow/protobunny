@@ -1,10 +1,11 @@
 import dataclasses
 import functools
+import typing as tp
 
 try:
     import tomllib
 except ImportError:
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore
 
 from pathlib import Path
 
@@ -41,9 +42,9 @@ def load_config() -> Config:
     return Config(**{k.replace("-", "_"): v for k, v in config.items()})
 
 
-def get_config_from_pyproject() -> tuple[dict, Path] | None:
+def get_config_from_pyproject() -> tuple[dict[str, tp.Any], Path | None]:
     start_path = Path.cwd()
-    config, folder = None, None
+    config, folder = dict(), None
     for folder in [start_path, *start_path.parents]:
         pyproject = folder / "pyproject.toml"
         if pyproject.exists():

@@ -3,9 +3,7 @@ import uuid
 import betterproto
 import pytest
 
-from protobunny.base import (
-    get_queue,
-)
+from protobunny.base import get_queue, get_queue_sync
 from protobunny.models import (
     MessageMixin,
     MissingRequiredFields,
@@ -94,6 +92,14 @@ def test_get_queue() -> None:
     q = get_queue(tests.tasks.TaskMessage())
     assert q.shared_queue
     q = get_queue(tests.TestMessage())
+    assert not q.shared_queue
+    assert get_queue(tests.TestMessage()) == get_queue(tests.TestMessage)
+
+
+def test_get_queue_sync() -> None:
+    q = get_queue_sync(tests.tasks.TaskMessage())
+    assert q.shared_queue
+    q = get_queue_sync(tests.TestMessage())
     assert not q.shared_queue
     assert get_queue(tests.TestMessage()) == get_queue(tests.TestMessage)
 

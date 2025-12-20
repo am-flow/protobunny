@@ -37,8 +37,14 @@ class TestIntegration:
     def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
 
-    def log_callback(self, _: aio_pika.IncomingMessage, body: str) -> None:
-        self.log_msg = body
+    def log_callback(self, message: aio_pika.IncomingMessage, body: str) -> None:
+        corr_id = message.correlation_id
+        log_msg = (
+            f"{message.routing_key}(cid:{corr_id}): {body}"
+            if corr_id
+            else f"{message.routing_key}: {body}"
+        )
+        self.log_msg = log_msg
 
     def test_publish(self) -> None:
         pb.publish_sync(self.msg)
@@ -96,6 +102,32 @@ class TestIntegration:
             lambda: 3 == queue.get_message_count(), timeout_seconds=1, sleep_seconds=0.1
         ), f"{queue.get_message_count()}"
 
+    def test_logger_body(self) -> None:
+        pb.publish_sync(self.msg)
+        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
+        assert (
+            self.log_msg
+            == 'acme.tests.TestMessage: {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        )
+        self.log_msg = None
+        result = self.msg.make_result()
+        pb.publish_result_sync(result)
+        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
+        assert (
+            self.log_msg
+            == 'acme.tests.TestMessage.result: SUCCESS - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        )
+        result = self.msg.make_result(
+            return_code=pb.results.ReturnCode.FAILURE, return_value={"test": "value"}
+        )
+        self.log_msg = None
+        pb.publish_result_sync(result)
+        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
+        assert (
+            self.log_msg
+            == 'acme.tests.TestMessage.result: FAILURE - error: [] - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        )
+
     def test_logger_int64(self) -> None:
         # Ensure that uint64/int64 values are not converted to strings in the LoggerQueue callbacks
         pb.publish_sync(
@@ -107,12 +139,13 @@ class TestIntegration:
         assert isinstance(self.log_msg, str)
         assert (
             self.log_msg
-            == '{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
+            == 'acme.tests.tasks.TaskMessage: {"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
         )
+        self.log_msg = None
         pb.publish_sync(tests.TestMessage(number=63, content="test"))
         assert wait(
             lambda: self.log_msg
-            == '{"content": "test", "number": 63, "detail": null, "options": null, "color": null}',
+            == 'acme.tests.TestMessage: {"content": "test", "number": 63, "detail": null, "options": null, "color": null}',
             timeout_seconds=1,
             sleep_seconds=0.1,
         ), self.log_msg
