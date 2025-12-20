@@ -41,7 +41,12 @@ build-package: clean
 	uv build
 
 publish-test: build-package
-	uv publish --publish-url https://test.pypi.org/legacy/
+	$(eval SECTION := testpypi)
+	$(eval PYPI_TOKEN := $(shell sed -n '/^\[$(SECTION)\]/,/^\[.*\]/ { /password *=/ s/.*= *//p; }' $(HOME)/.pypirc))
+	uv publish --publish-url https://test.pypi.org/legacy/ --token $(PYPI_TOKEN)
 
-publish-pypi: build-package
-	uv publish
+publish: build-package
+	$(eval SECTION := testpypi)
+	$(eval PYPI_TOKEN := $(shell sed -n '/^\[$(SECTION)\]/,/^\[.*\]/ { /password *=/ s/.*= *//p; }' $(HOME)/.pypirc))
+	uv publish --token $(PYPI_TOKEN)
+
