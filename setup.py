@@ -81,6 +81,11 @@ package_data = {
 packages = setuptools.find_namespace_packages() + [
     ROOT_GENERATED_PACKAGE_NAME,
 ]
+project_urls = {
+    "repository": "https://github.com/am-flow/protobunny",
+    "issues": "https://github.com/am-flow/protobunny/issues",
+    "homepage": "https://am-flow.github.io/protobunny",
+}
 setup(
     name=PROJECT_NAME,
     version=VERSION,

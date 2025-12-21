@@ -279,9 +279,10 @@ class AsyncConnection:
                 self.is_connected_event.clear()
                 raise
             except Exception as e:
-                self.is_connected_event.clear()
                 if "connection" in locals() and not connection.is_closed:
                     await connection.close()
+                    await channel.close()
+                self.is_connected_event.clear()
                 self._channel = None
                 self._connection = None
                 log.exception("Failed to establish RabbitMQ connection")
@@ -363,9 +364,6 @@ class AsyncConnection:
         Raises:
             ConnectionError: If not connected
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
-
         queue_name = topic if shared else ""
         log.debug("Setting up queue for topic '%s' (shared=%s)", topic, shared)
 
@@ -480,16 +478,17 @@ class AsyncConnection:
                 tag = await conn.subscribe("my.events.*", handle_message)
 
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
 
-        queue = await self.setup_queue(topic, shared)
-        log.info("Subscribing to topic '%s' (queue=%s, shared=%s)", topic, queue.name, shared)
+            queue = await self.setup_queue(topic, shared)
+            log.info("Subscribing to topic '%s' (queue=%s, shared=%s)", topic, queue.name, shared)
 
-        func = functools.partial(self._on_message, topic, callback)
-        tag = await queue.consume(func)
-        self.consumers[tag] = queue.name
-        return tag
+            func = functools.partial(self._on_message, topic, callback)
+            tag = await queue.consume(func)
+            self.consumers[tag] = queue.name
+            return tag
 
     async def unsubscribe(self, tag: str, if_unused: bool = True, if_empty: bool = True) -> None:
         """Unsubscribe from a queue.
@@ -539,12 +538,13 @@ class AsyncConnection:
         Raises:
             ConnectionError: If not connected
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
 
-        log.info("Purging topic '%s'", topic)
-        await self.setup_queue(topic, shared=True)
-        await self.queues[topic].purge()
+            log.info("Purging topic '%s'", topic)
+            await self.setup_queue(topic, shared=True)
+            await self.queues[topic].purge()
 
     async def get_message_count(self, topic: str) -> int | None:
         """Get the number of messages in a queue.
