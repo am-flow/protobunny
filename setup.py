@@ -81,13 +81,21 @@ package_data = {
 packages = setuptools.find_namespace_packages() + [
     ROOT_GENERATED_PACKAGE_NAME,
 ]
+project_urls = {
+    "Repository": "https://github.com/am-flow/protobunny",
+    "Issues": "https://github.com/am-flow/protobunny/issues",
+    "Homepage": "https://am-flow.github.io/protobunny/index.html",
+}
 setup(
     name=PROJECT_NAME,
     version=VERSION,
     author="Domenico Nappo, Sander Koelstra, Sem Mulder",
+    author_email="support@am-flow.com",
     include_package_data=True,
     package_data=package_data,
     packages=packages,
+    project_urls=project_urls,
+    keywords=["protobuf", "rabbitmq", "mqtt"],
     cmdclass={
         "install": GenerateProtoCommand,
     },

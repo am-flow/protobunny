@@ -103,6 +103,10 @@ class BaseQueue(ABC):
     def get_message_count(self) -> int | tp.Awaitable[int]:
         ...
 
+    @abstractmethod
+    def get_consumer_count(self) -> int | tp.Awaitable[int]:
+        ...
+
 
 class SyncQueue(BaseQueue):
     """Message queue backed by pika and RabbitMQ."""
@@ -160,11 +164,10 @@ class SyncQueue(BaseQueue):
 
     def unsubscribe(self, if_unused: bool = True, if_empty: bool = True) -> None:
         """Unsubscribe from the queue."""
-        if self.subscription is not None:
-            get_connection_sync().unsubscribe(
-                self.subscription, if_unused=if_unused, if_empty=if_empty
-            )
-            self.subscription = None
+        if self.subscription is None:
+            return
+        get_connection_sync().unsubscribe(self.subscription, if_unused=if_unused, if_empty=if_empty)
+        self.subscription = None
 
     def publish_result(
         self,
@@ -247,6 +250,12 @@ class SyncQueue(BaseQueue):
             raise RuntimeError("Can only get count of shared queues")
         log.debug("Getting queue message count")
         return get_connection_sync().get_message_count(self.topic)
+
+    def get_consumer_count(self) -> int | None:
+        """Get current consumers count."""
+        if not self.shared_queue:
+            raise RuntimeError("Can only get count of shared queues")
+        return get_connection_sync().get_consumer_count(self.topic)
 
     @staticmethod
     def send_message(
@@ -412,6 +421,13 @@ class AsyncQueue(BaseQueue):
             raise RuntimeError("Can only get count of shared queues")
         conn = await get_connection()
         return await conn.get_message_count(self.topic)
+
+    async def get_consumer_count(self) -> int | None:
+        """Get current consumers count."""
+        if not self.shared_queue:
+            raise RuntimeError("Can only get count of shared queues")
+        conn = await get_connection()
+        return await conn.get_consumer_count(self.topic)
 
     @staticmethod
     async def send_message(

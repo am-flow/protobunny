@@ -13,6 +13,7 @@ import aio_pika
 from aio_pika.abc import (
     AbstractChannel,
     AbstractExchange,
+    AbstractQueue,
     AbstractRobustConnection,
     AbstractRobustQueue,
 )
@@ -131,7 +132,7 @@ class AsyncConnection:
         self._channel: AbstractChannel | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
-        self.queues: dict[str, AbstractRobustQueue] = {}
+        self.queues: dict[str, AbstractQueue] = {}
         self.consumers: dict[str, str] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
@@ -282,6 +283,7 @@ class AsyncConnection:
                 self.is_connected_event.clear()
                 if "connection" in locals() and not connection.is_closed:
                     await connection.close()
+                    await self._channel.close()
                 self._channel = None
                 self._connection = None
                 log.exception("Failed to establish RabbitMQ connection")
@@ -313,7 +315,7 @@ class AsyncConnection:
                             if queue.exclusive:
                                 log.debug("Force delete exclusive queue %s", queue_name)
                                 await asyncio.wait_for(
-                                    queue.delete(if_empty=False, if_unused=False), timeout=5.0
+                                    queue.delete(if_unused=False, if_empty=False), timeout=5.0
                                 )
                             self.queues.pop(queue_name, None)
                     except asyncio.TimeoutError:
@@ -330,12 +332,15 @@ class AsyncConnection:
 
                 # Close the underlying aio-pika connection
                 if self._connection and not self._connection.is_closed:
+                    await asyncio.wait_for(self._channel.close(), timeout=timeout)
                     await asyncio.wait_for(self._connection.close(), timeout=timeout)
 
             except asyncio.TimeoutError:
                 log.warning("RabbitMQ connection close timeout after %.1f seconds", timeout)
+                raise
             except Exception:
                 log.exception("Error during RabbitMQ disconnect")
+                raise
             finally:
                 self._connection = None
                 self._channel = None
@@ -348,7 +353,7 @@ class AsyncConnection:
                 AsyncConnection._instance_by_vhost.pop(self.vhost, None)
                 log.info("RabbitMQ connection closed")
 
-    async def setup_queue(self, topic: str, shared: bool = False) -> AbstractRobustQueue:
+    async def setup_queue(self, topic: str, shared: bool = False) -> AbstractQueue:
         """Set up a RabbitMQ queue.
 
         Args:
@@ -480,16 +485,17 @@ class AsyncConnection:
                 tag = await conn.subscribe("my.events.*", handle_message)
 
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
 
-        queue = await self.setup_queue(topic, shared)
-        log.info("Subscribing to topic '%s' (queue=%s, shared=%s)", topic, queue.name, shared)
+            queue = await self.setup_queue(topic, shared)
+            log.info("Subscribing to topic '%s' (queue=%s, shared=%s)", topic, queue.name, shared)
 
-        func = functools.partial(self._on_message, topic, callback)
-        tag = await queue.consume(func)
-        self.consumers[tag] = queue.name
-        return tag
+            func = functools.partial(self._on_message, topic, callback)
+            tag = await queue.consume(func)
+            self.consumers[tag] = queue.name
+            return tag
 
     async def unsubscribe(self, tag: str, if_unused: bool = True, if_empty: bool = True) -> None:
         """Unsubscribe from a queue.
@@ -508,9 +514,7 @@ class AsyncConnection:
             if tag not in self.consumers:
                 log.debug("Consumer tag '%s' not found, nothing to unsubscribe", tag)
                 return
-
-            queue_name = self.consumers.pop(tag)
-
+            queue_name = self.consumers[tag]
             if queue_name not in self.queues:
                 log.debug("Queue '%s' not found, skipping cleanup", queue_name)
                 return
@@ -518,17 +522,17 @@ class AsyncConnection:
             queue = self.queues[queue_name]
             log.info("Unsubscribing from queue '%s'", queue.name)
 
-        try:
-            await queue.cancel(tag)
+            try:
+                await queue.cancel(tag)
+                self.consumers.pop(tag, None)
+                # Delete exclusive (anonymous) queues when last consumer is removed
+                if queue.exclusive:
+                    self.queues.pop(queue.name)
+                    await queue.delete(if_empty=if_empty, if_unused=if_unused)
 
-            # Delete exclusive (anonymous) queues when last consumer is removed
-            if queue.exclusive:
-                self.queues.pop(queue.name)
-                await queue.delete(if_empty=if_empty, if_unused=if_unused)
-
-        except Exception:
-            log.exception("Error unsubscribing from queue '%s'", queue_name)
-            raise
+            except Exception:
+                log.exception("Error unsubscribing from queue '%s'", queue_name)
+                raise
 
     async def purge(self, topic: str) -> None:
         """Empty a queue of all messages.
@@ -546,6 +550,28 @@ class AsyncConnection:
         await self.setup_queue(topic, shared=True)
         await self.queues[topic].purge()
 
+    async def get_consumer_count(self, topic: str) -> int:
+        """Get the number of messages in a queue.
+
+        Args:
+            topic: The queue topic
+
+        Returns:
+            Number of messages currently in the queue
+
+        Raises:
+            ConnectionError: If not connected
+        """
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
+            queue = await self.channel.declare_queue(
+                topic, exclusive=False, durable=True, auto_delete=False, passive=True
+            )
+            res = queue.declaration_result.consumer_count
+            log.info("Consumer count for topic '%s': %s", topic, res)
+            return res
+
     async def get_message_count(self, topic: str) -> int | None:
         """Get the number of messages in a queue.
 
@@ -558,14 +584,16 @@ class AsyncConnection:
         Raises:
             ConnectionError: If not connected
         """
-        if not await self.is_connected():
-            raise ConnectionError("Not connected to RabbitMQ")
-
-        log.debug("Getting message count for topic '%s'", topic)
-        queue = await self.channel.declare_queue(
-            topic, exclusive=False, durable=True, auto_delete=False, passive=True
-        )
-        return queue.declaration_result.message_count
+        async with self.lock:
+            if not await self.is_connected():
+                raise ConnectionError("Not connected to RabbitMQ")
+            log.debug("Getting message count for topic '%s'", topic)
+            queue = await self.channel.declare_queue(
+                topic, exclusive=False, durable=True, auto_delete=False, passive=True
+            )
+            res = queue.declaration_result.message_count
+            log.info("Message count for topic '%s': %s", topic, res)
+            return res
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -839,6 +867,22 @@ class SyncConnection:
             TimeoutError: If operation times out
         """
         return self._run_coro(self._async_conn.get_message_count(topic), timeout=timeout)
+
+    def get_consumer_count(self, topic: str, timeout: float = 10.0) -> int:
+        """Get the number of consumers for a shared queue.
+
+        Args:
+            topic: The queue topic
+            timeout: Maximum time to wait (seconds)
+
+        Returns:
+            Number of consumers in the queue
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        return self._run_coro(self._async_conn.get_consumer_count(topic), timeout=timeout)
 
     def __enter__(self):
         """Context manager entry."""

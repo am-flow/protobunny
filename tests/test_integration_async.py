@@ -43,7 +43,7 @@ class TestIntegration:
         self.task_queue = await pb.subscribe(tests.tasks.TaskMessage, self.callback)
         self.logger_queue = await pb.subscribe_logger(self.log_callback)
         yield
-        await pb.unsubscribe_all()
+        await pb.unsubscribe_all(force=True)
         await connection.disconnect()
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:

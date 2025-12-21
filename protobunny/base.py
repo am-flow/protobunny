@@ -10,6 +10,7 @@ from types import ModuleType
 
 import aio_pika
 import betterproto
+from asttokens.util import iter_children_func
 
 from .config import load_config
 
@@ -292,13 +293,15 @@ async def unsubscribe_results(
             await q.unsubscribe_results()
 
 
-def unsubscribe_all_sync() -> None:
+def unsubscribe_all_sync(force: bool = False) -> None:
     """
     Remove all active in-process subscriptions.
 
     This clears standard subscriptions, result subscriptions, and task
     subscriptions, effectively stopping all message consumption for this process.
     """
+    if_unused = not force
+    if_empty = not force
     with _registry_lock:
         for q in subscriptions_sync.values():
             q.unsubscribe(if_unused=False, if_empty=False)
@@ -308,17 +311,22 @@ def unsubscribe_all_sync() -> None:
         results_subscriptions_sync.clear()
         for queues in tasks_subscriptions_sync.values():
             for q in queues:
-                q.unsubscribe()
+                q.unsubscribe(if_empty=if_empty, if_unused=if_unused)
         tasks_subscriptions_sync.clear()
 
 
-async def unsubscribe_all() -> None:
+async def unsubscribe_all(force: bool = False) -> None:
     """
     Asynchronously remove all active in-process subscriptions.
 
     This clears standard subscriptions, result subscriptions, and task
     subscriptions, effectively stopping all message consumption for this process.
+
+    Args:
+        force: if True, delete tasks shared queues even if they have subscribers
     """
+    if_unused = not force
+    if_empty = not force
     async with _async_registry_lock:
         for q in subscriptions.values():
             await q.unsubscribe(if_unused=False, if_empty=False)
@@ -328,7 +336,7 @@ async def unsubscribe_all() -> None:
         results_subscriptions.clear()
         for queues in tasks_subscriptions.values():
             for q in queues:
-                await q.unsubscribe()
+                await q.unsubscribe(if_empty=if_empty, if_unused=if_unused)
         tasks_subscriptions.clear()
 
 

@@ -1,3 +1,5 @@
+import functools
+import time
 import typing as tp
 
 import aio_pika
@@ -12,46 +14,56 @@ from . import tests
 if tp.TYPE_CHECKING:
     from protobunny.models import ProtoBunnyMessage
 
-from protobunny.queues import configuration
+from protobunny.queues import SyncQueue, configuration
 
 
 @pytest.mark.integration
 class TestIntegration:
     """Integration tests (to run with RabbitMQ up)"""
 
-    received = None
-    log_msg = None
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
     @pytest.fixture(autouse=True)
     def setup_connections(self):
+        self.received = None
+        self.task_received = None
+        # self.log_msg = None
         configuration.mode = "sync"
-        conn = pb.get_connection_sync()
-        self.simple_queue = pb.subscribe_sync(self.msg, self.callback)
-        self.task_queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback)
-        self.logger_queue = pb.subscribe_logger_sync(self.log_callback)
+        connection = pb.get_connection_sync()
+        queue = pb.get_queue_sync(self.msg)
+        assert queue.topic == "acme.tests.TestMessage"
+        assert isinstance(queue, SyncQueue)
         yield
-        pb.unsubscribe_all_sync()
-        conn.disconnect()
+        self.received = None
+        self.task_received = None
+        self.log_msg = None
+        pb.unsubscribe_all_sync(force=True)
+        connection.disconnect()
 
-    def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
+    def callback(self, msg: "ProtoBunnyMessage") -> None:
         self.received = msg
 
-    def log_callback(self, message: aio_pika.IncomingMessage, body: str) -> None:
+    def callback_task(self, msg: "tests.tasks.TaskMessage") -> None:
+        self.task_received = msg
+
+    @classmethod
+    def log_callback(cls, message: aio_pika.IncomingMessage, body: str) -> None:
         corr_id = message.correlation_id
         log_msg = (
             f"{message.routing_key}(cid:{corr_id}): {body}"
             if corr_id
             else f"{message.routing_key}: {body}"
         )
-        self.log_msg = log_msg
+        cls.log_msg = log_msg
 
     def test_publish(self) -> None:
+        pb.subscribe_sync(tests.TestMessage, self.callback)
         pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.number == self.msg.number
 
     def test_to_dict(self) -> None:
+        pb.subscribe_sync(tests.TestMessage, self.callback)
         pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.to_dict(
@@ -66,9 +78,10 @@ class TestIntegration:
             content="test",
             bbox=[1, 2, 3, 4],
         )
+        queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback_task)
         pb.publish_sync(msg)
-        assert wait(lambda: self.received == msg, timeout_seconds=1, sleep_seconds=0.1)
-        assert self.received.to_dict(
+        assert wait(lambda: self.task_received == msg, timeout_seconds=1, sleep_seconds=0.1)
+        assert self.task_received.to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
         ) == {
             "content": "test",
@@ -77,7 +90,7 @@ class TestIntegration:
             "options": None,
         }
         # to_pydict uses enum names and don't stringyfies int64
-        assert self.received.to_pydict(
+        assert self.task_received.to_pydict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
         ) == {
             "content": "test",
@@ -85,50 +98,71 @@ class TestIntegration:
             "weights": [],
             "options": None,
         }
+        queue.unsubscribe()
 
     def test_count_messages(self) -> None:
+        assert self.task_received is None
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
+        queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback_task)
+        queue.unsubscribe(if_empty=False, if_unused=False)
+
+        def log_assert(func) -> None:
+            print(str(func.__name__), func())
+
+        wait(
+            lambda: queue.get_consumer_count() == 0,
+            timeout_seconds=2,
+            sleep_seconds=0.1,
+            on_poll=functools.partial(log_assert, queue.get_consumer_count),
+        )
         # we subscribe to create the queue in RabbitMQ
-        queue = self.task_queue
         queue.purge()  # remove past messages
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
-        queue.unsubscribe()
+        self.task_received = None
         pb.publish_sync(msg)
         pb.publish_sync(msg)
         pb.publish_sync(msg)
+        assert self.task_received is None
+
         # and we can count them
         assert wait(
-            lambda: 3 == queue.get_message_count(), timeout_seconds=1, sleep_seconds=0.1
-        ), f"{queue.get_message_count()}"
+            lambda: 3 == queue.get_message_count(),
+            timeout_seconds=1,
+            sleep_seconds=0.1,
+            on_poll=functools.partial(log_assert, queue.get_message_count),
+        )
 
     def test_logger_body(self) -> None:
+        pb.subscribe_logger_sync(self.log_callback)
         pb.publish_sync(self.msg)
-        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
-        assert (
-            self.log_msg
-            == 'acme.tests.TestMessage: {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        assert wait(
+            lambda: self.log_msg
+            == 'acme.tests.TestMessage: {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}',
+            timeout_seconds=1,
+            sleep_seconds=0.1,
         )
-        self.log_msg = None
         result = self.msg.make_result()
         pb.publish_result_sync(result)
-        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
-        assert (
-            self.log_msg
-            == 'acme.tests.TestMessage.result: SUCCESS - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        assert wait(
+            lambda: self.log_msg
+            == 'acme.tests.TestMessage.result: SUCCESS - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}',
+            timeout_seconds=1,
+            sleep_seconds=0.1,
         )
         result = self.msg.make_result(
             return_code=pb.results.ReturnCode.FAILURE, return_value={"test": "value"}
         )
-        self.log_msg = None
         pb.publish_result_sync(result)
-        assert wait(lambda: isinstance(self.log_msg, str), timeout_seconds=1, sleep_seconds=0.1)
-        assert (
-            self.log_msg
-            == 'acme.tests.TestMessage.result: FAILURE - error: [] - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+        assert wait(
+            lambda: self.log_msg
+            == 'acme.tests.TestMessage.result: FAILURE - error: [] - {"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}',
+            timeout_seconds=1,
+            sleep_seconds=0.1,
         )
 
     def test_logger_int64(self) -> None:
+        pb.subscribe_logger_sync(self.log_callback)
         # Ensure that uint64/int64 values are not converted to strings in the LoggerQueue callbacks
         pb.publish_sync(
             tests.tasks.TaskMessage(
@@ -141,7 +175,6 @@ class TestIntegration:
             self.log_msg
             == 'acme.tests.tasks.TaskMessage: {"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}'
         )
-        self.log_msg = None
         pb.publish_sync(tests.TestMessage(number=63, content="test"))
         assert wait(
             lambda: self.log_msg
@@ -151,9 +184,9 @@ class TestIntegration:
         ), self.log_msg
 
     def test_unsubscribe(self) -> None:
+        pb.subscribe_sync(tests.TestMessage, self.callback)
         pb.publish_sync(self.msg)
-        assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
-        assert self.received == self.msg
+        assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         self.received = None
         pb.unsubscribe_sync(tests.TestMessage, if_unused=False, if_empty=False)
         pb.publish_sync(self.msg)
@@ -161,8 +194,9 @@ class TestIntegration:
 
         # unsubscribe from a package-level topic
         pb.subscribe_sync(tests, self.callback)
-        pb.publish_sync(tests.TestMessage(number=63, content="test"))
+        pb.publish_sync(self.msg)
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
+        assert self.received == self.msg
         self.received = None
         pb.unsubscribe_sync(tests, if_unused=False, if_empty=False)
         pb.publish_sync(self.msg)
@@ -180,7 +214,7 @@ class TestIntegration:
         pb.publish_sync(self.msg)  # this will reach callback_2 as well
         assert wait(lambda: self.received and received, timeout_seconds=1, sleep_seconds=0.5)
         assert self.received == received == self.msg
-        pb.unsubscribe_all_sync()
+        pb.unsubscribe_all_sync(force=True)
         self.received = None
         received = None
         pb.publish_sync(self.msg)
@@ -199,7 +233,6 @@ class TestIntegration:
             nonlocal received_result
             received_result = m
 
-        pb.unsubscribe_all_sync()
         pb.subscribe_sync(tests.TestMessage, callback)
         # subscribe to the result topic
         pb.subscribe_results_sync(tests.TestMessage, callback_results)
@@ -230,7 +263,6 @@ class TestIntegration:
             nonlocal received_result
             received_result = m
 
-        pb.unsubscribe_all_sync()
         q1 = pb.subscribe_sync(tests.TestMessage, callback_1)
         q2 = pb.subscribe_sync(tests.tasks.TaskMessage, callback_2)
         assert q1.topic == "acme.tests.TestMessage"
@@ -244,8 +276,8 @@ class TestIntegration:
         assert wait(lambda: received_message is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == tests.TestMessage(number=2, content="test")
-
-        pb.unsubscribe_all_sync()
+        q2.unsubscribe(if_empty=False, if_unused=False)
+        pb.unsubscribe_all_sync(force=True)
         received_result = None
         received_message = None
         pb.publish_sync(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
