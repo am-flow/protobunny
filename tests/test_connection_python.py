@@ -66,66 +66,6 @@ async def test_message_count() -> None:
         assert await conn.get_message_count(topic) == 3
 
 
-#
-#
-# @pytest.mark.asyncio
-# async def test_on_message_success(mock_aio_pika):
-#     conn = AsyncConnection()
-#     # Mock an incoming message
-#     mock_msg = AsyncMock(spec=IncomingMessage)
-#     callback = MagicMock()
-#
-#     # We call the internal _on_message
-#     await conn._on_message("test.topic", callback, mock_msg)
-#
-#     # Since _on_message uses run_in_executor, the callback is run in a thread
-#     # We wait a tiny bit or verify the ack
-#     mock_msg.ack.assert_awaited_once()
-#
-#
-# @pytest.mark.asyncio
-# async def test_on_message_requeue(mock_aio_pika):
-#     conn = AsyncConnection(requeue_delay=0)  # No delay for testing
-#     mock_msg = AsyncMock(spec=IncomingMessage)
-#
-#     # Callback that triggers requeue
-#     def side_effect(*args):
-#         raise RequeueMessage()
-#
-#     callback = MagicMock(side_effect=side_effect)
-#
-#     await conn._on_message("test.topic", callback, mock_msg)
-#
-#     mock_msg.reject.assert_awaited_once_with(requeue=True)
-#
-#
-# @pytest.mark.asyncio
-# async def test_on_message_poison_pill(mock_aio_pika):
-#     conn = AsyncConnection()
-#     mock_msg = AsyncMock(spec=IncomingMessage)
-#
-#     # Random crash
-#     def crash(*args):
-#         raise RuntimeError("Boom")
-#
-#     callback = MagicMock(side_effect=crash)
-#
-#     await conn._on_message("test.topic", callback, mock_msg)
-#
-#     # Should reject without requeue to avoid infinite loop
-#     mock_msg.reject.assert_awaited_once_with(requeue=False)
-#
-#
-# @pytest.mark.asyncio
-# async def test_setup_queue_shared(mock_aio_pika):
-#     async with AsyncConnection() as conn:
-#         await conn.setup_queue("shared_topic", shared=True)
-#
-#         mock_aio_pika["channel"].declare_queue.assert_called_with(
-#             "shared_topic", exclusive=False, durable=True, auto_delete=False, arguments=ANY
-#         )
-
-
 # --- SyncConnection Tests ---
 
 
