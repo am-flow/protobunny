@@ -16,7 +16,6 @@ __all__ = [
     # from .base
     "get_message_count",
     "get_queue",
-    "get_queue_sync",
     "publish",
     "publish_result",
     "subscribe",
@@ -56,7 +55,6 @@ __all__ = [
 from .base import (  # noqa
     get_message_count,
     get_queue,
-    get_queue_sync,
     publish,
     publish_result,
     subscribe,
@@ -91,16 +89,13 @@ from .config import (  # noqa
     ROOT_GENERATED_PACKAGE_NAME,
     load_config,
 )
+from .exceptions import RequeueMessage, ConnectionError
+from .backends import get_backend
 
-# TODO autogenerate this based on `backend` configuration
-# RabbitMQ is the only backend
-from .backends.rabbitmq import (  # noqa
-    RequeueMessage,
-    ConnectionError,
-    reset_connection_sync,
-    reset_connection,
-    get_connection_sync,
-    get_connection,
-    disconnect,
-    disconnect_sync,
-)
+backend = get_backend()
+reset_connection_sync = backend.connection.reset_connection_sync
+reset_connection = backend.connection.reset_connection
+get_connection_sync = backend.connection.get_connection_sync
+get_connection = backend.connection.get_connection
+disconnect = backend.connection.disconnect
+disconnect_sync = backend.connection.disconnect_sync

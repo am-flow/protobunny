@@ -32,6 +32,8 @@ Configure the library in pyproject.toml:
    messages-directory = "messages"
    messages-prefix = "acme"
    generated-package-name = "mymessagelib.codegen"
+   mode = "sync"  # or "async"
+   backend = "rabbitmq" # or "python"
 
 Install the library with ``uv``, ``poetry`` or ``pip``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

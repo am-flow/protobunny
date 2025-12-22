@@ -36,6 +36,7 @@ Protobunny is designed for teams who use messaging to coordinate work between mi
 - Transparent handling of JSON-like payload fields as plain dictionaries/lists
 - Optional validation of required fields
 - Builtin logging service
+- Alternative configurable backends (e.g. `rabbitmq` or `python` for local in-process queues)
 ---
 
 ## Usage
@@ -67,7 +68,6 @@ make integration-test
 - Support grcp
 - Support for RabbitMQ certificates (through `pika`)
 - More backends:
-  - multiprocessing.Queue or queue.Queue for simple local scenarios
   - Mosquitto
   - Redis
   - NATS

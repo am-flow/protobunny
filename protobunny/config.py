@@ -15,7 +15,7 @@ GENERATED_PACKAGE_NAME = "core"
 ROOT_GENERATED_PACKAGE_NAME = f"{PACKAGE_NAME}.{GENERATED_PACKAGE_NAME}"
 PREFIX_MESSAGES = "pb"
 MESSAGES_DIRECTORY = "protobuf/protobunny"
-VERSION = "0.1.1b1"
+VERSION = "0.1.1b2"
 
 
 @dataclasses.dataclass
@@ -27,10 +27,15 @@ class Config:
     force_required_fields: bool = False
     generated_package_name: str = "codegen"
     mode: str = "sync"
+    backend: str = "rabbitmq"
 
     @property
     def use_async(self) -> bool:
         return self.mode == "async"
+
+    @functools.cached_property
+    def logger_prefix(self) -> str:
+        return f"{self.messages_prefix}.#"
 
 
 @functools.cache

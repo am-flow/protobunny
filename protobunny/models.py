@@ -8,12 +8,11 @@ import typing as tp
 from io import BytesIO
 from types import ModuleType
 
-import aio_pika
 import betterproto
 from betterproto.lib.std.google.protobuf import Any
 
 if tp.TYPE_CHECKING:
-    from .queues import LoggingAsyncQueue, LoggingSyncSyncQueue
+    from .backends import LoggingAsyncQueue, LoggingSyncQueue
 from .config import load_config
 from .utils import ProtobunnyJsonEncoder
 
@@ -22,8 +21,8 @@ from .utils import ProtobunnyJsonEncoder
 SyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Any]
 AsyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Awaitable[tp.Any]]
 ResultCallback: tp.TypeAlias = tp.Callable[["Result"], tp.Any]
-LogQueue = tp.TypeVar("LogQueue", "LoggingAsyncQueue", "LoggingSyncSyncQueue")
-LoggerCallback: tp.TypeAlias = tp.Callable[[aio_pika.IncomingMessage, str], tp.Any]
+LogQueue = tp.TypeVar("LogQueue", "LoggingAsyncQueue", "LoggingSyncQueue")
+LoggerCallback: tp.TypeAlias = tp.Callable[[tp.Any, str], tp.Any]
 
 log = logging.getLogger(__name__)
 
@@ -455,6 +454,36 @@ def get_topic(pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleT
     topic_name = f"{configuration.messages_prefix}.{build_routing_key(pkg_or_msg)}"
     is_task_queue = ".tasks." in topic_name
     return Topic(name=topic_name, is_task_queue=is_task_queue)
+
+
+@tp.runtime_checkable
+class IncomingMessageProtocol(tp.Protocol):
+    body: bytes
+    routing_key: tp.Optional[str]
+    correlation_id: tp.Optional[str]
+    delivery_mode: tp.Any  # aio_pika uses an Enum, but int/str works for typing
+
+    def ack(self) -> None:
+        ...
+
+    def reject(self, requeue: bool = True) -> None:
+        ...
+
+
+@dataclasses.dataclass
+class Envelope:
+    body: bytes
+    correlation_id: str = ""
+    delivery_mode: str = ""
+    routing_key: str = ""
+
+    def ack(self) -> None:
+        """Mimics aio_pika acknowledgement."""
+        pass
+
+    def reject(self, requeue: bool = True) -> None:
+        """Mimics aio_pika rejection."""
+        pass
 
 
 from .core.commons import JsonContent

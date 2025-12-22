@@ -208,7 +208,7 @@ def main() -> None:
     source_dir = args.source_dir
     packages = get_modules_with_subpackages(main_package, source_dir)
     all_packages = get_all_submodules(packages)
-    log.info("Packages found to have submodules: %s", packages)
+    log.debug("Packages found to have submodules: %s", packages)
     log.info("All packages: %s", all_packages)
     main_imports = packages.pop(main_package)
     # Write main protobunny init file using jinja template,

@@ -38,10 +38,8 @@ import typing as tp
 from functools import partial
 from types import FrameType
 
-import aio_pika
-
 import protobunny as pb
-from protobunny.models import LoggerCallback
+from protobunny.models import IncomingMessageProtocol, LoggerCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -50,7 +48,7 @@ log = logging.getLogger(__name__)
 def log_callback(
     max_length: int,
     regex: re.Pattern[tp.Any] | None,
-    message: aio_pika.IncomingMessage,
+    message: IncomingMessageProtocol,
     msg_content: str,
 ) -> None:
     """Log messages to stdout.
