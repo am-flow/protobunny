@@ -19,7 +19,7 @@ keywords = [
 requires-python = ">=3.10,<3.14"
 readme = "README.md"
 dependencies = [
-#    "aio-pika>=7.1.0",
+    "aio-pika>=7.1.0",
     "betterproto[compiler]>=2.0.0b7,<3",  # needs --preleases=allow
     "grpcio-tools>=1.62.0,<2",
     "numpy>=1.26",

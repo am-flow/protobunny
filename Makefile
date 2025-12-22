@@ -6,7 +6,7 @@ help : Makefile
 
 .PHONY: build
 build:
-	uv sync
+	uv sync --all-extas
 
 compile:
 	uv run protobunny generate
