@@ -559,8 +559,10 @@ class AsyncConnection:
 
     async def get_consumer_count(self, topic: str) -> int:
         """Get the number of messages in a queue.
+
             Args:
-        @@ -558,14 +562,38 @@ async def get_message_count(self, topic: str) -> int | None:
+                topic: The queue topic
+
             Raises:
                 ConnectionError: If not connected
         """
