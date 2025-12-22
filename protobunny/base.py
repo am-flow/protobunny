@@ -8,25 +8,24 @@ import typing as tp
 from collections import defaultdict
 from types import ModuleType
 
-import aio_pika
 import betterproto
 
-from .backends import LoggingAsyncQueue, LoggingSyncQueue, get_backend
+from protobunny.models import IncomingMessageProtocol
+
+from .backends import BaseAsyncQueue, BaseQueue, LoggingAsyncQueue, LoggingSyncQueue, get_backend
 from .config import load_config
 
 if tp.TYPE_CHECKING:
     from .core.results import Result
-    from .models import (
-        AsyncCallback,
-        ProtoBunnyMessage,
-        SyncCallback,
-    )
-from protobunny.backends.rabbitmq.queues import (
-    AsyncQueue,
-    SyncQueue,
-)
 
-from .models import LoggerCallback, LogQueue, get_topic
+from .models import (
+    AsyncCallback,
+    LoggerCallback,
+    LogQueue,
+    ProtoBunnyMessage,
+    SyncCallback,
+    get_topic,
+)
 
 log = logging.getLogger(__name__)
 
@@ -39,44 +38,32 @@ configuration = load_config()
 # subscriptions registries
 _registry_lock = threading.Lock()
 _async_registry_lock = asyncio.Lock()
-subscriptions: dict[tp.Any, "AsyncQueue"] = dict()
-results_subscriptions: dict[tp.Any, "AsyncQueue"] = dict()
-tasks_subscriptions: dict[tp.Any, list["AsyncQueue"]] = defaultdict(list)
-subscriptions_sync: dict[tp.Any, "SyncQueue"] = dict()
-results_subscriptions_sync: dict[tp.Any, "SyncQueue"] = dict()
-tasks_subscriptions_sync: dict[tp.Any, list["SyncQueue"]] = defaultdict(list)
-
-
-def get_queue_sync(
-    pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
-) -> "SyncQueue":
-    """Factory method to get a SyncQueue instance based on the message type and backend.
-
-    Args:
-        pkg_or_msg: A message instance, a message class, or a module
-            containing message definitions.
-
-    Returns:
-        SyncQueue: A synchronous queue instance configured for the relevant topic.
-    """
-    backend = get_backend()
-    return backend.queues.SyncQueue(get_topic(pkg_or_msg))
+subscriptions: dict[str, "BaseAsyncQueue"] = dict()
+results_subscriptions: dict[str, "BaseAsyncQueue"] = dict()
+tasks_subscriptions: dict[str, list["BaseAsyncQueue"]] = defaultdict(list)
+subscriptions_sync: dict[str, "BaseQueue"] = dict()
+results_subscriptions_sync: dict[str, "BaseQueue"] = dict()
+tasks_subscriptions_sync: dict[str, list["BaseQueue"]] = defaultdict(list)
 
 
 def get_queue(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
-) -> "AsyncQueue":
-    """Factory method to get an AsyncQueue instance based on the message type and backend.
+) -> "BaseQueue":
+    """Factory method to get an AsyncQueue/SyncQueue instance based on
+      - the message type (e.g. mylib.subpackage.subsubpackage.MyMessage)
+      - the mode (e.g. async)
+      - he backend (e.g. rabbitmq)
 
     Args:
         pkg_or_msg: A message instance, a message class, or a module
             containing message definitions.
 
     Returns:
-        AsyncQueue: An asynchronous queue instance configured for the relevant topic.
+        Async/SyncQueue: A queue instance configured for the relevant topic.
     """
-    backend = get_backend()
-    return backend.queues.AsyncQueue(get_topic(pkg_or_msg))
+    return getattr(get_backend().queues, f"{configuration.mode.capitalize()}Queue")(
+        get_topic(pkg_or_msg)
+    )
 
 
 def publish_sync(message: "ProtoBunnyMessage") -> None:
@@ -88,7 +75,7 @@ def publish_sync(message: "ProtoBunnyMessage") -> None:
     Args:
         message: The Protobuf message instance to be published.
     """
-    queue = get_queue_sync(message)
+    queue = get_queue(message)
     queue.publish(message)
 
 
@@ -129,7 +116,7 @@ def publish_result_sync(
             Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
         correlation_id:
     """
-    queue = get_queue_sync(result.source)
+    queue = get_queue(result.source)
     queue.publish_result(result, topic, correlation_id)
 
 
@@ -151,14 +138,12 @@ def subscribe_sync(
     with _registry_lock:
         if "tasks" in module_name.split("."):
             # It's a task. Handle multiple subscriptions
-            queue = get_queue_sync(pkg_or_msg)
+            queue = get_queue(pkg_or_msg)
             queue.subscribe(callback)
             tasks_subscriptions_sync[obj].append(queue)
         else:
             queue = (
-                get_queue_sync(pkg_or_msg)
-                if obj not in subscriptions_sync
-                else subscriptions_sync[obj]
+                get_queue(pkg_or_msg) if obj not in subscriptions_sync else subscriptions_sync[obj]
             )
             queue.subscribe(callback)
             # register subscription to unsubscribe later
@@ -231,7 +216,7 @@ def subscribe_results_sync(
         pkg_or_msg:
         callback:
     """
-    queue = get_queue_sync(pkg_or_msg)
+    queue = get_queue(pkg_or_msg)
     queue.subscribe_results(callback)
     # register subscription to unsubscribe later
     sub_key = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
@@ -341,7 +326,7 @@ async def unsubscribe_all() -> None:
 def get_message_count_sync(
     msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
 ) -> int | None:
-    q = get_queue_sync(msg_type)
+    q = get_queue(msg_type)
     count = q.get_message_count()
     return count
 
@@ -349,12 +334,12 @@ def get_message_count_sync(
 async def get_message_count(
     msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
 ) -> int | None:
-    q: AsyncQueue = get_queue(msg_type)
+    q = get_queue(msg_type)
     count = await q.get_message_count()
     return count
 
 
-def default_log_callback(message: aio_pika.IncomingMessage, msg_content: str) -> None:
+def default_log_callback(message: "IncomingMessageProtocol", msg_content: str) -> None:
     """Default callback for the logging service"""
     log.info(
         "<%s>(cid:%s) %s",

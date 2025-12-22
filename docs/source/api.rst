@@ -6,20 +6,36 @@ Core Package
   .. automodule:: protobunny
        :members:
 
-Message Queues
---------------
-  .. automodule:: protobunny.queues
+  .. automodule:: protobunny.base
        :members:
 
 Models
 -----------
   .. automodule:: protobunny.models
        :members:
+  .. automodule:: protobunny.backends
+       :members:
 
 RabbitMQ backend
 ----------------
   .. automodule:: protobunny.backends.rabbitmq
        :members:
+  .. automodule:: protobunny.backends.python.connection
+       :members:
+  .. automodule:: protobunny.backends.rabbitmq.queues
+       :members:
+
+Python backend
+----------------
+  .. automodule:: protobunny.backends.python
+       :members:
+  .. automodule:: protobunny.backends.python.connection
+       :members:
+       :no-index:
+  .. automodule:: protobunny.backends.python.queues
+       :members:
+       :no-index:
+
 
 Logger service
 --------------

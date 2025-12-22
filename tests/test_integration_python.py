@@ -8,13 +8,18 @@ from pytest_mock import MockerFixture
 from waiting import wait
 
 import protobunny as pb
-from protobunny import get_queue, get_queue_sync
+from protobunny import get_queue
 from protobunny.backends import LoggingSyncQueue
-from protobunny.backends.python.connection import AsyncLocalConnection, SyncLocalConnection
+from protobunny.backends.python.connection import (
+    AsyncLocalConnection,
+    SyncLocalConnection,
+    configuration,
+)
+from protobunny.backends.python.queues import SyncQueue
 from protobunny.models import Envelope, ProtoBunnyMessage
 
 from . import tests
-from .utils import async_wait
+from .utils import async_wait, tear_down
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -30,9 +35,17 @@ class TestIntegrationAsync:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
     @pytest.fixture(autouse=True)
+    async def teardown(self):
+        yield
+        event_loop = asyncio.get_running_loop()
+        await tear_down(event_loop)
+
+    @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture):
         from protobunny.backends import python as python_backend
 
+        configuration.mode = "async"
+        configuration.backend = "python"
         original_connection_sync = pb.get_connection
         original_backend = pb.backend
         pb.backend = python_backend
@@ -52,7 +65,7 @@ class TestIntegrationAsync:
         pb.backend = original_backend
         # CRITICAL: Manually clear the singleton registry
         # to prevent loop leakage between tests
-        AsyncLocalConnection._instance_by_vhost.clear()
+        AsyncLocalConnection._instances_by_vhost.clear()
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -131,15 +144,16 @@ class TestIntegrationAsync:
         await queue.purge()  # remove past messages
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
-        await queue.unsubscribe()
+        await queue.unsubscribe(if_unused=False, if_empty=False)
 
         async def predicate() -> bool:
             return await queue.get_message_count() == 0
 
         assert await async_wait(predicate, timeout_seconds=1, sleep_seconds=0.1)
-        pb.publish_sync(msg)
-        pb.publish_sync(msg)
-        pb.publish_sync(msg)
+
+        await pb.publish(msg)
+        await pb.publish(msg)
+        await pb.publish(msg)
 
         # and we can count them
         async def predicate() -> bool:
@@ -337,6 +351,8 @@ class TestIntegrationSync:
     def setup_connections(self, mocker: MockerFixture):
         from protobunny.backends import python as python_backend
 
+        configuration.mode = "sync"
+        configuration.backend = "python"
         pb.backend = python_backend
         mocker.patch("protobunny.backends.get_backend", return_value=python_backend)
         mocker.patch("protobunny.base.get_backend", return_value=python_backend)
@@ -344,12 +360,13 @@ class TestIntegrationSync:
             pb, "get_connection_sync", python_backend.connection.get_connection_sync
         )
         conn = pb.get_connection_sync()
-        queue = get_queue_sync(tests.TestMessage)
+        queue = get_queue(tests.TestMessage)
         assert isinstance(queue, python_backend.queues.SyncQueue)
         assert isinstance(conn, SyncLocalConnection)
         pb.unsubscribe_all_sync()
         yield
         pb.disconnect_sync()
+        SyncLocalConnection._instances_by_vhost.clear()
 
     def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -371,7 +388,7 @@ class TestIntegrationSync:
 
     def test_to_dict(self) -> None:
         pb.subscribe_sync(tests.TestMessage, self.callback)
-        pb.subscribe_sync(tests.tasks.TaskMessage, self.callback)
+        q = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback)
         pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.to_dict(
@@ -405,6 +422,7 @@ class TestIntegrationSync:
             "weights": [],
             "options": None,
         }
+        q.unsubscribe(if_unused=False, if_empty=False)
 
     def test_count_messages(self) -> None:
         queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback)
@@ -556,18 +574,20 @@ class TestIntegrationSync:
             nonlocal received_result
             received_result = m
 
-        # pb.unsubscribe_all_sync()
         q1 = pb.subscribe_sync(tests.TestMessage, callback_1)
         q2 = pb.subscribe_sync(tests.tasks.TaskMessage, callback_2)
+        # subscribe to a result topic too, to receive the result error message for the callback_1
+        pb.subscribe_results_sync(tests.TestMessage, callback_results)
+
+        assert isinstance(q1, SyncQueue) and isinstance(q2, SyncQueue)
         assert q1.topic == "acme.tests.TestMessage"
         assert q2.topic == "acme.tests.tasks.TaskMessage"
         assert q1.subscription is not None
         assert q2.subscription is not None
-        # subscribe to a result topic
-        pb.subscribe_results_sync(tests.TestMessage, callback_results)
-        pb.publish_sync(tests.TestMessage(number=2, content="test"))
+
         pb.publish_sync(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
         assert wait(lambda: received_message is not None, timeout_seconds=1, sleep_seconds=0.1)
+        pb.publish_sync(tests.TestMessage(number=2, content="test"))
         assert wait(lambda: received_result is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert received_result.source == tests.TestMessage(number=2, content="test")
 

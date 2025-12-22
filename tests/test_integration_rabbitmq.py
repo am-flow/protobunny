@@ -3,6 +3,7 @@ import typing as tp
 import aio_pika
 import betterproto
 import pytest
+from pytest_mock import MockerFixture
 from waiting import wait
 
 import protobunny as pb
@@ -23,8 +24,15 @@ class TestIntegration:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
     @pytest.fixture(autouse=True)
-    async def setup_connections(self):
+    async def setup_connections(self, mocker: MockerFixture) -> tp.AsyncGenerator[None, None]:
+        from protobunny.backends import rabbitmq as rabbitmq_backend
+
         configuration.mode = "async"
+        configuration.backend = "rabbitmq"
+        pb.backend = rabbitmq_backend
+        mocker.patch("protobunny.backends.get_backend", return_value=rabbitmq_backend)
+        mocker.patch("protobunny.base.get_backend", return_value=rabbitmq_backend)
+        mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
         connection = await pb.get_connection()
         assert isinstance(connection, AsyncConnection)
         queue = pb.get_queue(self.msg)
@@ -298,6 +306,9 @@ class TestIntegrationSync:
         self.msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
         from protobunny.backends import rabbitmq as rabbitmq_backend
 
+        configuration.mode = "sync"
+        configuration.backend = "rabbitmq"
+        pb.backend = rabbitmq_backend
         self.received = None
         self.task_received = None
         # This ensures that we use the rabbitmq backend

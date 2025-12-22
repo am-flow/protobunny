@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from protobunny.backends.python.connection import (
@@ -8,9 +10,16 @@ from protobunny.backends.python.connection import (
 )
 from protobunny.models import Envelope
 
-from .utils import async_wait
+from .utils import async_wait, tear_down
 
 # --- AsyncConnection Tests ---
+
+
+@pytest.fixture(autouse=True)
+async def teardown():
+    yield
+    event_loop = asyncio.get_running_loop()
+    await tear_down(event_loop)
 
 
 @pytest.mark.asyncio
@@ -35,6 +44,8 @@ async def test_async_publish(mock_python_connection):
 
 async def test_connection_flow():
     """Test the synchronous wrapper's ability to run logic in its thread."""
+    from protobunny.backends.python.connection import _broker
+
     async with AsyncLocalConnection(vhost="/test") as conn:
         assert conn.is_connected()
         topic = "test.topic"
@@ -44,11 +55,13 @@ async def test_connection_flow():
         assert await conn.get_consumer_count(topic) == 1
         await conn.unsubscribe(topic)
         await conn.publish(topic, msg)
-        assert conn._exclusive_subscribers["test.topic"] is not None
+        assert _broker._exclusive_queues["test.topic"] is not None
         assert await conn.get_message_count("test.topic") == 0
 
 
 async def test_message_count() -> None:
+    from protobunny.backends.python.connection import _broker
+
     async with AsyncLocalConnection() as conn:
         topic = "test.topic.tasks"
         msg = Envelope(body=b"body")
@@ -57,12 +70,12 @@ async def test_message_count() -> None:
         assert await conn.get_consumer_count(topic) == 1
         await conn.unsubscribe(topic)
         assert await conn.get_consumer_count(topic) == 0
-        assert conn._shared_queues[topic] is not None
-        assert conn._shared_queues[topic].qsize() == 0
+        assert _broker._shared_queues[topic] is not None
+        assert _broker._shared_queues[topic].qsize() == 0
         await conn.publish(topic, msg)
         await conn.publish(topic, msg)
         await conn.publish(topic, msg)
-        assert conn._shared_queues[topic].qsize() == 3
+        assert _broker._shared_queues[topic].qsize() == 3
         assert await conn.get_message_count(topic) == 3
 
 
@@ -71,6 +84,8 @@ async def test_message_count() -> None:
 
 def test_sync_connection_flow():
     """Test the synchronous wrapper's ability to run logic in its thread."""
+    from protobunny.backends.python.connection import _broker
+
     with SyncLocalConnection(vhost="/test") as conn:
         assert conn.is_connected
         topic = "test.topic"
@@ -80,27 +95,30 @@ def test_sync_connection_flow():
         assert conn.get_consumer_count(topic) == 1
         conn.unsubscribe(topic)
         conn.publish(topic, msg)
-        assert conn._exclusive_subscribers["test.topic"] is not None
-        assert conn.get_message_count("test.topic") == 0
+        assert _broker._exclusive_queues["test.topic"] is not None
+        assert _broker.get_message_count("test.topic") == 0
         conn.unsubscribe("test.topic")
 
 
 def test_sync_message_count() -> None:
+    from protobunny.backends.python.connection import _broker
+
     with SyncLocalConnection() as conn:
         topic = "test.topic.tasks"
         msg = Envelope(body=b"body")
+        conn.purge(topic)
         assert conn.get_message_count(topic) == 0
         conn.subscribe(topic, shared=True, callback=lambda _: None)
         assert conn.get_consumer_count(topic) == 1
         conn.unsubscribe(topic)
         assert conn.get_consumer_count(topic) == 0
-        assert conn._shared_queues[topic] is not None
-        assert conn._shared_queues[topic].qsize() == 0
+        assert _broker._shared_queues[topic] is not None
+        assert _broker._shared_queues[topic].qsize() == 0
         conn.publish(topic, msg)
         conn.publish(topic, msg)
         conn.publish(topic, msg)
-        assert conn._shared_queues[topic].qsize() == 3
-        assert conn.get_message_count(topic) == 3
+        assert _broker._shared_queues[topic].qsize() == 3
+        assert _broker.get_message_count(topic) == 3
 
 
 # --- Singleton Tests ---
@@ -111,6 +129,7 @@ async def test_async_singleton_logic():
     conn1 = await get_connection()
     conn2 = await get_connection()
     assert conn1 is conn2
+    await conn1.disconnect()
 
 
 def test_sync_singleton_logic():

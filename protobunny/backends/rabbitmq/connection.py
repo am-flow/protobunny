@@ -624,6 +624,7 @@ class SyncConnection(BaseConnection):
                 cls._instance_by_vhost[vhost] = cls(vhost=vhost)
             if not cls._instance_by_vhost[vhost].is_connected():
                 cls._instance_by_vhost[vhost].connect()
+            log.info("Returning singleton SyncConnection instance for vhost %s", vhost)
             return cls._instance_by_vhost[vhost]
 
     def _run_loop(self) -> None:

@@ -22,16 +22,17 @@ def setup_connections(mocker: MockerFixture) -> None:
     from protobunny.backends import rabbitmq as rabbitmq_backend
     from protobunny.backends.rabbitmq.queues import configuration
 
-    original_connection_sync = pb.get_connection
-    original_backend = pb.backend
+    configuration.mode = "sync"
+    configuration.backend = "rabbitmq"
     pb.backend = rabbitmq_backend
     mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
     mocker.patch.object(pb.base.configuration, "backend", "rabbitmq")
-    configuration.mode = "sync"
-    assert configuration.messages_prefix == "acme"
 
+    assert configuration.messages_prefix == "acme"
     assert not configuration.use_async
     assert configuration.backend == "rabbitmq"
+    queue = pb.get_queue(tests.TestMessage)
+    assert isinstance(queue.get_connection_sync(), SyncConnection)
 
 
 def test_serdeser_result() -> None:
@@ -73,6 +74,7 @@ def test_topics(mock_sync_connection: MagicMock) -> None:
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
     assert isinstance(q.get_connection_sync(), SyncConnection)
+    assert q.get_connection_sync() == mock_sync_connection
     assert q.result_topic == "acme.tests.TestMessage.result"
     pb.publish_result_sync(result)
     expected_payload = aio_pika.Message(

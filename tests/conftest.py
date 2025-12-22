@@ -71,6 +71,7 @@ def mock_aio_pika():
 def mock_sync_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=rabbitmq_connection.SyncConnection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection_sync", return_value=mock)
+    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection_sync", return_value=mock)
     yield mock
 
 

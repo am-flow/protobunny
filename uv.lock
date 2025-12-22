@@ -1064,7 +1064,6 @@ name = "protobunny"
 version = "0.1.1b2"
 source = { editable = "." }
 dependencies = [
-    { name = "aio-pika" },
     { name = "betterproto", extra = ["compiler"] },
     { name = "grpcio-tools" },
     { name = "numpy" },
@@ -1099,7 +1098,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aio-pika", specifier = ">=7.1.0" },
     { name = "aio-pika", marker = "extra == 'rabbitmq'", specifier = ">=7.1.0" },
     { name = "betterproto", extras = ["compiler"], specifier = ">=2.0.0b7,<3" },
     { name = "grpcio-tools", specifier = ">=1.62.0,<2" },

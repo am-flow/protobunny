@@ -16,7 +16,6 @@ __all__ = [
     # from .base
     "get_message_count",
     "get_queue",
-    "get_queue_sync",
     "publish",
     "publish_result",
     "subscribe",
@@ -56,7 +55,6 @@ __all__ = [
 from .base import (  # noqa
     get_message_count,
     get_queue,
-    get_queue_sync,
     publish,
     publish_result,
     subscribe,
