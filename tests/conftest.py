@@ -68,7 +68,7 @@ def mock_aio_pika():
 
 
 @pytest.fixture
-def mock_sync_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
+def mock_sync_rmq_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=rabbitmq_connection.SyncConnection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection_sync", return_value=mock)
     mocker.patch("protobunny.backends.rabbitmq.connection.get_connection_sync", return_value=mock)
@@ -76,7 +76,7 @@ def mock_sync_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None,
 
 
 @pytest.fixture
-async def mock_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
+async def mock_rmq_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
     mock = mocker.AsyncMock(spec=rabbitmq_connection.AsyncConnection)
     mocker.patch("protobunny.backends.BaseAsyncQueue.get_connection", return_value=mock)
     yield mock

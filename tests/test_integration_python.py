@@ -35,12 +35,6 @@ class TestIntegrationAsync:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
     @pytest.fixture(autouse=True)
-    async def teardown(self):
-        yield
-        event_loop = asyncio.get_running_loop()
-        await tear_down(event_loop)
-
-    @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture):
         from protobunny.backends import python as python_backend
 
@@ -50,6 +44,7 @@ class TestIntegrationAsync:
         original_backend = pb.backend
         pb.backend = python_backend
         mocker.patch.object(pb, "get_connection", python_backend.connection.get_connection)
+        mocker.patch.object(pb, "disconnect", python_backend.connection.disconnect)
         mocker.patch.object(pb.base.configuration, "backend", "python")
         conn = await pb.get_connection()
         assert isinstance(conn, AsyncLocalConnection)
@@ -66,6 +61,9 @@ class TestIntegrationAsync:
         # CRITICAL: Manually clear the singleton registry
         # to prevent loop leakage between tests
         AsyncLocalConnection._instances_by_vhost.clear()
+        # cancel pending tasks to avoid warnings in output
+        event_loop = asyncio.get_running_loop()
+        await tear_down(event_loop)
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -359,6 +357,7 @@ class TestIntegrationSync:
         mocker.patch.object(
             pb, "get_connection_sync", python_backend.connection.get_connection_sync
         )
+        mocker.patch.object(pb, "disconnect_sync", python_backend.connection.disconnect_sync)
         conn = pb.get_connection_sync()
         queue = get_queue(tests.TestMessage)
         assert isinstance(queue, python_backend.queues.SyncQueue)
