@@ -11,6 +11,7 @@ from types import ModuleType
 import aio_pika
 import betterproto
 
+from .backends import LoggingAsyncQueue, LoggingSyncQueue, get_backend
 from .config import load_config
 
 if tp.TYPE_CHECKING:
@@ -20,8 +21,12 @@ if tp.TYPE_CHECKING:
         ProtoBunnyMessage,
         SyncCallback,
     )
+from protobunny.backends.rabbitmq.queues import (
+    AsyncQueue,
+    SyncQueue,
+)
+
 from .models import LoggerCallback, LogQueue, get_topic
-from .queues import AsyncQueue, LoggingAsyncQueue, LoggingSyncSyncQueue, SyncQueue
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +50,7 @@ tasks_subscriptions_sync: dict[tp.Any, list["SyncQueue"]] = defaultdict(list)
 def get_queue_sync(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
 ) -> "SyncQueue":
-    """Factory method to get a SyncQueue instance based on the message type.
+    """Factory method to get a SyncQueue instance based on the message type and backend.
 
     Args:
         pkg_or_msg: A message instance, a message class, or a module
@@ -54,13 +59,14 @@ def get_queue_sync(
     Returns:
         SyncQueue: A synchronous queue instance configured for the relevant topic.
     """
-    return SyncQueue(get_topic(pkg_or_msg))
+    backend = get_backend()
+    return backend.queues.SyncQueue(get_topic(pkg_or_msg))
 
 
 def get_queue(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
 ) -> "AsyncQueue":
-    """Factory method to get an AsyncQueue instance based on the message type.
+    """Factory method to get an AsyncQueue instance based on the message type and backend.
 
     Args:
         pkg_or_msg: A message instance, a message class, or a module
@@ -69,7 +75,8 @@ def get_queue(
     Returns:
         AsyncQueue: An asynchronous queue instance configured for the relevant topic.
     """
-    return AsyncQueue(get_topic(pkg_or_msg))
+    backend = get_backend()
+    return backend.queues.AsyncQueue(get_topic(pkg_or_msg))
 
 
 def publish_sync(message: "ProtoBunnyMessage") -> None:
@@ -139,7 +146,6 @@ def subscribe_sync(
     Returns:
         The Queue object. You can access the subscription via its `subscription` attribute.
     """
-
     obj = type(pkg_or_msg) if isinstance(pkg_or_msg, betterproto.Message) else pkg_or_msg
     module_name = obj.__name__ if inspect.ismodule(obj) else obj.__module__
     with _registry_lock:
@@ -249,7 +255,7 @@ async def unsubscribe(
         elif "tasks" in module_name.split("."):
             queues = tasks_subscriptions.pop(sub_key)
             for q in queues:
-                await q.unsubscribe()
+                await q.unsubscribe(if_unused=if_unused)
 
 
 def unsubscribe_sync(
@@ -262,12 +268,12 @@ def unsubscribe_sync(
     module_name = sub_key.__module__ if hasattr(sub_key, "__module__") else sub_key.__name__
     with _registry_lock:
         if sub_key in subscriptions_sync:
-            q = subscriptions_sync.pop(sub_key)
-            q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
+            queue = subscriptions_sync.pop(sub_key)
+            queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
         elif "tasks" in module_name.split("."):
-            queues = tasks_subscriptions_sync.pop(sub_key)
-            for q in queues:
-                q.unsubscribe()
+            queues = tasks_subscriptions_sync.pop(sub_key, [])
+            for queue in queues:
+                queue.unsubscribe()
 
 
 def unsubscribe_results_sync(
@@ -370,14 +376,14 @@ def _prepare_logger_queue(
 async def subscribe_logger(
     log_callback: "LoggerCallback | None" = None, prefix: str | None = None
 ) -> "LoggingAsyncQueue":
-    q, cb = _prepare_logger_queue(LoggingAsyncQueue, log_callback, prefix)
-    await q.subscribe(cb)
-    return q
+    queue, cb = _prepare_logger_queue(LoggingAsyncQueue, log_callback, prefix)
+    await queue.subscribe(cb)
+    return queue
 
 
 def subscribe_logger_sync(
     log_callback: "LoggerCallback | None" = None, prefix: str | None = None
-) -> "LoggingSyncSyncQueue":
-    q, cb = _prepare_logger_queue(LoggingSyncSyncQueue, log_callback, prefix)
-    q.subscribe(cb)
-    return q
+) -> "LoggingSyncQueue":
+    queue, cb = _prepare_logger_queue(LoggingSyncQueue, log_callback, prefix)
+    queue.subscribe(cb)
+    return queue

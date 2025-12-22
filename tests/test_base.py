@@ -3,6 +3,7 @@ import uuid
 import betterproto
 import pytest
 
+from protobunny.backends import deserialize_message
 from protobunny.base import get_queue, get_queue_sync
 from protobunny.models import (
     MessageMixin,
@@ -11,7 +12,6 @@ from protobunny.models import (
     get_message_class_from_type_url,
     get_topic,
 )
-from protobunny.queues import deserialize_message
 
 from . import tests
 

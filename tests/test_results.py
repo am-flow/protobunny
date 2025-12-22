@@ -1,15 +1,37 @@
 from unittest.mock import MagicMock
 
 import aio_pika
+import pytest
 from aio_pika import DeliveryMode
+from pytest_mock import MockerFixture
 
 import protobunny as pb
+from protobunny.backends import deserialize_result_message
+from protobunny.backends.rabbitmq.connection import SyncConnection
+from protobunny.backends.rabbitmq.queues import configuration
 from protobunny.models import get_message_class_from_topic, get_message_class_from_type_url
-from protobunny.queues import configuration, deserialize_result_message
 
 from . import tests
 
 configuration.mode = "sync"
+configuration.backend = "rabbitmq"
+
+
+@pytest.fixture(autouse=True)
+def setup_connections(mocker: MockerFixture) -> None:
+    from protobunny.backends import rabbitmq as rabbitmq_backend
+    from protobunny.backends.rabbitmq.queues import configuration
+
+    original_connection_sync = pb.get_connection
+    original_backend = pb.backend
+    pb.backend = rabbitmq_backend
+    mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
+    mocker.patch.object(pb.base.configuration, "backend", "rabbitmq")
+    configuration.mode = "sync"
+    assert configuration.messages_prefix == "acme"
+
+    assert not configuration.use_async
+    assert configuration.backend == "rabbitmq"
 
 
 def test_serdeser_result() -> None:
@@ -50,6 +72,7 @@ def test_topics(mock_sync_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
+    assert isinstance(q.get_connection_sync(), SyncConnection)
     assert q.result_topic == "acme.tests.TestMessage.result"
     pb.publish_result_sync(result)
     expected_payload = aio_pika.Message(

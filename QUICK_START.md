@@ -24,6 +24,8 @@ Configure the library in pyproject.toml:
 messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib.codegen"
+mode = "sync"  # or "async"
+backend = "rabbitmq"  # or "python"
 ```
 
 ### Install the library with `uv`, `poetry` or `pip`
@@ -33,7 +35,7 @@ uv sync  # or poetry sync/install
 ```
 
 ### RabbitMQ connection
-Protobunny connects to RabbitMQ using environment variables.
+Protobunny connects to RabbitMQ by reading environment variables.
 
 ```shell
 export RABBITMQ_HOST=localhost RABBITMQ_PORT=5672 RABBITMQ_USER=guest RABBITMQ_PASS=guest RABBITMQ_VHOST=/test

@@ -3,7 +3,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 import pytest
 from aio_pika import IncomingMessage, Message
 
-from protobunny.backends.rabbitmq import (
+from protobunny.backends.rabbitmq.connection import (
     AsyncConnection,
     RequeueMessage,
     SyncConnection,

@@ -6,11 +6,11 @@ import pytest
 from pytest_mock import MockerFixture
 
 import protobunny as pb
+from protobunny.backends import LoggingSyncQueue
 from protobunny.base import (
     get_queue,
     get_queue_sync,
 )
-from protobunny.queues import LoggingSyncSyncQueue
 
 from . import tests
 
@@ -19,7 +19,7 @@ from . import tests
 class TestAsyncQueue:
     @pytest.fixture(autouse=True, scope="class")
     async def setup_connection(self) -> None:
-        from protobunny.queues import configuration
+        from protobunny.backends.rabbitmq.queues import configuration
 
         configuration.mode = "async"
         assert configuration.use_async
@@ -111,7 +111,7 @@ class TestAsyncQueue:
 class TestQueue:
     @pytest.fixture(autouse=True, scope="class")
     async def setup_connection(self) -> None:
-        from protobunny.queues import configuration
+        from protobunny.backends.rabbitmq.queues import configuration
 
         assert configuration.messages_prefix == "acme"
         configuration.mode = "sync"
@@ -201,6 +201,6 @@ class TestQueue:
 
     def test_logger(self, mock_sync_connection: MagicMock) -> None:
         q = pb.subscribe_logger_sync()
-        assert isinstance(q, LoggingSyncSyncQueue)
+        assert isinstance(q, LoggingSyncQueue)
         assert q.topic == "acme.#"
         mock_sync_connection.subscribe.assert_called_once_with("acme.#", ANY, shared=False)
