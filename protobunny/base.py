@@ -55,20 +55,22 @@ tasks_subscriptions_sync: dict[type["ProtoBunnyMessage"], list["BaseQueue"]] = d
 
 def get_queue(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
+    backend: str | None = None,
 ) -> "BaseSyncQueue | BaseAsyncQueue":
     """Factory method to get an AsyncQueue/SyncQueue instance based on
       - the message type (e.g. mylib.subpackage.subsubpackage.MyMessage)
       - the mode (e.g. async)
-      - he backend (e.g. rabbitmq)
+      - the configured backend or the parameter passed (e.g. "rabbitmq")
 
     Args:
         pkg_or_msg: A message instance, a message class, or a module
             containing message definitions.
+        backend: backend name to use
 
     Returns:
         Async/SyncQueue: A queue instance configured for the relevant topic.
     """
-    return getattr(get_backend().queues, f"{configuration.mode.capitalize()}Queue")(
+    return getattr(get_backend(backend=backend).queues, f"{configuration.mode.capitalize()}Queue")(
         get_topic(pkg_or_msg)
     )
 

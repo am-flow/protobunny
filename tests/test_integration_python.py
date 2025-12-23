@@ -1,3 +1,31 @@
+"""
+Integration tests for asynchronous Python multiprocessing Queue.
+
+This module contains integration tests for verifying the functionality
+of asynchronous message queues, using the Protobunny framework. These
+tests cover message publishing, subscribing, logging, and message
+conversion to dictionaries and JSON.
+
+It's not marked as integration test because it doesn't need any backend dependency
+but it tests the integration between the Protobunny framework and the multiprocessing Queue.
+
+Classes:
+    TestIntegrationAsync: Represents the suite of integration tests for
+    asynchronous queue connections and messaging functionalities.
+
+Dependencies:
+    - asyncio
+    - logging
+    - typing
+    - betterproto
+    - pytest
+    - pytest_mock
+    - waiting
+    - protobunny
+    - custom utils and test modules from the same package
+"""
+
+
 import asyncio
 import logging
 import typing as tp
@@ -24,7 +52,6 @@ from .utils import async_wait, tear_down
 logging.basicConfig(level=logging.DEBUG)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 class TestIntegrationAsync:
     """Integration tests for python multiprocessing Queue"""
@@ -37,6 +64,7 @@ class TestIntegrationAsync:
     @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture):
         from protobunny.backends import python as python_backend
+        from protobunny.backends import rabbitmq as rabbitmq_backend
 
         configuration.mode = "async"
         configuration.backend = "python"
@@ -57,7 +85,8 @@ class TestIntegrationAsync:
         yield
         await pb.disconnect()
         pb.get_connection_sync = original_connection_sync
-        pb.backend = original_backend
+        # set back the original backend
+        pb.backend = rabbitmq_backend
         # CRITICAL: Manually clear the singleton registry
         # to prevent loop leakage between tests
         AsyncLocalConnection._instances_by_vhost.clear()
@@ -337,7 +366,6 @@ class TestIntegrationAsync:
         assert received_result is None
 
 
-@pytest.mark.integration
 class TestIntegrationSync:
     """Integration tests for python multiprocessing Queue"""
 

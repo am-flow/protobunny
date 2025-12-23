@@ -4,13 +4,15 @@ import aio_pika
 from aio_pika import DeliveryMode
 
 import protobunny as pb
+from protobunny import get_queue
 
 from . import tests
 
 
 def test_sync_send_message(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
-    pb.publish_sync(msg)
+    queue = get_queue(msg, backend="rabbitmq")
+    queue.publish(msg)
     expected_payload = aio_pika.Message(
         bytes(msg),
         correlation_id=None,

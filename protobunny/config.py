@@ -17,7 +17,6 @@ PREFIX_MESSAGES = "pb"
 MESSAGES_DIRECTORY = "protobuf/protobunny"
 VERSION = "0.1.1"
 
-available_backends = ("rabbitmq", "python", "redis")
 AvailableBackends = tp.Literal["rabbitmq", "python", "redis"]
 
 
@@ -31,9 +30,10 @@ class Config:
     generated_package_name: str = "codegen"
     mode: tp.Literal["sync", "async"] = "sync"
     backend: AvailableBackends = "rabbitmq"
+    available_backends = ("rabbitmq", "python", "redis")
 
     def __post_init__(self) -> None:
-        if self.backend not in available_backends:
+        if self.backend not in self.available_backends:
             raise ValueError(f"Invalid backend: {self.backend}")
         if self.mode not in ("sync", "async"):
             raise ValueError(f"Invalid mode: {self.mode}")

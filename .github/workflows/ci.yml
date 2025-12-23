@@ -66,7 +66,7 @@ jobs:
 
       - name: Run linting
         run: make lint
-  integration_test:
+  integration_test_rabbitmq:
     runs-on: ubuntu-latest
     services:
       rabbitmq:
@@ -103,10 +103,42 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
       - name: Run integration tests
-        run: make integration-test
+        run: uv run python -m pytest tests/test_integration_rabbitmq.py
         env:
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: 5672
           RABBITMQ_USER: guest
           RABBITMQ_PASS: guest
           RABBITMQ_VHOST: /test
+
+  integration_test_redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:6.2.6-alpine
+        ports:
+          - 6379:6379
+          - 16379:16379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run integration tests
+        run: uv run python -m pytest tests/test_integration_redis.py
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379

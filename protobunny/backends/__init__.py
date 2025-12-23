@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 
 def get_backend(backend: str | None = None) -> ModuleType:
     backend = backend or configuration.backend
+    if backend not in configuration.available_backends:
+        raise ValueError(f"Backend {backend} is not available")
     module = importlib.import_module(f"protobunny.backends.{backend}")
     return module
 
