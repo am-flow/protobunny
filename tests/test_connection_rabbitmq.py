@@ -4,9 +4,9 @@ import pytest
 from aio_pika import IncomingMessage, Message
 
 from protobunny.backends.rabbitmq.connection import (
-    AsyncRmqConnection,
+    Connection,
     RequeueMessage,
-    SyncRmqConnection,
+    SyncConnection,
     get_connection,
     get_connection_sync,
 )
@@ -16,7 +16,7 @@ from protobunny.backends.rabbitmq.connection import (
 
 @pytest.mark.asyncio
 async def test_async_connect_success(mock_aio_pika):
-    conn = AsyncRmqConnection(host="localhost")
+    conn = Connection(host="localhost")
     await conn.connect()
 
     # Verify aio_pika calls
@@ -29,7 +29,7 @@ async def test_async_connect_success(mock_aio_pika):
 
 @pytest.mark.asyncio
 async def test_async_publish(mock_aio_pika):
-    async with AsyncRmqConnection(vhost="/test") as conn:
+    async with Connection(vhost="/test") as conn:
         msg = Message(body=b"hello")
         await conn.publish("test.routing.key", msg)
 
@@ -40,7 +40,7 @@ async def test_async_publish(mock_aio_pika):
 
 @pytest.mark.asyncio
 async def test_on_message_success(mock_aio_pika):
-    conn = AsyncRmqConnection()
+    conn = Connection()
     # Mock an incoming message
     mock_msg = AsyncMock(spec=IncomingMessage)
     callback = MagicMock()
@@ -55,7 +55,7 @@ async def test_on_message_success(mock_aio_pika):
 
 @pytest.mark.asyncio
 async def test_on_message_requeue(mock_aio_pika):
-    conn = AsyncRmqConnection(requeue_delay=0)  # No delay for testing
+    conn = Connection(requeue_delay=0)  # No delay for testing
     mock_msg = AsyncMock(spec=IncomingMessage)
 
     # Callback that triggers requeue
@@ -71,7 +71,7 @@ async def test_on_message_requeue(mock_aio_pika):
 
 @pytest.mark.asyncio
 async def test_on_message_poison_pill(mock_aio_pika):
-    conn = AsyncRmqConnection()
+    conn = Connection()
     mock_msg = AsyncMock(spec=IncomingMessage)
 
     # Random crash
@@ -88,7 +88,7 @@ async def test_on_message_poison_pill(mock_aio_pika):
 
 @pytest.mark.asyncio
 async def test_setup_queue_shared(mock_aio_pika):
-    async with AsyncRmqConnection() as conn:
+    async with Connection() as conn:
         await conn.setup_queue("shared_topic", shared=True)
 
         mock_aio_pika["channel"].declare_queue.assert_called_with(
@@ -101,7 +101,7 @@ async def test_setup_queue_shared(mock_aio_pika):
 
 def test_sync_connection_flow(mock_aio_pika):
     """Test the synchronous wrapper's ability to run logic in its thread."""
-    with SyncRmqConnection(vhost="/test") as conn:
+    with SyncConnection(vhost="/test") as conn:
         assert conn.is_connected
 
         msg = Message(body=b"sync-body")
@@ -119,7 +119,7 @@ def test_sync_get_message_count(mock_aio_pika):
     mock_res.message_count = 42
     mock_aio_pika["queue"].declaration_result = mock_res
 
-    with SyncRmqConnection() as conn:
+    with SyncConnection() as conn:
         count = conn.get_message_count("test.topic")
         assert count == 42
 

@@ -42,7 +42,7 @@ __all__ = [
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
     "ROOT_GENERATED_PACKAGE_NAME",
-    "load_config",
+    "configuration",
     # from .backends.rabbitmq
     "RequeueMessage",
     "ConnectionError",
@@ -85,7 +85,7 @@ from .config import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
-    load_config,
+    configuration,
 )
 
 #######################################################

@@ -149,11 +149,11 @@ class BaseLocalConnection(BaseConnection, ABC):
         _broker.purge_queue(topic)
 
 
-class SyncLocalConnection(BaseLocalConnection):
+class SyncConnection(BaseLocalConnection):
     """Synchronous local connection using threads."""
 
     @classmethod
-    def get_connection(cls, vhost: str = "/") -> "SyncLocalConnection":
+    def get_connection(cls, vhost: str = "/") -> "SyncConnection":
         if vhost not in cls._instances_by_vhost:
             with cls._lock:
                 if vhost not in cls._instances_by_vhost:
@@ -263,13 +263,13 @@ class SyncLocalConnection(BaseLocalConnection):
         return False
 
 
-class AsyncLocalConnection(BaseLocalConnection):
+class Connection(BaseLocalConnection):
     """Asynchronous local connection using asyncio."""
 
     _lock = asyncio.Lock()
 
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "AsyncLocalConnection":
+    async def get_connection(cls, vhost: str = "/") -> "Connection":
         if vhost not in cls._instances_by_vhost:
             async with cls._lock:
                 if vhost not in cls._instances_by_vhost:
@@ -306,7 +306,7 @@ class AsyncLocalConnection(BaseLocalConnection):
             self._is_connected = False
             self._instances_by_vhost.pop(self.vhost, None)
 
-    async def publish(self, topic: str, message: Envelope) -> None:
+    async def publish(self, topic: str, message: Envelope, **kwargs) -> None:
         # Broker's publish is thread-safe
         published = await asyncio.to_thread(_broker.publish, topic, message)
         if not published:
@@ -405,11 +405,11 @@ class AsyncLocalConnection(BaseLocalConnection):
 
 
 # Convenience functions
-async def get_connection() -> AsyncLocalConnection:
-    return await AsyncLocalConnection.get_connection(vhost=VHOST)
+async def get_connection() -> Connection:
+    return await Connection.get_connection(vhost=VHOST)
 
 
-async def reset_connection() -> AsyncLocalConnection:
+async def reset_connection() -> Connection:
     connection = await get_connection()
     await connection.disconnect()
     return await get_connection()
@@ -420,11 +420,11 @@ async def disconnect() -> None:
     await connection.disconnect()
 
 
-def get_connection_sync() -> SyncLocalConnection:
-    return SyncLocalConnection.get_connection(vhost=VHOST)
+def get_connection_sync() -> SyncConnection:
+    return SyncConnection.get_connection(vhost=VHOST)
 
 
-def reset_connection_sync() -> SyncLocalConnection:
+def reset_connection_sync() -> SyncConnection:
     connection = get_connection_sync()
     connection.disconnect()
     return get_connection_sync()

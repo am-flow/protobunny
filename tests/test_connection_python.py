@@ -3,8 +3,8 @@ import asyncio
 import pytest
 
 from protobunny.backends.python.connection import (
-    AsyncLocalConnection,
-    SyncLocalConnection,
+    Connection,
+    SyncConnection,
     get_connection,
     get_connection_sync,
 )
@@ -24,14 +24,14 @@ async def teardown():
 
 @pytest.mark.asyncio
 async def test_async_connect_success():
-    conn = AsyncLocalConnection(vhost="localhost")
+    conn = Connection(vhost="localhost")
     await conn.connect()
     assert conn.is_connected()
 
 
 @pytest.mark.asyncio
 async def test_async_publish(mock_python_connection):
-    async with AsyncLocalConnection(vhost="/test") as conn:
+    async with Connection(vhost="/test") as conn:
         msg = None
 
         async def callback(envelope: Envelope):
@@ -51,7 +51,7 @@ async def test_connection_flow():
     """Test the synchronous wrapper's ability to run logic in its thread."""
     from protobunny.backends.python.connection import _broker
 
-    async with AsyncLocalConnection(vhost="/test") as conn:
+    async with Connection(vhost="/test") as conn:
         assert conn.is_connected()
         topic = "test.topic"
 
@@ -67,7 +67,7 @@ async def test_connection_flow():
 async def test_message_count() -> None:
     from protobunny.backends.python.connection import _broker
 
-    async with AsyncLocalConnection() as conn:
+    async with Connection() as conn:
         topic = "test.topic.tasks"
         msg = Envelope(body=b"body")
         assert await conn.get_message_count(topic) == 0
@@ -91,7 +91,7 @@ def test_sync_connection_flow():
     """Test the synchronous wrapper's ability to run logic in its thread."""
     from protobunny.backends.python.connection import _broker
 
-    with SyncLocalConnection(vhost="/test") as conn:
+    with SyncConnection(vhost="/test") as conn:
         assert conn.is_connected
         topic = "test.topic"
 
@@ -108,7 +108,7 @@ def test_sync_connection_flow():
 def test_sync_message_count() -> None:
     from protobunny.backends.python.connection import _broker
 
-    with SyncLocalConnection() as conn:
+    with SyncConnection() as conn:
         topic = "test.topic.tasks"
         msg = Envelope(body=b"body")
         conn.purge(topic)

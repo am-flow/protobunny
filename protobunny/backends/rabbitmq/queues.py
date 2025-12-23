@@ -8,10 +8,8 @@ from protobunny.backends import (
     BaseSyncQueue,
 )
 from protobunny.backends.rabbitmq.connection import get_connection
-from protobunny.config import load_config
 
 log = logging.getLogger(__name__)
-configuration = load_config()
 
 
 class SyncQueue(BaseSyncQueue):

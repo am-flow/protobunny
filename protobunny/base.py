@@ -25,7 +25,7 @@ from .backends import (
     LoggingSyncQueue,
     get_backend,
 )
-from .config import load_config
+from .config import configuration
 
 if tp.TYPE_CHECKING:
     from .core.results import Result
@@ -42,7 +42,6 @@ from .registry import default_registry
 
 log = logging.getLogger(__name__)
 
-configuration = load_config()
 
 ########################
 # Base Methods

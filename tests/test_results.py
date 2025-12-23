@@ -7,20 +7,21 @@ from pytest_mock import MockerFixture
 
 import protobunny as pb
 from protobunny.backends import deserialize_result_message
-from protobunny.backends.rabbitmq.connection import SyncRmqConnection
-from protobunny.backends.rabbitmq.queues import configuration
+from protobunny.backends.rabbitmq.connection import SyncConnection
+
+# from protobunny.backends import configuration
 from protobunny.models import get_message_class_from_topic, get_message_class_from_type_url
 
 from . import tests
 
-configuration.mode = "sync"
-configuration.backend = "rabbitmq"
+# configuration.mode = "sync"
+# configuration.backend = "rabbitmq"
 
 
 @pytest.fixture(autouse=True)
 def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection) -> None:
+    from protobunny.backends import configuration
     from protobunny.backends import rabbitmq as rabbitmq_backend
-    from protobunny.backends.rabbitmq.queues import configuration
 
     configuration.mode = "sync"
     configuration.backend = "rabbitmq"
@@ -30,7 +31,7 @@ def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection) -> None:
     assert configuration.messages_prefix == "acme"
     assert not configuration.use_async
     queue = pb.get_queue(tests.TestMessage)
-    assert isinstance(queue.get_connection_sync(), SyncRmqConnection)
+    assert isinstance(queue.get_connection_sync(), SyncConnection)
 
 
 def test_serdeser_result() -> None:
@@ -71,7 +72,7 @@ def test_topics(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
-    assert isinstance(q.get_connection_sync(), SyncRmqConnection)
+    assert isinstance(q.get_connection_sync(), SyncConnection)
     assert q.get_connection_sync() == mock_sync_rmq_connection
     assert q.result_topic == "acme.tests.TestMessage.result"
     pb.publish_result_sync(result)

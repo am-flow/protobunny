@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from protobunny.backends.redis.connection import (
-    AsyncRedisConnection,
+    Connection,
     RequeueMessage,
-    SyncRedisConnection,
+    SyncConnection,
     get_connection,
     get_connection_sync,
 )
@@ -16,7 +16,7 @@ from protobunny.models import Envelope
 
 @pytest.mark.asyncio
 async def test_async_connect_success(mock_redis):
-    conn = AsyncRedisConnection(host="localhost")
+    conn = Connection(host="localhost")
     await conn.connect()
 
     # Verify redis calls
@@ -27,7 +27,7 @@ async def test_async_connect_success(mock_redis):
 
 @pytest.mark.asyncio
 async def test_async_publish(mock_redis):
-    async with AsyncRedisConnection(vhost="/test") as conn:
+    async with Connection(vhost="/test") as conn:
         msg = Envelope(body=b"hello")
         await conn.publish("test.routing.key", msg)
         mock_redis.xadd.assert_awaited_with(
@@ -39,7 +39,7 @@ async def test_async_publish(mock_redis):
 
 @pytest.mark.asyncio
 async def test_on_message_success(mock_redis):
-    conn = AsyncRedisConnection()
+    conn = Connection()
     await conn.connect()
     # Mock an incoming message
     callback = AsyncMock()
@@ -54,7 +54,7 @@ async def test_on_message_success(mock_redis):
 
 @pytest.mark.asyncio
 async def test_on_message_requeue(mock_redis):
-    async with AsyncRedisConnection() as conn:
+    async with Connection() as conn:
         conn.requeue_delay = 0.1
         payload = {"body": b"test"}
 
@@ -73,7 +73,7 @@ async def test_on_message_requeue(mock_redis):
 
 @pytest.mark.asyncio
 async def test_on_message_poison_pill(mock_redis):
-    async with AsyncRedisConnection() as conn:
+    async with Connection() as conn:
         payload = {"body": b"test"}
 
         # Random crash
@@ -92,7 +92,7 @@ async def test_on_message_poison_pill(mock_redis):
 
 @pytest.mark.asyncio
 async def test_setup_queue_shared(mock_redis):
-    async with AsyncRedisConnection() as conn:
+    async with Connection() as conn:
         await conn.setup_queue("shared_topic", shared=True)
 
         mock_redis.xgroup_create.assert_awaited_with(
@@ -105,7 +105,7 @@ async def test_setup_queue_shared(mock_redis):
 
 def test_sync_connection_flow(mock_redis):
     """Test the synchronous wrapper's ability to run logic in its thread."""
-    with SyncRedisConnection() as conn:
+    with SyncConnection() as conn:
         assert conn.is_connected
         msg = Envelope(body=b"sync-body")
 
@@ -121,7 +121,7 @@ def test_sync_get_message_count(mock_redis):
     # Configure mock result
     mock_redis.xlen = AsyncMock(return_value=42)
 
-    with SyncRedisConnection() as conn:
+    with SyncConnection() as conn:
         count = conn.get_message_count("test.topic")
         assert count == 42
 

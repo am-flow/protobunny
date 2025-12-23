@@ -142,3 +142,4 @@ def get_project_version() -> str:
 
 
 VERSION = get_project_version()
+configuration = load_config()

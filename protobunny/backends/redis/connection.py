@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import redis.asyncio as redis
 from redis import RedisError, ResponseError
 
-from ...config import load_config
+from ...config import configuration
 from ...exceptions import ConnectionError, RequeueMessage
 from ...models import Envelope, IncomingMessageProtocol
 from .. import BaseAsyncConnection, BaseSyncConnection
@@ -22,13 +22,13 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
 
 
-async def get_connection() -> "AsyncRedisConnection":
+async def get_connection() -> "Connection":
     """Get the singleton async connection."""
-    conn = await AsyncRedisConnection.get_connection(vhost=VHOST)
+    conn = await Connection.get_connection(vhost=VHOST)
     return conn
 
 
-async def reset_connection() -> "AsyncRedisConnection":
+async def reset_connection() -> "Connection":
     """Reset the singleton connection."""
     connection = await get_connection()
     await connection.disconnect()
@@ -45,22 +45,22 @@ def disconnect_sync() -> None:
     connection.disconnect()
 
 
-def reset_connection_sync() -> "SyncRedisConnection":
+def reset_connection_sync() -> "SyncConnection":
     connection = get_connection_sync()
     connection.disconnect()
     return get_connection_sync()
 
 
-def get_connection_sync() -> "SyncRedisConnection":
-    connection = SyncRedisConnection.get_connection(vhost=VHOST)
+def get_connection_sync() -> "SyncConnection":
+    connection = SyncConnection.get_connection(vhost=VHOST)
     return connection
 
 
-class AsyncRedisConnection(BaseAsyncConnection):
+class Connection(BaseAsyncConnection):
     """Async Redis Connection wrapper."""
 
     _lock: asyncio.Lock | None = None
-    instance_by_vhost: dict[str, "AsyncRedisConnection | None"] = {}
+    instance_by_vhost: dict[str, "Connection | None"] = {}
 
     def __init__(
         self,
@@ -91,7 +91,6 @@ class AsyncRedisConnection(BaseAsyncConnection):
             requeue_delay: how long to wait before re-queueing a message (seconds)
         """
         super().__init__()
-        configuration = load_config()
         uname = username or os.environ.get(
             "REDIS_USERNAME", os.environ.get("REDIS_DEFAULT_USER", "")
         )
@@ -136,7 +135,7 @@ class AsyncRedisConnection(BaseAsyncConnection):
             # (though get_connection should be called inside one)
             self._loop = None
 
-    async def __aenter__(self) -> "AsyncRedisConnection":
+    async def __aenter__(self) -> "Connection":
         await self.connect()
         return self
 
@@ -208,11 +207,11 @@ class AsyncRedisConnection(BaseAsyncConnection):
                 self.is_connected_event.clear()
 
                 # 5. Remove from registry
-                AsyncRedisConnection.instance_by_vhost.pop(self.vhost, None)
+                Connection.instance_by_vhost.pop(self.vhost, None)
                 log.info("Redis connection closed")
 
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "AsyncRedisConnection":
+    async def get_connection(cls, vhost: str = "/") -> "Connection":
         """Get singleton instance (async)."""
         current_loop = asyncio.get_running_loop()
         async with cls._get_class_lock():
@@ -709,7 +708,7 @@ class AsyncRedisConnection(BaseAsyncConnection):
             log.error("Failed to reset groups for %s: %s", topic, e)
 
 
-class SyncRedisConnection(BaseSyncConnection):
+class SyncConnection(BaseSyncConnection):
     """Synchronous wrapper around the async connection
 
     Example:
@@ -723,11 +722,11 @@ class SyncRedisConnection(BaseSyncConnection):
 
     _lock = threading.RLock()
     _stopped: asyncio.Event | None = None
-    _instance_by_vhost: dict[str, "SyncRedisConnection"] = {}
-    async_class = AsyncRedisConnection
+    _instance_by_vhost: dict[str, "SyncConnection"] = {}
+    async_class = Connection
 
-    def get_async_connection(self, **kwargs) -> "AsyncRedisConnection":
-        return AsyncRedisConnection(**kwargs)
+    def get_async_connection(self, **kwargs) -> "Connection":
+        return Connection(**kwargs)
 
     def reset_stream_groups(self, topic: str) -> None:
         self._run_coro(self._async_conn.reset_stream_groups(topic))

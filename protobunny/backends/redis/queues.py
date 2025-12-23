@@ -5,11 +5,9 @@ from protobunny.backends import (
     BaseSyncQueue,
 )
 from protobunny.backends.redis.connection import get_connection
-from protobunny.config import load_config
 from protobunny.models import Envelope
 
 log = logging.getLogger(__name__)
-configuration = load_config()
 
 
 class SyncQueue(BaseSyncQueue):
