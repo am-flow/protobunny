@@ -32,12 +32,12 @@ configuration = load_config()
 class MessageMixin:
     """Utility mixin for protobunny messages."""
 
-    # if tp.TYPE_CHECKING:
-    #     _betterproto: tp.Any
-    #     __name__: str
+    if tp.TYPE_CHECKING:
+        _betterproto: tp.Any
+        __name__: str
 
-    # def is_set(self, field_name: str) -> bool:
-    #     ...
+        def is_set(self, field_name: str) -> bool:
+            ...
 
     def validate_required_fields(self: "ProtoBunnyMessage") -> None:
         """Raises a MissingRequiredFields if non optional fields are missing.
@@ -458,6 +458,27 @@ def get_topic(pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleT
 
 @tp.runtime_checkable
 class IncomingMessageProtocol(tp.Protocol):
+    """
+    Defines a protocol for incoming messages in protobunny messaging system.
+
+    This protocol establishes the set of attributes and methods required for
+    handling an incoming message.
+
+    Attributes:
+        body (bytes): The raw message content.
+        routing_key (Optional[str]): The routing key associated with the message,
+            which determines the message's destination.
+        correlation_id (Optional[str]): An identifier that correlates the message
+            with a specific request or context.
+        delivery_mode (Any): The delivery mode of the message, which could signify
+            options like persistence or transient state.
+
+    Methods:
+        ack(): Acknowledges the successful processing of the message.
+        reject(requeue): Rejects the message, with an optional flag indicating
+            whether it should be requeued for processing.
+    """
+
     body: bytes
     routing_key: tp.Optional[str]
     correlation_id: tp.Optional[str]
@@ -469,21 +490,19 @@ class IncomingMessageProtocol(tp.Protocol):
     def reject(self, requeue: bool = True) -> None:
         ...
 
+    def to_dict(self) -> dict:
+        ...
+
 
 @dataclasses.dataclass
-class Envelope:
+class Envelope(IncomingMessageProtocol):
     body: bytes
     correlation_id: str = ""
     delivery_mode: str = ""
     routing_key: str = ""
 
-    def ack(self) -> None:
-        """Mimics aio_pika acknowledgement."""
-        pass
-
-    def reject(self, requeue: bool = True) -> None:
-        """Mimics aio_pika rejection."""
-        pass
+    def to_dict(self) -> dict:
+        return dataclasses.asdict(self)
 
 
 from .core.commons import JsonContent

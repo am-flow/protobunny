@@ -15,7 +15,9 @@ GENERATED_PACKAGE_NAME = "core"
 ROOT_GENERATED_PACKAGE_NAME = f"{PACKAGE_NAME}.{GENERATED_PACKAGE_NAME}"
 PREFIX_MESSAGES = "pb"
 MESSAGES_DIRECTORY = "protobuf/protobunny"
-VERSION = "0.1.1b2"
+VERSION = "0.1.1"
+
+AvailableBackends = tp.Literal["rabbitmq", "python", "redis"]
 
 
 @dataclasses.dataclass
@@ -26,8 +28,15 @@ class Config:
     project_root: str = "./"
     force_required_fields: bool = False
     generated_package_name: str = "codegen"
-    mode: str = "sync"
-    backend: str = "rabbitmq"
+    mode: tp.Literal["sync", "async"] = "sync"
+    backend: AvailableBackends = "rabbitmq"
+    available_backends = ("rabbitmq", "python", "redis")
+
+    def __post_init__(self) -> None:
+        if self.backend not in self.available_backends:
+            raise ValueError(f"Invalid backend: {self.backend}")
+        if self.mode not in ("sync", "async"):
+            raise ValueError(f"Invalid mode: {self.mode}")
 
     @property
     def use_async(self) -> bool:

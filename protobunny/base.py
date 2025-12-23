@@ -12,7 +12,14 @@ import betterproto
 
 from protobunny.models import IncomingMessageProtocol
 
-from .backends import BaseAsyncQueue, BaseQueue, LoggingAsyncQueue, LoggingSyncQueue, get_backend
+from .backends import (
+    BaseAsyncQueue,
+    BaseQueue,
+    BaseSyncQueue,
+    LoggingAsyncQueue,
+    LoggingSyncQueue,
+    get_backend,
+)
 from .config import load_config
 
 if tp.TYPE_CHECKING:
@@ -38,30 +45,32 @@ configuration = load_config()
 # subscriptions registries
 _registry_lock = threading.Lock()
 _async_registry_lock = asyncio.Lock()
-subscriptions: dict[str, "BaseAsyncQueue"] = dict()
-results_subscriptions: dict[str, "BaseAsyncQueue"] = dict()
-tasks_subscriptions: dict[str, list["BaseAsyncQueue"]] = defaultdict(list)
-subscriptions_sync: dict[str, "BaseQueue"] = dict()
-results_subscriptions_sync: dict[str, "BaseQueue"] = dict()
-tasks_subscriptions_sync: dict[str, list["BaseQueue"]] = defaultdict(list)
+subscriptions: dict[type["ProtoBunnyMessage"], "BaseAsyncQueue"] = dict()
+results_subscriptions: dict[type["ProtoBunnyMessage"], "BaseAsyncQueue"] = dict()
+tasks_subscriptions: dict[type["ProtoBunnyMessage"], list["BaseAsyncQueue"]] = defaultdict(list)
+subscriptions_sync: dict[type["ProtoBunnyMessage"], "BaseSyncQueue"] = dict()
+results_subscriptions_sync: dict[type["ProtoBunnyMessage"], "BaseQueue"] = dict()
+tasks_subscriptions_sync: dict[type["ProtoBunnyMessage"], list["BaseQueue"]] = defaultdict(list)
 
 
 def get_queue(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
-) -> "BaseQueue":
+    backend: str | None = None,
+) -> "BaseSyncQueue | BaseAsyncQueue":
     """Factory method to get an AsyncQueue/SyncQueue instance based on
       - the message type (e.g. mylib.subpackage.subsubpackage.MyMessage)
       - the mode (e.g. async)
-      - he backend (e.g. rabbitmq)
+      - the configured backend or the parameter passed (e.g. "rabbitmq")
 
     Args:
         pkg_or_msg: A message instance, a message class, or a module
             containing message definitions.
+        backend: backend name to use
 
     Returns:
         Async/SyncQueue: A queue instance configured for the relevant topic.
     """
-    return getattr(get_backend().queues, f"{configuration.mode.capitalize()}Queue")(
+    return getattr(get_backend(backend=backend).queues, f"{configuration.mode.capitalize()}Queue")(
         get_topic(pkg_or_msg)
     )
 
@@ -123,7 +132,7 @@ def publish_result_sync(
 def subscribe_sync(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     callback: "SyncCallback",
-) -> "SyncQueue":
+) -> "BaseSyncQueue":
     """Subscribe a callback function to the topic.
 
     Args:
@@ -154,7 +163,7 @@ def subscribe_sync(
 async def subscribe(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     callback: "AsyncCallback",
-) -> "AsyncQueue":
+) -> "BaseAsyncQueue":
     """
     Subscribe an asynchronous callback to a specific topic or namespace.
 
@@ -190,7 +199,7 @@ async def subscribe(
 async def subscribe_results(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     callback: "AsyncCallback",
-) -> "AsyncQueue":
+) -> "BaseAsyncQueue":
     """Subscribe a callback function to the result topic.
 
     Args:
@@ -209,7 +218,7 @@ async def subscribe_results(
 def subscribe_results_sync(
     pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
     callback: "SyncCallback",
-) -> "SyncQueue":
+) -> "BaseSyncQueue":
     """Subscribe a callback function to the result topic.
 
     Args:
@@ -283,7 +292,7 @@ async def unsubscribe_results(
             await q.unsubscribe_results()
 
 
-def unsubscribe_all_sync() -> None:
+def unsubscribe_all_sync(if_unused: bool = True, if_empty: bool = True) -> None:
     """
     Remove all active in-process subscriptions.
 
@@ -299,11 +308,11 @@ def unsubscribe_all_sync() -> None:
         results_subscriptions_sync.clear()
         for queues in tasks_subscriptions_sync.values():
             for q in queues:
-                q.unsubscribe()
+                q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
         tasks_subscriptions_sync.clear()
 
 
-async def unsubscribe_all() -> None:
+async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
     """
     Asynchronously remove all active in-process subscriptions.
 
@@ -319,7 +328,7 @@ async def unsubscribe_all() -> None:
         results_subscriptions.clear()
         for queues in tasks_subscriptions.values():
             for q in queues:
-                await q.unsubscribe()
+                await q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
         tasks_subscriptions.clear()
 
 

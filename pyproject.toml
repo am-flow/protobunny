@@ -1,6 +1,6 @@
 [project]
 name = "protobunny"
-version = "0.1.1b2"
+version = "0.1.1"
 description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
     { name = "Domenico Nappo", email = "domenico.nappo@am-flow.com" },
@@ -28,6 +28,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 rabbitmq = ["aio-pika>=7.1.0"]
+redis = ["redis<8"]
 
 [project.urls]
 homepage = "https://am-flow.github.io/protobunny"
@@ -71,6 +72,7 @@ markers = [
     "integration: tests requiring a real connection to the amqp server. They don't run in CI",
 ]
 cache_dir = ".cache/pytest"
+log_cli_level = "INFO"
 
 [tool.pytest_env]
 RABBITMQ_HOST = "localhost"
@@ -78,6 +80,11 @@ RABBITMQ_PORT = 5672
 RABBITMQ_USER = "guest"
 RABBITMQ_PASS = "guest"
 RABBITMQ_VHOST = "/test"
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+REDIS_USER = "default"
+REDIS_PASS = "guest"
+REDIS_VHOST = "11"
 
 [tool.coverage.run]
 omit = ["test.py", "*/tests/*"]

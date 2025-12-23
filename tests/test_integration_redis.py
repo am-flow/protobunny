@@ -1,3 +1,4 @@
+import time
 import typing as tp
 
 import aio_pika
@@ -7,9 +8,10 @@ from pytest_mock import MockerFixture
 from waiting import wait
 
 import protobunny as pb
-from protobunny.backends.rabbitmq.connection import AsyncRmqConnection, SyncRmqConnection
-from protobunny.backends.rabbitmq.queues import AsyncQueue, configuration
-from protobunny.models import ProtoBunnyMessage
+from protobunny import get_backend, get_queue
+from protobunny.backends.redis.connection import AsyncRedisConnection, SyncRedisConnection
+from protobunny.backends.redis.queues import AsyncQueue, SyncQueue, configuration
+from protobunny.models import IncomingMessageProtocol, ProtoBunnyMessage
 
 from . import tests
 from .utils import async_wait
@@ -25,24 +27,27 @@ class TestIntegration:
 
     @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture) -> tp.AsyncGenerator[None, None]:
-        from protobunny.backends import rabbitmq as rabbitmq_backend
+        from protobunny.backends import redis as redis_backend
 
         configuration.mode = "async"
         configuration.backend = "rabbitmq"
-        pb.backend = rabbitmq_backend
-        mocker.patch("protobunny.backends.get_backend", return_value=rabbitmq_backend)
-        mocker.patch("protobunny.base.get_backend", return_value=rabbitmq_backend)
-        mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
+        pb.backend = redis_backend
+        mocker.patch("protobunny.backends.get_backend", return_value=redis_backend)
+        mocker.patch("protobunny.base.get_backend", return_value=redis_backend)
+        mocker.patch.object(pb, "get_connection", redis_backend.connection.get_connection)
+        mocker.patch.object(pb, "disconnect", redis_backend.connection.disconnect)
         connection = await pb.get_connection()
-        assert isinstance(connection, AsyncRmqConnection)
+        assert isinstance(connection, AsyncRedisConnection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage"
         assert isinstance(queue, AsyncQueue)
-        assert isinstance(await queue.get_connection(), AsyncRmqConnection)
-        await pb.unsubscribe_all()
+        assert isinstance(await queue.get_connection(), AsyncRedisConnection)
+        await pb.unsubscribe_all(if_unused=False, if_empty=False)
+        await connection.purge(queue.topic, reset_groups=True)
         yield
-        await connection.disconnect()
-        AsyncRmqConnection.instance_by_vhost.clear()
+        await redis_backend.connection.disconnect()
+        assert not await connection.is_connected()
+        AsyncRedisConnection.instance_by_vhost.clear()
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -112,7 +117,9 @@ class TestIntegration:
         task_queue = await pb.subscribe(tests.tasks.TaskMessage, self.callback)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
-        await task_queue.purge()  # remove past messages
+        connection = await pb.get_connection()
+        await connection.purge(task_queue.topic, reset_groups=True)
+        # await task_queue.purge()  # remove past messages
 
         async def predicate() -> bool:
             return 0 == await task_queue.get_message_count()
@@ -298,41 +305,42 @@ class TestIntegrationSync:
     """Integration tests (to run with RabbitMQ up)"""
 
     received = None
+    received_2 = None
     log_msg = None
     msg = None
+    task_received = None
 
     @pytest.fixture(autouse=True)
     def setup_connections(self, mocker: MockerFixture) -> tp.Generator[None, None, None]:
-        from protobunny.backends import rabbitmq as rabbitmq_backend
+        from protobunny.backends import redis as redis_backend
 
         self.msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
         configuration.mode = "sync"
-        configuration.backend = "rabbitmq"
-        pb.backend = rabbitmq_backend
+        configuration.backend = "redis"
+
         self.received = None
         self.task_received = None
         # This ensures that we use the rabbitmq backend
-        mocker.patch.object(
-            pb, "get_connection_sync", rabbitmq_backend.connection.get_connection_sync
-        )
-        mocker.patch.object(pb, "disconnect_sync", rabbitmq_backend.connection.disconnect_sync)
-        mocker.patch.object(pb.base.configuration, "backend", "rabbitmq")
+        mocker.patch.object(pb, "get_connection_sync", redis_backend.connection.get_connection_sync)
+        mocker.patch.object(pb, "disconnect_sync", redis_backend.connection.disconnect_sync)
+        mocker.patch.object(pb.base.configuration, "backend", "redis")
+        mocker.patch("protobunny.base.get_backend", return_value=redis_backend)
+        backend = get_backend()
+        assert backend is redis_backend
         conn = pb.get_connection_sync()
-        assert isinstance(conn, SyncRmqConnection)
+        assert isinstance(conn, SyncRedisConnection)
+        queue = get_queue(tests.TestMessage)
+        assert queue.topic == "acme.tests.TestMessage"
         assert conn.is_connected()
-        pb.unsubscribe_all_sync()
+        conn.purge(queue.topic)
+        pb.unsubscribe_all_sync(if_unused=False, if_empty=False)
         yield
-        rabbitmq_backend.connection.disconnect_sync()
+        redis_backend.connection.disconnect_sync()
         assert not conn.is_connected()
         assert len(conn._instance_by_vhost) == 0
+        AsyncRedisConnection.instance_by_vhost.clear()
 
-    def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
-        self.received = msg
-
-    def callback_task(self, msg: tests.tasks.TaskMessage) -> tp.Any:
-        self.task_received = msg
-
-    def log_callback(self, message: aio_pika.IncomingMessage, body: str) -> None:
+    def log_callback(self, message: IncomingMessageProtocol, body: str) -> None:
         corr_id = message.correlation_id
         log_msg = (
             f"{message.routing_key}(cid:{corr_id}): {body}"
@@ -341,15 +349,30 @@ class TestIntegrationSync:
         )
         self.log_msg = log_msg
 
+    def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
+        print("---------DEBUG: CALL 1", msg)
+        self.received = msg
+
+    def callback_2(self, msg: "ProtoBunnyMessage") -> tp.Any:
+        print("---------DEBUG: CALL 2", msg)
+        self.received_2 = msg
+
+    def callback_task(self, msg: "ProtoBunnyMessage") -> tp.Any:
+        print("---------DEBUG: CALL TASK", msg)
+        self.task_received = msg
+
     def test_publish(self) -> None:
-        pb.subscribe_sync(tests.TestMessage, self.callback)
+        queue = pb.subscribe_sync(tests.TestMessage, self.callback)
+        assert isinstance(queue, SyncQueue)
+        time.sleep(1.5)
         pb.publish_sync(self.msg)
-        assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
+
+        assert wait(lambda: self.received is not None, timeout_seconds=5, sleep_seconds=0.1)
         assert self.received.number == self.msg.number
 
     def test_to_dict(self) -> None:
         pb.subscribe_sync(tests.TestMessage, self.callback)
-        pb.subscribe_sync(tests.tasks.TaskMessage, self.callback_task)
+        task_queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback_task)
         pb.publish_sync(self.msg)
         assert wait(lambda: self.received == self.msg, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received.to_dict(
@@ -383,12 +406,13 @@ class TestIntegrationSync:
             "weights": [],
             "options": None,
         }
+        task_queue.unsubscribe()
 
     def test_count_messages(self) -> None:
         task_queue = pb.subscribe_sync(tests.tasks.TaskMessage, self.callback_task)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
-        task_queue.purge()  # remove past messages
+        pb.get_connection_sync().purge(task_queue.topic, reset_groups=True)  # remove past messages
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
         task_queue.unsubscribe()
@@ -454,7 +478,7 @@ class TestIntegrationSync:
         ), self.log_msg
 
     def test_unsubscribe(self) -> None:
-        simple_queue = pb.subscribe_sync(tests.TestMessage, self.callback)
+        pb.subscribe_sync(tests.TestMessage, self.callback)
         pb.publish_sync(self.msg)
         assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
         assert self.received == self.msg
@@ -464,9 +488,9 @@ class TestIntegrationSync:
         assert self.received is None
 
         # unsubscribe from a package-level topic
-        pb.subscribe_sync(tests, self.callback)
+        pb.subscribe_sync(tests, self.callback_2)
         pb.publish_sync(tests.TestMessage(number=63, content="test"))
-        assert wait(lambda: self.received is not None, timeout_seconds=1, sleep_seconds=0.1)
+        assert wait(lambda: self.received_2 is not None, timeout_seconds=1, sleep_seconds=0.1)
         self.received = None
         pb.unsubscribe_sync(tests, if_unused=False, if_empty=False)
         pb.publish_sync(self.msg)

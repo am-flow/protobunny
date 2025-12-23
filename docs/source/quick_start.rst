@@ -33,7 +33,7 @@ Configure the library in pyproject.toml:
    messages-prefix = "acme"
    generated-package-name = "mymessagelib.codegen"
    mode = "sync"  # or "async"
-   backend = "rabbitmq" # or "python"
+   backend = "rabbitmq" # available backends are ['rabbitmq', 'redis', 'python']
 
 Install the library with ``uv``, ``poetry`` or ``pip``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,7 +46,7 @@ Install the library with ``uv``, ``poetry`` or ``pip``
 RabbitMQ connection
 ~~~~~~~~~~~~~~~~~~~
 
-Protobunny connects to RabbitMQ using environment variables.
+Protobunny connects to RabbitMQ or Redis by reading environment variables.
 
 .. code:: shell
 
@@ -64,6 +64,9 @@ For docker-compose or pipelines yaml:
      RABBITMQ_VHOST: /test
 
 --------------
+
+For Redis, replace ``RABBITMQ`` with ``REDIS`` for the variables above
+
 
 Quick example
 -------------

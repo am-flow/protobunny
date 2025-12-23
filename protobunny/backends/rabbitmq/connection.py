@@ -18,20 +18,20 @@ from aio_pika.abc import (
 )
 
 from ...exceptions import ConnectionError, RequeueMessage
-from .. import BaseConnection
+from .. import BaseAsyncConnection, BaseSyncConnection
 
 log = logging.getLogger(__name__)
 
 VHOST = os.environ.get("RABBITMQ_VHOST", "/")
 
 
-async def get_connection() -> "AsyncConnection":
+async def get_connection() -> "AsyncRmqConnection":
     """Get the singleton async connection."""
-    conn = await AsyncConnection.get_connection(vhost=VHOST)
+    conn = await AsyncRmqConnection.get_connection(vhost=VHOST)
     return conn
 
 
-async def reset_connection() -> "AsyncConnection":
+async def reset_connection() -> "AsyncRmqConnection":
     """Reset the singleton connection."""
     connection = await get_connection()
     await connection.disconnect()
@@ -48,22 +48,22 @@ def disconnect_sync() -> None:
     connection.disconnect()
 
 
-def reset_connection_sync() -> "SyncConnection":
+def reset_connection_sync() -> "SyncRmqConnection":
     connection = get_connection_sync()
     connection.disconnect()
     return get_connection_sync()
 
 
-def get_connection_sync() -> "SyncConnection":
-    connection = SyncConnection.get_connection(vhost=VHOST)
+def get_connection_sync() -> "SyncRmqConnection":
+    connection = SyncRmqConnection.get_connection(vhost=VHOST)
     return connection
 
 
-class AsyncConnection:
+class AsyncRmqConnection(BaseAsyncConnection):
     """Async RabbitMQ Connection wrapper."""
 
     _lock: asyncio.Lock | None = None
-    _instance_by_vhost: dict[str, "AsyncConnection | None"] = {}
+    instance_by_vhost: dict[str, "AsyncRmqConnection | None"] = {}
 
     def __init__(
         self,
@@ -98,6 +98,7 @@ class AsyncConnection:
             heartbeat: heartbeat interval in seconds
             timeout: connection timeout in seconds
         """
+        super().__init__()
         uname = username or os.environ.get(
             "RABBITMQ_USERNAME", os.environ.get("RABBITMQ_DEFAULT_USER", "guest")
         )
@@ -106,7 +107,6 @@ class AsyncConnection:
         )
         host = host or os.environ.get("RABBITMQ_HOST", "127.0.0.1")
         port = port or int(os.environ.get("RABBITMQ_PORT", "5672"))
-        # URL encode credentials and vhost to prevent injection
         username = urllib.parse.quote(uname, safe="")
         password = urllib.parse.quote(passwd, safe="")
         self.vhost = vhost
@@ -156,11 +156,11 @@ class AsyncConnection:
         return self._instance_lock
 
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "AsyncConnection":
+    async def get_connection(cls, vhost: str = "/") -> "AsyncRmqConnection":
         """Get singleton instance (async)."""
         current_loop = asyncio.get_running_loop()
         async with cls._get_class_lock():
-            instance = cls._instance_by_vhost.get(vhost)
+            instance = cls.instance_by_vhost.get(vhost)
             # Check if we have an instance AND if it belongs to the CURRENT loop
             if instance:
                 # We need to check if the instance's internal loop matches our current loop
@@ -175,9 +175,9 @@ class AsyncConnection:
                 new_instance = cls(vhost=vhost)
                 new_instance._loop = current_loop  # Store the loop it was born in
                 await new_instance.connect()
-                cls._instance_by_vhost[vhost] = new_instance
+                cls.instance_by_vhost[vhost] = new_instance
                 instance = new_instance
-            log.info("Returning singleton AsyncConnection instance for vhost %s", vhost)
+            log.info("Returning singleton AsyncRmqConnection instance for vhost %s", vhost)
             return instance
 
     async def is_connected(self) -> bool:
@@ -227,11 +227,7 @@ class AsyncConnection:
             asyncio.TimeoutError: If connection times out
         """
         async with self.lock:
-            if (
-                self._instance_by_vhost.get(self.vhost)
-                and await self.is_connected()
-                and self._channel is not None
-            ):
+            if self.instance_by_vhost.get(self.vhost) and await self.is_connected():
                 return
             try:
                 log.info(
@@ -264,7 +260,7 @@ class AsyncConnection:
                 self._exchange = exchange
                 self.is_connected_event.set()
                 log.info("Successfully connected to RabbitMQ")
-                self._instance_by_vhost[self.vhost] = self
+                self.instance_by_vhost[self.vhost] = self
             except asyncio.TimeoutError:
                 log.error("RabbitMQ connection timeout after %.1f seconds", timeout)
                 self.is_connected_event.clear()
@@ -337,7 +333,7 @@ class AsyncConnection:
                 self.is_connected_event.clear()
                 # 6. Remove from CLASS registry
                 # Explicitly use the class name to ensure we hit the registry
-                AsyncConnection._instance_by_vhost.pop(self.vhost, None)
+                AsyncRmqConnection.instance_by_vhost.pop(self.vhost, None)
                 log.info("RabbitMQ connection closed")
 
     async def setup_queue(self, topic: str, shared: bool = False) -> AbstractQueue:
@@ -587,15 +583,16 @@ class AsyncConnection:
         return False
 
 
-class SyncConnection(BaseConnection):
-    """Synchronous wrapper around AsyncConnection.
+class SyncRmqConnection(BaseSyncConnection):
+
+    """Synchronous wrapper around AsyncRmqConnection.
 
     Manages a dedicated event loop in a background thread to run async operations.
 
     Example:
         .. code-block:: python
 
-            with SyncConnection() as conn:
+            with SyncRmqConnection() as conn:
                 conn.publish("my.topic", message)
                 tag = conn.subscribe("my.topic", callback)
 
@@ -603,280 +600,8 @@ class SyncConnection(BaseConnection):
 
     _lock = threading.RLock()
     _stopped: asyncio.Event | None = None
-    _instance_by_vhost: dict[str, "SyncConnection"] = {}
+    _instance_by_vhost: dict[str, "SyncRmqConnection"] = {}
+    async_class = AsyncRmqConnection
 
-    def __init__(self, **kwargs):
-        """Initialize sync connection.
-
-        Args:
-            **kwargs: Same arguments as AsyncConnection
-        """
-        self._async_conn = AsyncConnection(**kwargs)
-        self._thread: threading.Thread | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._ready = threading.Event()
-        self._stopped: asyncio.Event | None = None
-        self.vhost = self._async_conn.vhost
-
-    @classmethod
-    def get_connection(cls, vhost: str = "/") -> "SyncConnection":
-        """Get singleton instance (sync)."""
-        with cls._lock:
-            if not cls._instance_by_vhost.get(vhost):
-                cls._instance_by_vhost[vhost] = cls(vhost=vhost)
-            if not cls._instance_by_vhost[vhost].is_connected():
-                cls._instance_by_vhost[vhost].connect()
-            log.info("Returning singleton SyncConnection instance for vhost %s", vhost)
-            return cls._instance_by_vhost[vhost]
-
-    def _run_loop(self) -> None:
-        """Run the event loop in a dedicated thread."""
-        loop = None
-        try:
-            # Create a fresh loop for this specific thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._loop = loop
-
-            # Run the 'stop' watcher
-            loop.create_task(self._async_run_watcher())
-
-            # Signal readiness NOW that self._loop is assigned and running
-            self._ready.set()
-            loop.run_forever()
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            log.exception("Event loop thread crashed")
-        finally:
-            if loop:
-                loop.close()
-            self._loop = None
-            log.info("Event loop thread stopped")
-
-    async def _async_run_watcher(self) -> None:
-        """Wait for the stop signal inside the loop."""
-        self._stopped = asyncio.Event()
-        await self._stopped.wait()
-        asyncio.get_running_loop().stop()
-
-    async def _async_run(self) -> None:
-        """Async event loop runner."""
-        self._loop = asyncio.get_running_loop()
-        self._stopped = asyncio.Event()
-        self._loop.call_soon_threadsafe(self._ready.set)
-        await self._stopped.wait()
-
-    def _ensure_loop(self) -> None:
-        """Ensure event loop thread is running.
-
-        Raises:
-            ConnectionError: If event loop fails to start
-        """
-        # Check if the thread exists AND is actually running
-        if self._thread and self._thread.is_alive() and self._loop and self._loop.is_running():
-            return
-
-        log.info("Starting (or restarting) RabbitMQ event loop thread")
-
-        # Reset state for a fresh start
-        self._ready.clear()
-        self._loop = None
-
-        self._thread = threading.Thread(
-            target=self._run_loop, name="protobunny_event_loop", daemon=True
-        )
-        self._thread.start()
-
-        if not self._ready.wait(timeout=10.0):
-            # Cleanup on failure to prevent stale state for next attempt
-            self._thread = None
-            raise ConnectionError("Event loop thread failed to start or signal readiness")
-
-    def _run_coro(self, coro, timeout: float | None = None):
-        """Run a coroutine in the event loop thread and return result.
-
-        Args:
-            coro: The coroutine to run
-            timeout: Maximum time to wait for result (seconds)
-
-        Returns:
-            The coroutine result
-
-        Raises:
-            TimeoutError: If operation times out
-            ConnectionError: If event loop is not available
-        """
-        self._ensure_loop()
-        if self._loop is None:
-            raise ConnectionError("Event loop not initialized")
-
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        try:
-            return future.result(timeout=timeout)
-        except TimeoutError:
-            future.cancel()
-            raise
-
-    def is_connected(self) -> bool:
-        """Check if connection is established."""
-        if not self._loop or not self._loop.is_running():
-            return False
-        return self._run_coro(self._async_conn.is_connected())
-
-    def connect(self, timeout: float = 10.0) -> None:
-        """Establish RabbitMQ connection.
-
-        Args:
-            timeout: Maximum time to wait for connection (seconds)
-
-        Raises:
-            ConnectionError: If connection fails
-            TimeoutError: If connection times out
-        """
-        self._run_coro(self._async_conn.connect(timeout), timeout=timeout)
-        SyncConnection._instance_by_vhost[self.vhost] = self
-
-    def disconnect(self, timeout: float = 10.0) -> None:
-        """Close RabbitMQ connection and stop event loop.
-
-        Args:
-            timeout: Maximum time to wait for cleanup (seconds)
-        """
-        with self._lock:
-            try:
-                if self._loop and self._loop.is_running():
-                    self._run_coro(self._async_conn.disconnect(timeout), timeout=timeout)
-                # 2. Stop the loop (see _async_run_watcher)
-                if self._stopped and self._loop:
-                    self._loop.call_soon_threadsafe(self._stopped.set)
-            except Exception as e:
-                log.warning("Async disconnect failed during sync shutdown: %s", e)
-            finally:
-                if self._thread and self._thread.is_alive():
-                    self._thread.join(timeout=5.0)
-                    if self._thread.is_alive():
-                        log.warning("Event loop thread did not stop within timeout")
-                self._started = None
-                self._loop = None
-                self._thread = None
-                SyncConnection._instance_by_vhost.pop(self.vhost, None)
-
-    def publish(
-        self,
-        topic: str,
-        message: aio_pika.Message,
-        mandatory: bool = False,
-        immediate: bool = False,
-        timeout: float = 10.0,
-    ) -> None:
-        """Publish a message to a topic.
-
-        Args:
-            topic: The routing key/topic
-            message: The message to publish
-            mandatory: If True, raise error if message cannot be routed
-            immediate: If True, publish message immediately to the queue
-            timeout: Maximum time to wait for publish (seconds)
-
-        Raises:
-            ConnectionError: If not connected
-            TimeoutError: If operation times out
-        """
-        self._run_coro(
-            self._async_conn.publish(topic, message, mandatory, immediate), timeout=timeout
-        )
-
-    def subscribe(
-        self, topic: str, callback: tp.Callable, shared: bool = False, timeout: float = 10.0
-    ) -> str:
-        """Subscribe to a queue/topic.
-
-        Args:
-            topic: The routing key/topic to subscribe to
-            callback: Function to handle incoming messages
-            shared: if True, use shared queue (round-robin delivery)
-            timeout: Maximum time to wait for subscription (seconds)
-
-        Returns:
-            Subscription tag identifier
-
-        Raises:
-            ConnectionError: If not connected
-            TimeoutError: If operation times out
-        """
-        return self._run_coro(self._async_conn.subscribe(topic, callback, shared), timeout=timeout)
-
-    def unsubscribe(
-        self, tag: str, timeout: float = 10.0, if_unused: bool = True, if_empty: bool = True
-    ) -> None:
-        """Unsubscribe from a queue.
-
-        Args:
-            if_unused:
-            if_empty:
-            tag: Subscription identifier returned from subscribe()
-            timeout: Maximum time to wait (seconds)
-
-        Raises:
-            TimeoutError: If operation times out
-        """
-        self._run_coro(
-            self._async_conn.unsubscribe(tag, if_empty=if_empty, if_unused=if_unused),
-            timeout=timeout,
-        )
-
-    def purge(self, topic: str, timeout: float = 10.0) -> None:
-        """Empty a queue of all messages.
-
-        Args:
-            topic: The queue topic to purge
-            timeout: Maximum time to wait (seconds)
-
-        Raises:
-            ConnectionError: If not connected
-            TimeoutError: If operation times out
-        """
-        self._run_coro(self._async_conn.purge(topic), timeout=timeout)
-
-    def get_message_count(self, topic: str, timeout: float = 10.0) -> int:
-        """Get the number of messages in a queue.
-
-        Args:
-            topic: The queue topic
-            timeout: Maximum time to wait (seconds)
-
-        Returns:
-            Number of messages in the queue
-
-        Raises:
-            ConnectionError: If not connected
-            TimeoutError: If operation times out
-        """
-        return self._run_coro(self._async_conn.get_message_count(topic), timeout=timeout)
-
-    def get_consumer_count(self, topic: str, timeout: float = 10.0) -> int:
-        """Get the number of messages in a queue.
-
-        Args:
-            topic: The queue topic
-            timeout: Maximum time to wait (seconds)
-
-        Returns:
-            Number of messages in the queue
-
-        Raises:
-            ConnectionError: If not connected
-            TimeoutError: If operation times out
-        """
-        return self._run_coro(self._async_conn.get_consumer_count(topic), timeout=timeout)
-
-    def __enter__(self):
-        """Context manager entry."""
-        self.connect()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.disconnect()
-        return False
+    def get_async_connection(self, **kwargs) -> "AsyncRmqConnection":
+        return AsyncRmqConnection(**kwargs)

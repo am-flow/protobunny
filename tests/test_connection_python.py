@@ -33,13 +33,18 @@ async def test_async_connect_success():
 async def test_async_publish(mock_python_connection):
     async with AsyncLocalConnection(vhost="/test") as conn:
         msg = None
-        await conn.subscribe("test.routing.key", callback=lambda x: msg)
+
+        async def callback(envelope: Envelope):
+            nonlocal msg
+            msg = envelope
+
+        await conn.subscribe("test.routing.key", callback=callback)
         await conn.publish("test.routing.key", Envelope(body=b"hello"))
 
         async def predicate():
             return msg == Envelope(body=b"hello")
 
-        await async_wait(predicate, timeout_seconds=1, sleep_seconds=0.1)
+        assert await async_wait(predicate, timeout_seconds=1, sleep_seconds=0.1)
 
 
 async def test_connection_flow():

@@ -3,8 +3,6 @@ API Reference
 
 Core Package
 ------------
-  .. automodule:: protobunny
-       :members:
 
   .. automodule:: protobunny.base
        :members:
@@ -24,6 +22,16 @@ RabbitMQ backend
        :members:
   .. automodule:: protobunny.backends.rabbitmq.queues
        :members:
+
+Redis backend
+----------------
+  .. automodule:: protobunny.backends.redis
+       :members:
+  .. automodule:: protobunny.backends.redis.connection
+       :members:
+  .. automodule:: protobunny.backends.redis.queues
+       :members:
+       :no-index:
 
 Python backend
 ----------------
