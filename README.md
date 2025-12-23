@@ -69,8 +69,8 @@ make integration-test
 - Support for RabbitMQ certificates (through `pika`)
 - More backends:
   - Mosquitto
-  - Redis
   - NATS
+  - Kafka
   - Cloud providers (AWS SQS/SNS)
 ---
 

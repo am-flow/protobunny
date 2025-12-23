@@ -13,6 +13,7 @@ keywords = [
     "mqtt",
     "messaging",
     "rabbitmq",
+    "redis",
     "amqp",
     "aio-pika",
     "betterproto",
