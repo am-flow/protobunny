@@ -30,13 +30,13 @@ The `protobunny` library simplifies messaging for asynchronous tasks by providin
 Protobunny is designed for teams who use messaging to coordinate work between microservices or different python processes and want:
 
 - A small API surface, easy to learn and use, both async and sync
-- Typed RabbitMQ messaging
+- Typed RabbitMQ and Redis messaging with protobuf messages as payloads
 - Consistent topic naming and routing
 - Builtin task queue semantics and result messages
 - Transparent handling of JSON-like payload fields as plain dictionaries/lists
 - Optional validation of required fields
 - Builtin logging service
-- Alternative configurable backends (e.g. `rabbitmq` or `python` for local in-process queues)
+- Alternative configurable backends (e.g. `rabbitmq`, `redis` or `python` for local in-process queues)
 ---
 
 ## Usage

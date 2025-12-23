@@ -1,6 +1,8 @@
+import asyncio
 import functools
 import importlib
 import logging
+import threading
 import typing as tp
 from abc import ABC, abstractmethod
 from types import ModuleType
@@ -9,6 +11,7 @@ import betterproto
 
 from protobunny.exceptions import RequeueMessage
 from protobunny.models import (
+    AsyncCallback,
     IncomingMessageProtocol,
     LoggerCallback,
     ProtoBunnyMessage,
@@ -29,15 +32,26 @@ def get_backend(backend: str | None = None) -> ModuleType:
 
 class BaseConnection(ABC):
     @abstractmethod
-    def publish(self, topic: str, message: "IncomingMessageProtocol") -> None | tp.Awaitable[None]:
+    def __init__(self, *args, **kwargs):
         ...
 
     @abstractmethod
-    def disconnect(self) -> None | tp.Awaitable[None]:
+    def publish(
+        self,
+        topic: str,
+        message: "IncomingMessageProtocol",
+        mandatory: bool = True,
+        immediate: bool = False,
+    ) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
-    def get_connection(self) -> tp.Any | tp.Awaitable[tp.Any]:
+    def disconnect(self, timeout: float = 30) -> None | tp.Awaitable[None]:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def get_connection(cls, vhost: str = "") -> tp.Any | tp.Awaitable[tp.Any]:
         ...
 
     @abstractmethod
@@ -45,7 +59,7 @@ class BaseConnection(ABC):
         ...
 
     @abstractmethod
-    def connect(self) -> None | tp.Awaitable[None]:
+    def connect(self, timeout: float = 30) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
@@ -59,7 +73,7 @@ class BaseConnection(ABC):
         ...
 
     @abstractmethod
-    def purge(self, topic: str) -> None | tp.Awaitable[None]:
+    def purge(self, topic: str, **kwargs) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
@@ -69,6 +83,304 @@ class BaseConnection(ABC):
     @abstractmethod
     def get_consumer_count(self, topic: str) -> int | tp.Awaitable[int]:
         ...
+
+
+class BaseAsyncConnection(BaseConnection, ABC):
+    instance_by_vhost: dict[str, "BaseAsyncConnection"]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.vhost = kwargs.get("vhost", "")
+
+
+class BaseSyncConnection(BaseConnection, ABC):
+    _lock: threading.RLock
+    _stopped: asyncio.Event | None
+    _instance_by_vhost: dict[str, "BaseSyncConnection"]
+    async_class: tp.Type["BaseAsyncConnection | None"]
+
+    @abstractmethod
+    def get_async_connection(self, **kwargs) -> "BaseAsyncConnection":
+        ...
+
+    def __init__(self, **kwargs):
+        """Initialize sync connection.
+
+        Args:
+            **kwargs: Same arguments as AsyncConnection
+        """
+        super().__init__()
+        self._async_conn = self.get_async_connection(**kwargs)
+        self._thread: threading.Thread | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._ready = threading.Event()
+        self._stopped: asyncio.Event | None = None
+        self.vhost = self._async_conn.vhost
+        self._started = False
+
+    def _run_loop(self) -> None:
+        """Run the event loop in a dedicated thread."""
+        loop = None
+        try:
+            # Create a fresh loop for this specific thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self._loop = loop
+
+            # Run the 'stop' watcher
+            loop.create_task(self._async_run_watcher())
+
+            # Signal readiness NOW that self._loop is assigned and running
+            self._ready.set()
+            loop.run_forever()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            log.exception("Event loop thread crashed")
+        finally:
+            if loop:
+                loop.close()
+            self._loop = None
+            log.info("Event loop thread stopped")
+
+    async def _async_run_watcher(self) -> None:
+        """Wait for the stop signal inside the loop."""
+        self._stopped = asyncio.Event()
+        await self._stopped.wait()
+        asyncio.get_running_loop().stop()
+
+    async def _async_run(self) -> None:
+        """Async event loop runner."""
+        self._loop = asyncio.get_running_loop()
+        self._stopped = asyncio.Event()
+        self._loop.call_soon_threadsafe(self._ready.set)
+        await self._stopped.wait()
+
+    def _ensure_loop(self) -> None:
+        """Ensure event loop thread is running.
+
+        Raises:
+            ConnectionError: If event loop fails to start
+        """
+        # Check if the thread exists AND is actually running
+        if self._thread and self._thread.is_alive() and self._loop and self._loop.is_running():
+            return
+
+        log.info("Starting (or restarting) wrapping event loop thread")
+
+        # Reset state for a fresh start
+        self._ready.clear()
+        self._loop = None
+
+        self._thread = threading.Thread(
+            target=self._run_loop, name="protobunny_event_loop", daemon=True
+        )
+        self._thread.start()
+
+        if not self._ready.wait(timeout=10.0):
+            # Cleanup on failure to prevent stale state for next attempt
+            self._thread = None
+            raise ConnectionError("Event loop thread failed to start or signal readiness")
+
+    def _run_coro(self, coro, timeout: float | None = None):
+        """Run a coroutine in the event loop thread and return result.
+
+        Args:
+            coro: The coroutine to run
+            timeout: Maximum time to wait for result (seconds)
+
+        Returns:
+            The coroutine result
+
+        Raises:
+            TimeoutError: If operation times out
+            ConnectionError: If event loop is not available
+        """
+        self._ensure_loop()
+        if self._loop is None:
+            raise ConnectionError("Event loop not initialized")
+
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError:
+            future.cancel()
+            raise
+
+    def is_connected(self) -> bool:
+        """Check if connection is established."""
+        if not self._loop or not self._loop.is_running():
+            return False
+        return self._run_coro(self._async_conn.is_connected())
+
+    @classmethod
+    def get_connection(cls, vhost: str = "") -> "BaseSyncConnection":
+        """Get singleton instance (sync)."""
+        with cls._lock:
+            if not cls._instance_by_vhost.get(vhost):
+                cls._instance_by_vhost[vhost] = cls(vhost=vhost)
+            if not cls._instance_by_vhost[vhost].is_connected():
+                cls._instance_by_vhost[vhost].connect()
+            log.info("Returning singleton SyncConnection instance for vhost %s", vhost)
+            return cls._instance_by_vhost[vhost]
+
+    def publish(
+        self,
+        topic: str,
+        message: "IncomingMessageProtocol",
+        mandatory: bool = False,
+        immediate: bool = False,
+        timeout: float = 10.0,
+    ) -> None:
+        """Publish a message to a topic.
+
+        Args:
+            topic: The routing key/topic
+            message: The message to publish
+            mandatory: If True, raise error if message cannot be routed
+            immediate: If True, publish message immediately to the queue
+            timeout: Maximum time to wait for publish (seconds)
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        self._run_coro(
+            self._async_conn.publish(topic, message, mandatory, immediate), timeout=timeout
+        )
+
+    def subscribe(
+        self, topic: str, callback: tp.Callable, shared: bool = False, timeout: float = 10.0
+    ) -> str:
+        """Subscribe to a queue/topic.
+
+        Args:
+            topic: The routing key/topic to subscribe to
+            callback: Function to handle incoming messages
+            shared: if True, use shared queue (round-robin delivery)
+            timeout: Maximum time to wait for subscription (seconds)
+
+        Returns:
+            Subscription tag identifier
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        return self._run_coro(self._async_conn.subscribe(topic, callback, shared), timeout=timeout)
+
+    def unsubscribe(
+        self, tag: str, timeout: float = 10.0, if_unused: bool = True, if_empty: bool = True
+    ) -> None:
+        """Unsubscribe from a queue.
+
+        Args:
+            if_unused:
+            if_empty:
+            tag: Subscription identifier returned from subscribe()
+            timeout: Maximum time to wait (seconds)
+
+        Raises:
+            TimeoutError: If operation times out
+        """
+        self._run_coro(
+            self._async_conn.unsubscribe(tag, if_empty=if_empty, if_unused=if_unused),
+            timeout=timeout,
+        )
+
+    def purge(self, topic: str, timeout: float = 10.0, **kwargs) -> None:
+        """Empty a queue of all messages.
+
+        Args:
+            topic: The queue topic to purge
+            timeout: Maximum time to wait (seconds)
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        self._run_coro(self._async_conn.purge(topic, **kwargs), timeout=timeout)
+
+    def get_message_count(self, topic: str, timeout: float = 10.0) -> int:
+        """Get the number of messages in a queue.
+
+        Args:
+            topic: The queue topic
+            timeout: Maximum time to wait (seconds)
+
+        Returns:
+            Number of messages in the queue
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        return self._run_coro(self._async_conn.get_message_count(topic), timeout=timeout)
+
+    def get_consumer_count(self, topic: str, timeout: float = 10.0) -> int:
+        """Get the number of messages in a queue.
+
+        Args:
+            topic: The queue topic
+            timeout: Maximum time to wait (seconds)
+
+        Returns:
+            Number of messages in the queue
+
+        Raises:
+            ConnectionError: If not connected
+            TimeoutError: If operation times out
+        """
+        return self._run_coro(self._async_conn.get_consumer_count(topic), timeout=timeout)
+
+    def __enter__(self):
+        """Context manager entry."""
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.disconnect()
+        return False
+
+    def connect(self, timeout: float = 10.0) -> None:
+        """Establish Sync connection.
+
+        Args:
+            timeout: Maximum time to wait for connection (seconds)
+
+        Raises:
+            ConnectionError: If connection fails
+            TimeoutError: If connection times out
+        """
+        self._run_coro(self._async_conn.connect(timeout), timeout=timeout)
+        self.__class__._instance_by_vhost[self.vhost] = self
+
+    def disconnect(self, timeout: float = 10.0) -> None:
+        """Close sync and the underlying async connections and stop event loop.
+
+        Args:
+            timeout: Maximum time to wait for cleanup (seconds)
+        """
+        with self._lock:
+            try:
+                if self._loop and self._loop.is_running():
+                    self._run_coro(self._async_conn.disconnect(timeout), timeout=timeout)
+                # Stop the loop (see _async_run_watcher)
+                if self._stopped and self._loop:
+                    self._loop.call_soon_threadsafe(self._stopped.set)
+            except Exception as e:
+                log.warning("Async disconnect failed during sync shutdown: %s", e)
+            finally:
+                if self._thread and self._thread.is_alive():
+                    self._thread.join(timeout=5.0)
+                    if self._thread.is_alive():
+                        log.warning("Event loop thread did not stop within timeout")
+                self._started = None
+                self._loop = None
+                self._thread = None
+                self.async_class.instance_by_vhost.pop(self.vhost, None)
+            type(self)._instance_by_vhost.pop(self.vhost, None)
 
 
 class BaseQueue(ABC):
@@ -108,7 +420,7 @@ class BaseQueue(ABC):
         ...
 
     @abstractmethod
-    def unsubscribe(self) -> None:
+    def unsubscribe(self, if_unused: bool = True, if_empty: bool = True) -> None:
         ...
 
     @abstractmethod
@@ -171,6 +483,7 @@ class BaseAsyncQueue(BaseQueue, ABC):
             callback: a callable accepting a message as only argument.
             message: the IncomingMessageProtocol object received from the queue.
         """
+
         if not message.routing_key:
             raise ValueError("Routing key was not set. Invalid topic")
         if message.routing_key == self.result_topic or message.routing_key.endswith(".result"):
@@ -178,6 +491,7 @@ class BaseAsyncQueue(BaseQueue, ABC):
             # In case the subscription has .# as binding key,
             # this method catches also results message for all the topics in that namespace.
             return
+
         msg: "ProtoBunnyMessage" = deserialize_message(message.routing_key, message.body)
         try:
             await callback(msg)
@@ -200,7 +514,6 @@ class BaseAsyncQueue(BaseQueue, ABC):
         Note: The real callback that consumes the incoming aio-pika message is the method AsyncConnection._on_message
         The AsyncQueue._receive method is called from there to deserialize the message and in turn calls the user callback.
         """
-
         if self.subscription is not None:
             raise ValueError("Cannot subscribe twice")
         func = functools.partial(self._receive, callback)
@@ -331,7 +644,7 @@ class BaseSyncQueue(BaseQueue, ABC):
         )
 
     def _receive(
-        self, callback: "SyncCallback | LoggerCallback", message: IncomingMessageProtocol
+        self, callback: "SyncCallback | LoggerCallback", message: "IncomingMessageProtocol"
     ) -> None:
         """Handle a message from the queue.
 

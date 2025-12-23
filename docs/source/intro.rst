@@ -8,7 +8,7 @@ by providing:
 
 -  A clean “message-first” API
 -  Python class generation from Protobuf messages using betterproto
--  Connections facilities to RabbitMQ
+-  Connections facilities to RabbitMQ and Redis
 -  Message publishing/subscribing with typed topics
 -  Generate and consume ``Result`` messages (success/failure + optional
    return payload)
@@ -31,7 +31,7 @@ Protobunny is designed for teams who use messaging to coordinate work
 between microservices or different python processes and want:
 
 -  A small API surface, easy to learn and use, both async and sync
--  Typed RabbitMQ messaging
+-  Typed RabbitMQ and Redis messaging
 -  Consistent topic naming and routing
 -  Builtin task queue semantics and result messages
 -  Transparent handling of JSON-like payload fields as plain
@@ -46,9 +46,7 @@ Future work
 -  Support for RabbitMQ certificates (through ``pika``)
 -  More backends:
 
-   -  multiprocessing.Queue or queue.Queue for simple local scenarios
    -  Mosquitto
-   -  Redis
    -  NATS
    -  Cloud providers (AWS SQS/SNS)
 

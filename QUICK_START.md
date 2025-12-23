@@ -18,14 +18,15 @@ dependencies = [
   # your other dependencies ...
 ]
 ```
+
 Configure the library in pyproject.toml:
 ```toml
 [tool.protobunny]
 messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib.codegen"
-mode = "sync"  # or "async"
-backend = "rabbitmq"  # or "python"
+mode = "async"  # or "sync"
+backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'python']
 ```
 
 ### Install the library with `uv`, `poetry` or `pip`
