@@ -2,6 +2,7 @@ import asyncio
 import functools
 import importlib
 import logging
+import sys
 import threading
 import typing as tp
 from abc import ABC, abstractmethod
@@ -25,10 +26,34 @@ log = logging.getLogger(__name__)
 
 
 def get_backend(backend: str | None = None) -> ModuleType:
+    """
+    Retrieve and import the specified backend module.
+
+    Load the backend module based on the provided name or falls back
+    to the default backend specified in the configuration. If the backend is unavailable
+    or cannot be imported, it exits the program.
+
+    Args:
+        backend (str | None): The name of the backend to import. If None, the backend from
+            the configuration is used.
+
+    Returns:
+        The imported backend module.
+    """
     backend = backend or configuration.backend
-    if backend not in configuration.available_backends:
-        raise ValueError(f"Backend {backend} is not available")
-    module = importlib.import_module(f"protobunny.backends.{backend}")
+    try:
+        module = importlib.import_module(f"protobunny.backends.{backend}")
+    except ModuleNotFoundError as exc:
+        suggestion = ""
+        if backend not in configuration.available_backends:
+            suggestion = f" Invalid backend or backend not supported.\nAvailable backends: {configuration.available_backends}"
+        else:
+            suggestion = (
+                f" Install the backend with pip install protobunny[{backend}]."
+                if backend != "python"
+                else suggestion
+            )
+        sys.exit(f"Could not import backend: {exc}.{suggestion}")
     return module
 
 

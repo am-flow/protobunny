@@ -275,8 +275,8 @@ class TestIntegrationAsync:
 
         # subscribe/unsubscribe two callbacks for two topics
 
-        q1 = await pb.subscribe(tests.TestMessage, self.callback)
-        q2 = await pb.subscribe(tests, self.callback2)
+        await pb.subscribe(tests.TestMessage, self.callback)
+        await pb.subscribe(tests, self.callback2)
         assert self.received is None
         await pb.publish(self.msg)  # this will reach callback_2 as well
 

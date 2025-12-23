@@ -52,7 +52,7 @@ class TestIntegration:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_publish(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -65,7 +65,7 @@ class TestIntegration:
         assert self.received.content == "test"
 
     async def test_to_dict(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -174,7 +174,7 @@ class TestIntegration:
         )
 
     async def test_unsubscribe(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:

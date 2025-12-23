@@ -31,9 +31,12 @@ integration-test:
 	uv run pytest tests/ -m "integration"
 
 # Releasing
-.PHONY: docs clean build-package publish-test publish-pypi
+.PHONY: docs clean build-package publish-test publish-pypi convert-md
+convert-md:
+	uv run python scripts/convert_md.py
 docs:
 	uv run sphinx-build -b html docs/source docs/build/html
+
 clean:
 	rm -rf dist build *.egg-info
 
