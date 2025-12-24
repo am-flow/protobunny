@@ -1,6 +1,8 @@
 import configparser
 import dataclasses
 import functools
+import inspect
+import logging
 import os
 import typing as tp
 
@@ -22,6 +24,8 @@ ENV_PREFIX = "PROTOBUNNY_"
 INI_FILE = "protobunny.ini"
 
 AvailableBackends = tp.Literal["rabbitmq", "python", "redis"]
+
+log = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -56,19 +60,32 @@ def load_config() -> Config:
     2. `protobunny.ini` in the current directory.
     3. Environment variables prefixed with PROTOBUNNY_.
     """
-    config = get_config_from_pyproject()
+    config_dict = get_config_from_pyproject()
 
     ini_config = get_config_from_ini()
-    config.update(ini_config)
+    config_dict.update(ini_config)
 
     env_config = get_config_from_env()
-    config.update(env_config)
+    config_dict.update(env_config)
 
-    if "generated-package-name" not in config:
-        config["generated-package-name"] = (
-            f"{config['project-name']}.codegen" if "project-name" in config else "codegen"
+    if "generated-package-name" not in config_dict:
+        config_dict["generated-package-name"] = (
+            f"{config_dict['project-name']}.codegen" if "project-name" in config_dict else "codegen"
         )
-    return Config(**{k.replace("-", "_"): v for k, v in config.items()})
+    available_params = inspect.signature(Config).parameters.keys()
+    passed_params = {k.replace("-", "_") for k in config_dict.keys()}
+    unknown_params = passed_params - set(available_params)
+    if unknown_params:
+        log.warning(
+            f"Config params: [{', '.join(unknown_params)}] are not handled in protobunny version {VERSION}. Ignoring. Available params: {', '.join(available_params)}"
+        )
+    return Config(
+        **{
+            k.replace("-", "_"): v
+            for k, v in config_dict.items()
+            if k.replace("-", "_") in available_params
+        }
+    )
 
 
 def get_config_from_env() -> dict[str, tp.Any]:

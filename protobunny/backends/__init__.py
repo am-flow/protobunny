@@ -111,6 +111,10 @@ class BaseConnection(ABC):
     def get_consumer_count(self, topic: str) -> int | tp.Awaitable[int]:
         ...
 
+    @abstractmethod
+    def setup_queue(self, topic: str, shared: bool) -> tp.Any | tp.Awaitable[tp.Any]:
+        ...
+
 
 class BaseAsyncConnection(BaseConnection, ABC):
     instance_by_vhost: dict[str, "BaseAsyncConnection"]
@@ -275,6 +279,9 @@ class BaseSyncConnection(BaseConnection, ABC):
         self._run_coro(
             self._async_conn.publish(topic, message, mandatory, immediate), timeout=timeout
         )
+
+    def setup_queue(self, topic: str, shared: bool, timeout: int = 10) -> tp.Any:
+        self._run_coro(self._async_conn.setup_queue(topic, shared), timeout=timeout)
 
     def subscribe(
         self, topic: str, callback: tp.Callable, shared: bool = False, timeout: float = 10.0

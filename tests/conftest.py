@@ -26,27 +26,27 @@ test_config = protobunny.config.Config(
 #
 # # Overwrite the module-level configuration
 protobunny.base.configuration = test_config
-# import protobunny.backends.python.queues
-# import protobunny.backends.rabbitmq.queues
-# import protobunny.models
-#
 protobunny.models.configuration = test_config
-# protobunny.backends.rabbitmq.queues.configuration = test_config
-# protobunny.backends.redis.queues.configuration = test_config
 protobunny.backends.configuration = test_config
-# protobunny.backends.python.connection.configuration = test_config
 
 
-@pytest.fixture()
+@pytest.fixture
 async def mock_redis(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
     mock = mocker.AsyncMock(spec=redis.asyncio.Redis)
     # Ensure all used internal methods are also AsyncMocks
     mock.ping = mocker.AsyncMock(return_value=True)
     mock.xadd = mocker.AsyncMock(return_value="12345-0")
     mock.xack = mocker.AsyncMock()
+    mock.sadd = mocker.AsyncMock()
+    mock.xreadgroup = mocker.AsyncMock(return_value=[("test.topic", [(b"12345-0", b"test")])])
     mock.aclose = mocker.AsyncMock()
     mock.xgroup_create = mocker.AsyncMock()
     mock.smembers = mocker.AsyncMock(return_value=[b"test.routing.key", b"sync.topic"])
+    mock.xgroup_delconsumer = mocker.AsyncMock()
+    mock.xlen = mocker.AsyncMock(return_value=1)
+    mock.xdel = mocker.AsyncMock()
+    mock.xgroup_destroy = mocker.AsyncMock()
+    mock.xinfo_groups = mocker.AsyncMock(return_value=[{"name": "test"}])
     mocker.patch("protobunny.backends.redis.connection.redis.from_url", return_value=mock)
     yield mock
 

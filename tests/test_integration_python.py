@@ -6,8 +6,6 @@ of asynchronous message queues, using the Protobunny framework. These
 tests cover message publishing, subscribing, logging, and message
 conversion to dictionaries and JSON.
 
-It's not marked as integration test because it doesn't need any backend dependency
-but it tests the integration between the Protobunny framework and the multiprocessing Queue.
 
 Classes:
     TestIntegrationAsync: Represents the suite of integration tests for
@@ -51,8 +49,9 @@ from .utils import async_wait, tear_down
 logging.basicConfig(level=logging.DEBUG)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-class TestIntegrationAsync:
+class TestIntegration:
     """Integration tests for python multiprocessing Queue"""
 
     received = None
@@ -68,7 +67,6 @@ class TestIntegrationAsync:
         configuration.mode = "async"
         configuration.backend = "python"
         original_connection_sync = pb.get_connection
-        original_backend = pb.backend
         pb.backend = python_backend
         mocker.patch.object(pb, "get_connection", python_backend.connection.get_connection)
         mocker.patch.object(pb, "disconnect", python_backend.connection.disconnect)
@@ -363,6 +361,7 @@ class TestIntegrationAsync:
         assert received_result is None
 
 
+@pytest.mark.integration
 class TestIntegrationSync:
     """Integration tests for python multiprocessing Queue"""
 

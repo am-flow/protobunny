@@ -3,80 +3,94 @@ name = "protobunny"
 version = "0.1.2b1"
 description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
-    { name = "Domenico Nappo", email = "domenico.nappo@am-flow.com" },
-    { name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com" },
-    { name = "Sem Mulder", email = "sem.mulder@am-flow.com" },
+  {name = "Domenico Nappo", email = "domenico.nappo@am-flow.com"},
+  {name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com"},
+  {name = "Sem Mulder", email = "sem.mulder@am-flow.com"}
 ]
 keywords = [
-    "protobuf",
-    "queues",
-    "mqtt",
-    "messaging",
-    "rabbitmq",
-    "redis",
-    "amqp",
-    "aio-pika",
-    "betterproto",
+  "protobuf",
+  "queues",
+  "mqtt",
+  "messaging",
+  "rabbitmq",
+  "redis",
+  "amqp",
+  "aio-pika",
+  "betterproto"
 ]
 requires-python = ">=3.10,<3.14"
 readme = "README.md"
 dependencies = [
-    "betterproto[compiler]>=2.0.0b7,<3", # needs --preleases=allow
-    "click>=8.2.1",
-    "grpcio-tools>=1.62.0,<2",
-    "numpy>=1.26",
-    "pytest-env>=1.1.3",
-    "tomli ; python_version < '3.11'",
+  "betterproto[compiler]>=2.0.0b7,<3", # needs --preleases=allow
+  "click>=8.2.1",
+  "grpcio-tools>=1.62.0,<2",
+  "numpy>=1.26",
+  "pytest-env>=1.1.3",
+  "tomli ; python_version < '3.11'"
 ]
+
 [project.optional-dependencies]
 rabbitmq = ["aio-pika>=7.1.0"]
 redis = ["redis<8"]
 numpy = ["numpy>=1.26"]
 
+[project.scripts]
+protobunny = "protobunny.wrapper:main"
 
 [project.urls]
 homepage = "https://am-flow.github.io/protobunny"
 repository = "https://github.com/am-flow/protobunny"
 issues = "https://github.com/am-flow/protobunny/issues"
 
-[project.scripts]
-protobunny = "protobunny.wrapper:main"
-
-[dependency-groups]
-dev = [
-    "ipdb>=0.13.11,<0.14",
-    "waiting>=1.5.0,<2",
-    "ipython>=8.11.0,<9",
-    "pytest>=7.2.2,<8",
-    "pytest-cov>=4.0.0,<5",
-    "pytest-mock>=3.14.0,<4",
-    "pytest-asyncio>=0.23.7,<0.24",
-    "numpy>=1.26.3,<2",
-    "ruff>=0.1.14,<0.2",
-    "mypy>=1.9.0,<2",
-    "types-protobuf>=4.25.0.20240410,<5",
-]
-
-docs = [
-    "sphinx>=8.1.3",
-    "sphinx-rtd-theme>=0.5.1",
-    "furo>=2025.12.19",
-    "pypandoc-binary>=1.16.2",
-]
-
 [build-system]
 requires = ["poetry-core>=1.0.0", "betterproto[compiler]==2.0.0b7", "grpcio-tools==1.76.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-package-data = {"protobunny" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2", "scripts/*.py"]}
+[dependency-groups]
+dev = [
+  "ipdb>=0.13.11,<0.14",
+  "waiting>=1.5.0,<2",
+  "ipython>=8.11.0,<9",
+  "pytest>=7.2.2,<8",
+  "pytest-cov>=4.0.0,<5",
+  "pytest-mock>=3.14.0,<4",
+  "pytest-asyncio>=0.23.7,<0.24",
+  "numpy>=1.26.3,<2",
+  "ruff>=0.1.14,<0.2",
+  "mypy>=1.9.0,<2",
+  "types-protobuf>=4.25.0.20240410,<5",
+  "yamllint>=1.37.1",
+  "toml-sort>=0.24.3"
+]
+docs = [
+  "sphinx>=8.1.3",
+  "sphinx-rtd-theme>=0.5.1",
+  "furo>=2025.12.19",
+  "pypandoc-binary>=1.16.2"
+]
+
+[tool.coverage.run]
+omit = ["test.py", "*/tests/*"]
+disable_warnings = ["couldnt-parse"]
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+exclude = "scripts|build|tests|todo"
+
+[tool.protobunny]
+messages-directory = "protobunny/protobuf"
+generated-package-name = "protobunny.core"
+force-required-fields = true
+backend = "python"
+mode = "async"
 
 [tool.pytest.ini_options]
 addopts = "--junitxml=pytest_report.xml --cov=. --cov-report=term --cov-report=xml --cov-report html"
 testpaths = ["./tests/"]
 asyncio_mode = "auto"
 markers = [
-    "integration: tests requiring a real connection to the amqp server. They don't run in CI",
+  "integration: tests requiring a real connection to the amqp server. They don't run in CI"
 ]
 cache_dir = ".cache/pytest"
 log_cli_level = "INFO"
@@ -93,10 +107,6 @@ REDIS_USER = "default"
 REDIS_PASS = "guest"
 REDIS_VHOST = "11"
 
-[tool.coverage.run]
-omit = ["test.py", "*/tests/*"]
-disable_warnings = ["couldnt-parse"]
-
 [tool.ruff]
 select = ["F", "E", "W", "I"]
 line-length = 100
@@ -110,14 +120,5 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-[tool.mypy]
-ignore_missing_imports = true
-strict = true
-exclude = "scripts|build|tests|todo"
-
-[tool.protobunny]
-messages-directory = "protobunny/protobuf"
-generated-package-name = "protobunny.core"
-force-required-fields = true
-backend = "python"
-mode = "async"
+[tool.setuptools]
+package-data = {"protobunny" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2", "scripts/*.py"]}

@@ -21,6 +21,8 @@ format:
 lint:
 	uv run ruff check . --diff
 	uv run ruff format . --check --diff
+	uv run toml-sort --check ./pyproject.toml --sort-first project
+	uv run yamllint -d "{extends: relaxed, rules: {line-length: {max: 120}}}" .
 
 .PHONY: test integration-test
 test:
