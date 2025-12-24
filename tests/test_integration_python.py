@@ -6,8 +6,6 @@ of asynchronous message queues, using the Protobunny framework. These
 tests cover message publishing, subscribing, logging, and message
 conversion to dictionaries and JSON.
 
-It's not marked as integration test because it doesn't need any backend dependency
-but it tests the integration between the Protobunny framework and the multiprocessing Queue.
 
 Classes:
     TestIntegrationAsync: Represents the suite of integration tests for
@@ -39,9 +37,8 @@ import protobunny as pb
 from protobunny import get_queue
 from protobunny.backends import LoggingSyncQueue
 from protobunny.backends.python.connection import (
-    AsyncLocalConnection,
-    SyncLocalConnection,
-    configuration,
+    Connection,
+    SyncConnection,
 )
 from protobunny.backends.python.queues import SyncQueue
 from protobunny.models import Envelope, ProtoBunnyMessage
@@ -52,8 +49,9 @@ from .utils import async_wait, tear_down
 logging.basicConfig(level=logging.DEBUG)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-class TestIntegrationAsync:
+class TestIntegration:
     """Integration tests for python multiprocessing Queue"""
 
     received = None
@@ -63,19 +61,18 @@ class TestIntegrationAsync:
 
     @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture):
+        from protobunny.backends import configuration
         from protobunny.backends import python as python_backend
-        from protobunny.backends import rabbitmq as rabbitmq_backend
 
         configuration.mode = "async"
         configuration.backend = "python"
         original_connection_sync = pb.get_connection
-        original_backend = pb.backend
         pb.backend = python_backend
         mocker.patch.object(pb, "get_connection", python_backend.connection.get_connection)
         mocker.patch.object(pb, "disconnect", python_backend.connection.disconnect)
         mocker.patch.object(pb.base.configuration, "backend", "python")
         conn = await pb.get_connection()
-        assert isinstance(conn, AsyncLocalConnection)
+        assert isinstance(conn, Connection)
         await pb.unsubscribe_all()
         queue = get_queue(self.msg)
         assert isinstance(queue, python_backend.queues.AsyncQueue)
@@ -85,11 +82,9 @@ class TestIntegrationAsync:
         yield
         await pb.disconnect()
         pb.get_connection_sync = original_connection_sync
-        # set back the original backend
-        pb.backend = rabbitmq_backend
-        # CRITICAL: Manually clear the singleton registry
+        # Manually clear the singleton registry
         # to prevent loop leakage between tests
-        AsyncLocalConnection._instances_by_vhost.clear()
+        Connection._instances_by_vhost.clear()
         # cancel pending tasks to avoid warnings in output
         event_loop = asyncio.get_running_loop()
         await tear_down(event_loop)
@@ -275,8 +270,8 @@ class TestIntegrationAsync:
 
         # subscribe/unsubscribe two callbacks for two topics
 
-        q1 = await pb.subscribe(tests.TestMessage, self.callback)
-        q2 = await pb.subscribe(tests, self.callback2)
+        await pb.subscribe(tests.TestMessage, self.callback)
+        await pb.subscribe(tests, self.callback2)
         assert self.received is None
         await pb.publish(self.msg)  # this will reach callback_2 as well
 
@@ -366,6 +361,7 @@ class TestIntegrationAsync:
         assert received_result is None
 
 
+@pytest.mark.integration
 class TestIntegrationSync:
     """Integration tests for python multiprocessing Queue"""
 
@@ -375,6 +371,7 @@ class TestIntegrationSync:
 
     @pytest.fixture(autouse=True)
     def setup_connections(self, mocker: MockerFixture):
+        from protobunny.backends import configuration
         from protobunny.backends import python as python_backend
 
         configuration.mode = "sync"
@@ -389,11 +386,11 @@ class TestIntegrationSync:
         conn = pb.get_connection_sync()
         queue = get_queue(tests.TestMessage)
         assert isinstance(queue, python_backend.queues.SyncQueue)
-        assert isinstance(conn, SyncLocalConnection)
+        assert isinstance(conn, SyncConnection)
         pb.unsubscribe_all_sync()
         yield
         pb.disconnect_sync()
-        SyncLocalConnection._instances_by_vhost.clear()
+        SyncConnection._instances_by_vhost.clear()
 
     def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -470,7 +467,7 @@ class TestIntegrationSync:
     def test_logger_body(self) -> None:
         log_queue = pb.subscribe_logger_sync(self.log_callback)
         assert isinstance(log_queue, LoggingSyncQueue)
-        assert isinstance(log_queue.get_connection_sync(), SyncLocalConnection)
+        assert isinstance(log_queue.get_connection_sync(), SyncConnection)
         assert log_queue.topic == "acme.#"
         pb.publish_sync(self.msg)
         assert wait(lambda: self.log_msg is not None, timeout_seconds=1, sleep_seconds=0.1)

@@ -25,13 +25,13 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("RABBITMQ_VHOST", "/")
 
 
-async def get_connection() -> "AsyncRmqConnection":
+async def get_connection() -> "Connection":
     """Get the singleton async connection."""
-    conn = await AsyncRmqConnection.get_connection(vhost=VHOST)
+    conn = await Connection.get_connection(vhost=VHOST)
     return conn
 
 
-async def reset_connection() -> "AsyncRmqConnection":
+async def reset_connection() -> "Connection":
     """Reset the singleton connection."""
     connection = await get_connection()
     await connection.disconnect()
@@ -48,22 +48,22 @@ def disconnect_sync() -> None:
     connection.disconnect()
 
 
-def reset_connection_sync() -> "SyncRmqConnection":
+def reset_connection_sync() -> "SyncConnection":
     connection = get_connection_sync()
     connection.disconnect()
     return get_connection_sync()
 
 
-def get_connection_sync() -> "SyncRmqConnection":
-    connection = SyncRmqConnection.get_connection(vhost=VHOST)
+def get_connection_sync() -> "SyncConnection":
+    connection = SyncConnection.get_connection(vhost=VHOST)
     return connection
 
 
-class AsyncRmqConnection(BaseAsyncConnection):
+class Connection(BaseAsyncConnection):
     """Async RabbitMQ Connection wrapper."""
 
     _lock: asyncio.Lock | None = None
-    instance_by_vhost: dict[str, "AsyncRmqConnection | None"] = {}
+    instance_by_vhost: dict[str, "Connection | None"] = {}
 
     def __init__(
         self,
@@ -156,7 +156,7 @@ class AsyncRmqConnection(BaseAsyncConnection):
         return self._instance_lock
 
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "AsyncRmqConnection":
+    async def get_connection(cls, vhost: str = "/") -> "Connection":
         """Get singleton instance (async)."""
         current_loop = asyncio.get_running_loop()
         async with cls._get_class_lock():
@@ -233,7 +233,6 @@ class AsyncRmqConnection(BaseAsyncConnection):
                 log.info(
                     "Establishing RabbitMQ connection to %s", self._url.split("@")[1].split("?")[0]
                 )
-
                 connection = await asyncio.wait_for(
                     aio_pika.connect_robust(self._url), timeout=timeout
                 )
@@ -333,7 +332,7 @@ class AsyncRmqConnection(BaseAsyncConnection):
                 self.is_connected_event.clear()
                 # 6. Remove from CLASS registry
                 # Explicitly use the class name to ensure we hit the registry
-                AsyncRmqConnection.instance_by_vhost.pop(self.vhost, None)
+                Connection.instance_by_vhost.pop(self.vhost, None)
                 log.info("RabbitMQ connection closed")
 
     async def setup_queue(self, topic: str, shared: bool = False) -> AbstractQueue:
@@ -515,7 +514,7 @@ class AsyncRmqConnection(BaseAsyncConnection):
             log.exception("Error unsubscribing from queue '%s'", queue_name)
             raise
 
-    async def purge(self, topic: str) -> None:
+    async def purge(self, topic: str, **kwargs) -> None:
         """Empty a queue of all messages.
 
         Args:
@@ -583,7 +582,7 @@ class AsyncRmqConnection(BaseAsyncConnection):
         return False
 
 
-class SyncRmqConnection(BaseSyncConnection):
+class SyncConnection(BaseSyncConnection):
 
     """Synchronous wrapper around AsyncRmqConnection.
 
@@ -600,8 +599,8 @@ class SyncRmqConnection(BaseSyncConnection):
 
     _lock = threading.RLock()
     _stopped: asyncio.Event | None = None
-    _instance_by_vhost: dict[str, "SyncRmqConnection"] = {}
-    async_class = AsyncRmqConnection
+    _instance_by_vhost: dict[str, "SyncConnection"] = {}
+    async_class = Connection
 
-    def get_async_connection(self, **kwargs) -> "AsyncRmqConnection":
-        return AsyncRmqConnection(**kwargs)
+    def get_async_connection(self, **kwargs) -> "Connection":
+        return Connection(**kwargs)

@@ -115,23 +115,10 @@ class BaseLocalConnection(BaseConnection, ABC):
         self._subscriptions: dict[str, dict] = {}
         self.logger_prefix = configuration.logger_prefix
 
-    def is_connected(self) -> bool:
-        return self._is_connected
-
-    def _get_tag(self, topic: str, shared: bool, context_id: tp.Any) -> str:
+    def get_tag(self, topic: str, shared: bool, context_id: tp.Any) -> str:
         """Generate subscription tag."""
         suffix = "shared" if shared else context_id
         return f"local-sub-{topic}-{suffix}"
-
-    def _create_queue(self, topic: str, shared: bool) -> Queue:
-        """Create appropriate queue type."""
-        if topic == self.logger_prefix:
-            _broker.logger_queue = Queue()
-            return _broker.logger_queue
-        elif shared:
-            return _broker.create_shared_queue(topic)
-        else:
-            return _broker.create_exclusive_queue(topic)
 
     def _cleanup_queue(self, topic: str, queue: Queue, shared: bool, if_unused: bool) -> None:
         """Clean up queue resources."""
@@ -145,15 +132,40 @@ class BaseLocalConnection(BaseConnection, ABC):
     def get_message_count(self, topic: str) -> int:
         return _broker.get_message_count(topic)
 
-    def purge(self, topic: str) -> None:
+    def purge(self, topic: str, **kwargs) -> None:
         _broker.purge_queue(topic)
 
+    def setup_queue(self, topic: str, shared: bool) -> Queue:
+        """Create appropriate queue type."""
 
-class SyncLocalConnection(BaseLocalConnection):
+        if topic == self.logger_prefix:
+            _broker.logger_queue = Queue()
+            return _broker.logger_queue
+        elif shared:
+            return _broker.create_shared_queue(topic)
+        else:
+            return _broker.create_exclusive_queue(topic)
+
+
+class SyncConnection(BaseLocalConnection):
     """Synchronous local connection using threads."""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._is_connected_event: threading.Event | None = None
+
+    def is_connected(self) -> bool:
+        return self.is_connected_event.is_set()
+
+    @property
+    def is_connected_event(self) -> threading.Event:
+        """Lazily create the event in the current running loop."""
+        if self._is_connected_event is None:
+            self._is_connected_event = threading.Event()
+        return self._is_connected_event
+
     @classmethod
-    def get_connection(cls, vhost: str = "/") -> "SyncLocalConnection":
+    def get_connection(cls, vhost: str = "/") -> "SyncConnection":
         if vhost not in cls._instances_by_vhost:
             with cls._lock:
                 if vhost not in cls._instances_by_vhost:
@@ -164,20 +176,20 @@ class SyncLocalConnection(BaseLocalConnection):
 
     def connect(self, timeout: float = 10.0) -> None:
         with self._lock:
-            if self._is_connected:
+            if self.is_connected():
                 return
             log.info("Connecting SyncLocalConnection for vhost: %s", self.vhost)
             self._is_connected = True
 
-    def disconnect(self) -> None:
+    def disconnect(self, **kwargs) -> None:
         with self._lock:
             log.info("Disconnecting SyncLocalConnection for vhost: %s", self.vhost)
             for tag in list(self._subscriptions.keys()):
                 self._unsubscribe_by_tag(tag, if_unused=False)
-            self._is_connected = False
+            self.is_connected_event.clear()
             self._instances_by_vhost.pop(self.vhost, None)
 
-    def publish(self, topic: str, message: Envelope) -> None:
+    def publish(self, topic: str, message: Envelope, **kwargs) -> None:
         if not _broker.publish(topic, message):
             log.warning("No subscribers for topic '%s'", topic)
 
@@ -186,6 +198,7 @@ class SyncLocalConnection(BaseLocalConnection):
     ) -> None:
         """Worker thread for processing messages."""
         while not stop_event.is_set():
+            message = None
             try:
                 message = queue.get(timeout=0.1)
                 if stop_event.is_set():
@@ -204,13 +217,13 @@ class SyncLocalConnection(BaseLocalConnection):
     def subscribe(self, topic: str, callback: SyncCallback, shared: bool = False) -> str:
         with self._lock:
             context_id = threading.get_ident()
-            tag = self._get_tag(topic, shared, context_id)
+            tag = self.get_tag(topic, shared, context_id)
 
             if tag in self._subscriptions:
                 log.warning("Already subscribed with tag '%s'", tag)
                 return tag
 
-            queue = self._create_queue(topic, shared)
+            queue = self.setup_queue(topic, shared)
             stop_event = threading.Event()
 
             thread = threading.Thread(
@@ -263,13 +276,27 @@ class SyncLocalConnection(BaseLocalConnection):
         return False
 
 
-class AsyncLocalConnection(BaseLocalConnection):
+class Connection(BaseLocalConnection):
     """Asynchronous local connection using asyncio."""
 
     _lock = asyncio.Lock()
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._is_connected_event: asyncio.Event | None = None
+
+    async def setup_queue(self, topic: str, shared: bool) -> Queue:
+        return super().setup_queue(topic, shared)
+
+    @property
+    def is_connected_event(self) -> asyncio.Event:
+        """Lazily create the event in the current running loop."""
+        if self._is_connected_event is None:
+            self._is_connected_event = asyncio.Event()
+        return self._is_connected_event
+
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "AsyncLocalConnection":
+    async def get_connection(cls, vhost: str = "/") -> "Connection":
         if vhost not in cls._instances_by_vhost:
             async with cls._lock:
                 if vhost not in cls._instances_by_vhost:
@@ -278,13 +305,17 @@ class AsyncLocalConnection(BaseLocalConnection):
                     cls._instances_by_vhost[vhost] = instance
         return cls._instances_by_vhost[vhost]
 
+    async def is_connected(self) -> bool:
+        """Check if connection is established"""
+        return self.is_connected_event.is_set()
+
     async def connect(self, timeout: float = 10.0) -> None:
-        if self._is_connected:
+        if await self.is_connected():
             return
         log.info("Connecting AsyncLocalConnection for vhost: %s", self.vhost)
-        self._is_connected = True
+        self.is_connected_event.set()
 
-    async def disconnect(self) -> None:
+    async def disconnect(self, **kwargs) -> None:
         log.info("Disconnecting AsyncLocalConnection for vhost: %s", self.vhost)
         tags = list(self._subscriptions.keys())
         # Cancel all tasks first
@@ -303,10 +334,10 @@ class AsyncLocalConnection(BaseLocalConnection):
             await self._unsubscribe_by_tag(tag, if_unused=False)
 
         async with self._lock:
-            self._is_connected = False
+            self.is_connected_event.clear()
             self._instances_by_vhost.pop(self.vhost, None)
 
-    async def publish(self, topic: str, message: Envelope) -> None:
+    async def publish(self, topic: str, message: Envelope, **kwargs) -> None:
         # Broker's publish is thread-safe
         published = await asyncio.to_thread(_broker.publish, topic, message)
         if not published:
@@ -316,6 +347,7 @@ class AsyncLocalConnection(BaseLocalConnection):
         self, topic: str, callback: AsyncCallback, stop_event: asyncio.Event, queue: Queue
     ) -> None:
         """Async worker for processing messages."""
+        message = None
         while not stop_event.is_set():
             try:
                 # Use thread pool for blocking queue.get
@@ -339,13 +371,13 @@ class AsyncLocalConnection(BaseLocalConnection):
     async def subscribe(self, topic: str, callback: AsyncCallback, shared: bool = False) -> str:
         async with self._lock:
             context_id = id(asyncio.current_task())
-            tag = self._get_tag(topic, shared, context_id)
+            tag = self.get_tag(topic, shared, context_id)
 
             if tag in self._subscriptions:
                 log.warning("Already subscribed with tag '%s'", tag)
                 return tag
 
-            queue = self._create_queue(topic, shared)
+            queue = await self.setup_queue(topic, shared)
             stop_event = asyncio.Event()
 
             task = asyncio.create_task(self._message_worker(topic, callback, stop_event, queue))
@@ -405,11 +437,11 @@ class AsyncLocalConnection(BaseLocalConnection):
 
 
 # Convenience functions
-async def get_connection() -> AsyncLocalConnection:
-    return await AsyncLocalConnection.get_connection(vhost=VHOST)
+async def get_connection() -> Connection:
+    return await Connection.get_connection(vhost=VHOST)
 
 
-async def reset_connection() -> AsyncLocalConnection:
+async def reset_connection() -> Connection:
     connection = await get_connection()
     await connection.disconnect()
     return await get_connection()
@@ -420,11 +452,11 @@ async def disconnect() -> None:
     await connection.disconnect()
 
 
-def get_connection_sync() -> SyncLocalConnection:
-    return SyncLocalConnection.get_connection(vhost=VHOST)
+def get_connection_sync() -> SyncConnection:
+    return SyncConnection.get_connection(vhost=VHOST)
 
 
-def reset_connection_sync() -> SyncLocalConnection:
+def reset_connection_sync() -> SyncConnection:
     connection = get_connection_sync()
     connection.disconnect()
     return get_connection_sync()

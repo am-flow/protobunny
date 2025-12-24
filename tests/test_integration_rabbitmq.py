@@ -7,8 +7,8 @@ from pytest_mock import MockerFixture
 from waiting import wait
 
 import protobunny as pb
-from protobunny.backends.rabbitmq.connection import AsyncRmqConnection, SyncRmqConnection
-from protobunny.backends.rabbitmq.queues import AsyncQueue, configuration
+from protobunny.backends.rabbitmq.connection import Connection, SyncConnection
+from protobunny.backends.rabbitmq.queues import AsyncQueue
 from protobunny.models import ProtoBunnyMessage
 
 from . import tests
@@ -26,6 +26,7 @@ class TestIntegration:
     @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture) -> tp.AsyncGenerator[None, None]:
         from protobunny.backends import rabbitmq as rabbitmq_backend
+        from protobunny.base import configuration
 
         configuration.mode = "async"
         configuration.backend = "rabbitmq"
@@ -34,15 +35,15 @@ class TestIntegration:
         mocker.patch("protobunny.base.get_backend", return_value=rabbitmq_backend)
         mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
         connection = await pb.get_connection()
-        assert isinstance(connection, AsyncRmqConnection)
+        assert isinstance(connection, Connection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage"
         assert isinstance(queue, AsyncQueue)
-        assert isinstance(await queue.get_connection(), AsyncRmqConnection)
+        assert isinstance(await queue.get_connection(), Connection)
         await pb.unsubscribe_all()
         yield
         await connection.disconnect()
-        AsyncRmqConnection.instance_by_vhost.clear()
+        Connection.instance_by_vhost.clear()
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -52,7 +53,7 @@ class TestIntegration:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_publish(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -65,7 +66,7 @@ class TestIntegration:
         assert self.received.content == "test"
 
     async def test_to_dict(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -174,7 +175,7 @@ class TestIntegration:
         )
 
     async def test_unsubscribe(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -303,6 +304,7 @@ class TestIntegrationSync:
 
     @pytest.fixture(autouse=True)
     def setup_connections(self, mocker: MockerFixture) -> tp.Generator[None, None, None]:
+        from protobunny.backends import configuration
         from protobunny.backends import rabbitmq as rabbitmq_backend
 
         self.msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
@@ -318,7 +320,7 @@ class TestIntegrationSync:
         mocker.patch.object(pb, "disconnect_sync", rabbitmq_backend.connection.disconnect_sync)
         mocker.patch.object(pb.base.configuration, "backend", "rabbitmq")
         conn = pb.get_connection_sync()
-        assert isinstance(conn, SyncRmqConnection)
+        assert isinstance(conn, SyncConnection)
         assert conn.is_connected()
         pb.unsubscribe_all_sync()
         yield

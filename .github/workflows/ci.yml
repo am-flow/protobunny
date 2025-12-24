@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -15,42 +16,42 @@ jobs:
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
-    - name: Create virtual environment
-      run: uv venv --python ${{ matrix.python-version }}
+      - name: Create virtual environment
+        run: uv venv --python ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: uv sync --all-extras
+      - name: Install dependencies
+        run: uv sync --all-extras
 
-    - name: Run tests
-      run: make test
+      - name: Run tests
+        run: make test
 
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
-      if: matrix.python-version == '3.10'
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.12'
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
 
   lint:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -66,6 +67,27 @@ jobs:
 
       - name: Run linting
         run: make lint
+
+
+  integration_test_python_queues:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run tests
+        run: uv run python -m pytest tests/test_integration_python.py
+
+
   integration_test_rabbitmq:
     runs-on: ubuntu-latest
     services:
@@ -83,9 +105,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -102,7 +124,7 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl add_vhost /test
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
-      - name: Run integration tests
+      - name: Run tests
         run: uv run python -m pytest tests/test_integration_rabbitmq.py
         env:
           RABBITMQ_HOST: localhost
@@ -125,9 +147,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -137,7 +159,7 @@ jobs:
         run: uv venv --python 3.12
       - name: Install dependencies
         run: uv sync --all-extras
-      - name: Run integration tests
+      - name: Run tests
         run: uv run python -m pytest tests/test_integration_redis.py
         env:
           REDIS_HOST: localhost

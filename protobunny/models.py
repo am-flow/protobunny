@@ -13,7 +13,7 @@ from betterproto.lib.std.google.protobuf import Any
 
 if tp.TYPE_CHECKING:
     from .backends import LoggingAsyncQueue, LoggingSyncQueue
-from .config import load_config
+from .config import configuration
 from .utils import ProtobunnyJsonEncoder
 
 # - types
@@ -25,8 +25,6 @@ LogQueue = tp.TypeVar("LogQueue", "LoggingAsyncQueue", "LoggingSyncQueue")
 LoggerCallback: tp.TypeAlias = tp.Callable[[tp.Any, str], tp.Any]
 
 log = logging.getLogger(__name__)
-
-configuration = load_config()
 
 
 class MessageMixin:

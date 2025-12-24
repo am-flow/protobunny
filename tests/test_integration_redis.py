@@ -9,8 +9,8 @@ from waiting import wait
 
 import protobunny as pb
 from protobunny import get_backend, get_queue
-from protobunny.backends.redis.connection import AsyncRedisConnection, SyncRedisConnection
-from protobunny.backends.redis.queues import AsyncQueue, SyncQueue, configuration
+from protobunny.backends.redis.connection import Connection, SyncConnection
+from protobunny.backends.redis.queues import AsyncQueue, SyncQueue
 from protobunny.models import IncomingMessageProtocol, ProtoBunnyMessage
 
 from . import tests
@@ -27,6 +27,7 @@ class TestIntegration:
 
     @pytest.fixture(autouse=True)
     async def setup_connections(self, mocker: MockerFixture) -> tp.AsyncGenerator[None, None]:
+        from protobunny.backends import configuration
         from protobunny.backends import redis as redis_backend
 
         configuration.mode = "async"
@@ -37,17 +38,17 @@ class TestIntegration:
         mocker.patch.object(pb, "get_connection", redis_backend.connection.get_connection)
         mocker.patch.object(pb, "disconnect", redis_backend.connection.disconnect)
         connection = await pb.get_connection()
-        assert isinstance(connection, AsyncRedisConnection)
+        assert isinstance(connection, Connection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage"
         assert isinstance(queue, AsyncQueue)
-        assert isinstance(await queue.get_connection(), AsyncRedisConnection)
+        assert isinstance(await queue.get_connection(), Connection)
         await pb.unsubscribe_all(if_unused=False, if_empty=False)
         await connection.purge(queue.topic, reset_groups=True)
         yield
         await redis_backend.connection.disconnect()
         assert not await connection.is_connected()
-        AsyncRedisConnection.instance_by_vhost.clear()
+        Connection.instance_by_vhost.clear()
 
     async def callback(self, msg: "ProtoBunnyMessage") -> tp.Any:
         self.received = msg
@@ -57,7 +58,7 @@ class TestIntegration:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_publish(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -70,7 +71,7 @@ class TestIntegration:
         assert self.received.content == "test"
 
     async def test_to_dict(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -181,7 +182,7 @@ class TestIntegration:
         )
 
     async def test_unsubscribe(self) -> None:
-        await pb.subscribe(self.msg, self.callback)
+        await pb.subscribe(self.msg.__class__, self.callback)
         await pb.publish(self.msg)
 
         async def predicate() -> bool:
@@ -312,6 +313,7 @@ class TestIntegrationSync:
 
     @pytest.fixture(autouse=True)
     def setup_connections(self, mocker: MockerFixture) -> tp.Generator[None, None, None]:
+        from protobunny.backends import configuration
         from protobunny.backends import redis as redis_backend
 
         self.msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
@@ -328,7 +330,7 @@ class TestIntegrationSync:
         backend = get_backend()
         assert backend is redis_backend
         conn = pb.get_connection_sync()
-        assert isinstance(conn, SyncRedisConnection)
+        assert isinstance(conn, SyncConnection)
         queue = get_queue(tests.TestMessage)
         assert queue.topic == "acme.tests.TestMessage"
         assert conn.is_connected()
@@ -338,7 +340,7 @@ class TestIntegrationSync:
         redis_backend.connection.disconnect_sync()
         assert not conn.is_connected()
         assert len(conn._instance_by_vhost) == 0
-        AsyncRedisConnection.instance_by_vhost.clear()
+        Connection.instance_by_vhost.clear()
 
     def log_callback(self, message: IncomingMessageProtocol, body: str) -> None:
         corr_id = message.correlation_id

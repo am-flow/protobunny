@@ -21,6 +21,8 @@ format:
 lint:
 	uv run ruff check . --diff
 	uv run ruff format . --check --diff
+	uv run toml-sort --check ./pyproject.toml --sort-first project
+	uv run yamllint -d "{extends: relaxed, rules: {line-length: {max: 120}}}" .
 
 .PHONY: test integration-test
 test:
@@ -31,9 +33,12 @@ integration-test:
 	uv run pytest tests/ -m "integration"
 
 # Releasing
-.PHONY: docs clean build-package publish-test publish-pypi
+.PHONY: docs clean build-package publish-test publish-pypi convert-md
+convert-md:
+	uv run python scripts/convert_md.py
 docs:
 	uv run sphinx-build -b html docs/source docs/build/html
+
 clean:
 	rm -rf dist build *.egg-info
 
