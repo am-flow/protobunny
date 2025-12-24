@@ -6,10 +6,13 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "protobunny"
+from protobunny import PACKAGE_NAME, __version__
+
+project = PACKAGE_NAME
 copyright = "2026, AM-Flow"
 author = "Domenico Nappo, Sander Koelstra, Sem Mulder"
-release = "0.1.1"
+release = __version__
+
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
