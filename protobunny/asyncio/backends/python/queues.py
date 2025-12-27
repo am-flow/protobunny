@@ -1,22 +1,22 @@
 import logging
 
-import aio_pika
-from aio_pika import DeliveryMode
-
-from protobunny.backends import (
-    BaseSyncQueue,
+from protobunny.asyncio.backends import (
+    BaseAsyncQueue,
+)
+from protobunny.models import (
+    Envelope,
 )
 
 log = logging.getLogger(__name__)
 
 
-class SyncQueue(BaseSyncQueue):
+class AsyncQueue(BaseAsyncQueue):
     """Message queue backed by pika and RabbitMQ."""
 
     def get_tag(self) -> str:
-        return self.subscription
+        return self.topic
 
-    def send_message(
+    async def send_message(
         self, topic: str, body: bytes, correlation_id: str | None = None, persistent: bool = True
     ):
         """Low-level message sending implementation.
@@ -30,9 +30,10 @@ class SyncQueue(BaseSyncQueue):
         Returns:
 
         """
-        message = aio_pika.Message(
+        message = Envelope(
             body,
             correlation_id=correlation_id,
-            delivery_mode=DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT,
+            routing_key=topic,
         )
-        self.get_connection().publish(topic, message)
+        connection = await self.get_connection()
+        await connection.publish(topic, message)

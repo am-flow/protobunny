@@ -8,3 +8,9 @@ class ConnectionError(Exception):
     """Raised when connection operations fail."""
 
     ...
+
+
+class PublishError(Exception):
+    """Raised when a callback fails to process a message and doesn't raise the RequeueMessage exception."""
+
+    ...

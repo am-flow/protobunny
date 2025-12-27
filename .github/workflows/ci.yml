@@ -85,7 +85,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_python.py
+        run: uv run python -m pytest tests/test_integration.py -k python
 
 
   integration_test_rabbitmq:
@@ -125,7 +125,7 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_rabbitmq.py
+        run: uv run python -m pytest tests/test_integration.py -k rabbitmq
         env:
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: 5672
@@ -160,7 +160,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_redis.py
+        run: uv run python -m pytest tests/test_integration.py -k redis
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379

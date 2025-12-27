@@ -4,7 +4,7 @@ API Reference
 Core Package
 ------------
 
-  .. automodule:: protobunny.base
+  .. automodule:: protobunny
        :members:
 
 Models

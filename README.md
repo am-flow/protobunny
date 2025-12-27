@@ -1,6 +1,4 @@
-<div style="width: 50%; margin: 0 auto;">
-  <img src="https://raw.githubusercontent.com/am-flow/protobunny/main/images/logo.png" alt="protobunny logo">
-</div>
+![logo](https://raw.githubusercontent.com/am-flow/protobunny/main/images/logo_small.png)
 
 ---
 
@@ -12,7 +10,7 @@ The `protobunny` library simplifies messaging for asynchronous tasks by providin
 
 * A clean “message-first” API
 * Python class generation from Protobuf messages using betterproto
-* Connections facilities to RabbitMQ
+* Connections facilities for backends
 * Message publishing/subscribing with typed topics
 * Generate and consume `Result` messages (success/failure + optional return payload)
 * Protocol Buffers messages serialization/deserialization
@@ -23,20 +21,20 @@ The `protobunny` library simplifies messaging for asynchronous tasks by providin
 ## Requirements
 
 - Python >= 3.10, < 3.13
-- A running RabbitMQ instance (v4.0+ is preferred)
 
 ## Project scope
 
 Protobunny is designed for teams who use messaging to coordinate work between microservices or different python processes and want:
 
 - A small API surface, easy to learn and use, both async and sync
-- Typed RabbitMQ and Redis messaging with protobuf messages as payloads
+- Typed messaging with protobuf messages as payloads
+- Supports various backends by simple configuration: RabbitMQ, Redis, Mosquitto, local in-process queues
 - Consistent topic naming and routing
 - Builtin task queue semantics and result messages
 - Transparent handling of JSON-like payload fields as plain dictionaries/lists
 - Optional validation of required fields
 - Builtin logging service
-- Alternative configurable backends (e.g. `rabbitmq`, `redis` or `python` for local in-process queues)
+
 ---
 
 ## Usage
@@ -68,10 +66,10 @@ make integration-test
 - Support grcp
 - Support for RabbitMQ certificates (through `pika`)
 - More backends:
-  - Mosquitto
   - NATS
   - Kafka
   - Cloud providers (AWS SQS/SNS)
+
 ---
 
 ## License

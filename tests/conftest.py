@@ -3,52 +3,44 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aio_pika
 import aiormq
+import fakeredis
 import pamqp
 import pytest
-import redis
+import pytest_asyncio
 from pytest_mock import MockerFixture
 
 import protobunny
+from protobunny.asyncio.backends.python import connection as python_connection_aio
+from protobunny.asyncio.backends.rabbitmq import connection as rabbitmq_connection_aio
+from protobunny.asyncio.backends.redis import connection as redis_connection_aio
 from protobunny.backends.python import connection as python_connection
 from protobunny.backends.rabbitmq import connection as rabbitmq_connection
 from protobunny.backends.redis import connection as redis_connection
 
-test_config = protobunny.config.Config(
-    messages_directory="tests/proto",
-    messages_prefix="acme",
-    generated_package_name="tests",
-    project_name="test",
-    project_root="./",
-    force_required_fields=True,
-    mode="sync",
-    backend="rabbitmq",
-)
-#
-# # Overwrite the module-level configuration
-protobunny.base.configuration = test_config
-protobunny.models.configuration = test_config
-protobunny.backends.configuration = test_config
+
+@pytest_asyncio.fixture
+def test_config() -> protobunny.config.Config:
+    conf = protobunny.config.Config(
+        messages_directory="tests/proto",
+        messages_prefix="acme",
+        generated_package_name="tests",
+        project_name="test",
+        project_root="./",
+        force_required_fields=True,
+        mode="async",
+        backend="rabbitmq",
+        log_task_in_redis=False,
+    )
+    return conf
 
 
 @pytest.fixture
-async def mock_redis(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
-    mock = mocker.AsyncMock(spec=redis.asyncio.Redis)
-    # Ensure all used internal methods are also AsyncMocks
-    mock.ping = mocker.AsyncMock(return_value=True)
-    mock.xadd = mocker.AsyncMock(return_value="12345-0")
-    mock.xack = mocker.AsyncMock()
-    mock.sadd = mocker.AsyncMock()
-    mock.xreadgroup = mocker.AsyncMock(return_value=[("test.topic", [(b"12345-0", b"test")])])
-    mock.aclose = mocker.AsyncMock()
-    mock.xgroup_create = mocker.AsyncMock()
-    mock.smembers = mocker.AsyncMock(return_value=[b"test.routing.key", b"sync.topic"])
-    mock.xgroup_delconsumer = mocker.AsyncMock()
-    mock.xlen = mocker.AsyncMock(return_value=1)
-    mock.xdel = mocker.AsyncMock()
-    mock.xgroup_destroy = mocker.AsyncMock()
-    mock.xinfo_groups = mocker.AsyncMock(return_value=[{"name": "test"}])
-    mocker.patch("protobunny.backends.redis.connection.redis.from_url", return_value=mock)
-    yield mock
+async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedis, None]:
+    client = fakeredis.FakeAsyncRedis(decode_responses=False)
+    mocker.patch("protobunny.asyncio.backends.redis.connection.redis.from_url", return_value=client)
+    # Clear database before each test
+    await client.flushdb()
+    yield client
 
 
 @pytest.fixture
@@ -84,47 +76,47 @@ async def mock_aio_pika():
 
 @pytest.fixture
 def mock_sync_rmq_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
-    mock = mocker.MagicMock(spec=rabbitmq_connection.SyncConnection)
-    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection_sync", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection_sync", return_value=mock)
+    mock = mocker.MagicMock(spec=rabbitmq_connection.Connection)
+    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
+    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection", return_value=mock)
     yield mock
 
 
 @pytest.fixture
 async def mock_rmq_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
-    mock = mocker.AsyncMock(spec=rabbitmq_connection.Connection)
+    mock = mocker.AsyncMock(spec=rabbitmq_connection_aio.Connection)
     mocker.patch("protobunny.backends.BaseAsyncQueue.get_connection", return_value=mock)
     yield mock
 
 
 @pytest.fixture
 def mock_sync_redis_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
-    mock = mocker.MagicMock(spec=redis_connection.SyncConnection)
-    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection_sync", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection_sync", return_value=mock)
+    mock = mocker.MagicMock(spec=redis_connection.Connection)
+    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
+    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection", return_value=mock)
     yield mock
 
 
 @pytest.fixture
 async def mock_redis_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
-    mock = mocker.AsyncMock(spec=redis_connection.Connection)
+    mock = mocker.AsyncMock(spec=redis_connection_aio.Connection)
     mocker.patch("protobunny.backends.BaseAsyncQueue.get_connection", return_value=mock)
     yield mock
 
 
 @pytest.fixture
 def mock_sync_python_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
-    mock = mocker.MagicMock(spec=python_connection.SyncConnection)
-    mocker.patch("protobunny.base.get_backend", return_value=protobunny.backends.python)
-    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection_sync", return_value=mock)
+    mock = mocker.MagicMock(spec=python_connection.Connection)
+    mocker.patch("protobunny.helpers.get_backend", return_value=protobunny.backends.python)
+    mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
     yield mock
 
 
 @pytest.fixture
 async def mock_python_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncMock, None]:
-    mock = mocker.AsyncMock(spec=python_connection.Connection)
-    mocker.patch("protobunny.backends.BaseAsyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.base.get_backend", return_value=protobunny.backends.python)
+    mock = mocker.AsyncMock(spec=python_connection_aio.Connection)
+    mocker.patch("protobunny.asyncio.backends.BaseAsyncQueue.get_connection", return_value=mock)
+    mocker.patch("protobunny.helpers.get_backend", return_value=protobunny.backends.python)
     yield mock
 
 

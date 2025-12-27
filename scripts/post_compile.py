@@ -113,15 +113,18 @@ def write_main_init(main_imports: list[str], main_package: str, source_dir: str 
     path = Path(source_dir) / top_level_package
     if not path.exists():
         return
-    init_path = path / "__init__.py"
+    # Write the main __init__.py file for the messaging library (both sync and async)
+    # init_path = path / "__init__.py"
+    init_paths = [path / "asyncio" / "__init__.py", path / "__init__.py"]
     # look for a jinja template in the main directory
-    if (path / "__init__.py.j2").exists():
-        write_from_template(generated_package_name, init_path, main_imports, path)
-    else:
-        with open(init_path, mode="w+") as fh:
-            write_header(fh)
-            for subpackage in main_imports:
-                fh.write(f"from .{generated_package_name} import {subpackage.split('.')[-1]}  # noqa\n")
+    for init_path in init_paths:
+        if (init_path.parent / "__init__.py.j2").exists():
+            write_from_template(generated_package_name, init_path, main_imports, init_path.parent)
+        elif init_path.parent.exists():
+            with open(init_path, mode="w+") as fh:
+                write_header(fh)
+                for subpackage in main_imports:
+                    fh.write(f"from .{generated_package_name} import {subpackage.split('.')[-1]}  # noqa\n")
 
 
 def write_from_template(generated_package_name: str, init_path: Path, main_imports: list[str], path: Path):

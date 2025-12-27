@@ -33,6 +33,18 @@ wheels = [
 ]
 
 [[package]]
+name = "aiomqtt"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "paho-mqtt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/45/9a/863bc34c64bc4acb9720a9950bfc77d6f324640cdf1f420bb5d9ee624975/aiomqtt-2.4.0.tar.gz", hash = "sha256:ab0f18fc5b7ffaa57451c407417d674db837b00a9c7d953cccd02be64f046c17", size = 82718, upload-time = "2025-05-03T20:21:27.748Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/0c/2720665998d97d3a9521c03b138a22247e035ba54c4738e934da33c68699/aiomqtt-2.4.0-py3-none-any.whl", hash = "sha256:721296e2b79df5f6c7c4dfc91700ae0166953a4127735c92637859619dbd84e4", size = 15908, upload-time = "2025-05-03T20:21:26.337Z" },
+]
+
+[[package]]
 name = "aiormq"
 version = "6.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -372,6 +384,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/cc/28/c14e053b6762b1044f34a13aab6859bbf40456d37d23aa286ac24cfd9a5d/executing-2.2.1.tar.gz", hash = "sha256:3632cc370565f6648cc328b32435bd120a1e4ebb20c77e3fdde9a13cd1e533c4", size = 1129488, upload-time = "2025-09-01T09:48:10.866Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl", hash = "sha256:760643d3452b4d777d295bb167ccc74c64a81df23fb5e08eff250c425a4b2017", size = 28317, upload-time = "2025-09-01T09:48:08.5Z" },
+]
+
+[[package]]
+name = "fakeredis"
+version = "2.33.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "redis" },
+    { name = "sortedcontainers" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5f/f9/57464119936414d60697fcbd32f38909bb5688b616ae13de6e98384433e0/fakeredis-2.33.0.tar.gz", hash = "sha256:d7bc9a69d21df108a6451bbffee23b3eba432c21a654afc7ff2d295428ec5770", size = 175187, upload-time = "2025-12-16T19:45:52.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/78/a850fed8aeef96d4a99043c90b818b2ed5419cd5b24a4049fd7cfb9f1471/fakeredis-2.33.0-py3-none-any.whl", hash = "sha256:de535f3f9ccde1c56672ab2fdd6a8efbc4f2619fc2f1acc87b8737177d71c965", size = 119605, upload-time = "2025-12-16T19:45:51.08Z" },
 ]
 
 [[package]]
@@ -897,6 +923,15 @@ wheels = [
 ]
 
 [[package]]
+name = "paho-mqtt"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/15/0a6214e76d4d32e7f663b109cf71fb22561c2be0f701d67f93950cd40542/paho_mqtt-2.1.0.tar.gz", hash = "sha256:12d6e7511d4137555a3f6ea167ae846af2c7357b10bc6fa4f7c3968fc1723834", size = 148848, upload-time = "2024-04-29T19:52:55.591Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/cb/00451c3cf31790287768bb12c6bec834f5d292eaf3022afc88e14b8afc94/paho_mqtt-2.1.0-py3-none-any.whl", hash = "sha256:6db9ba9b34ed5bc6b6e3812718c7e06e2fd7444540df2455d2c51bd58808feee", size = 67219, upload-time = "2024-04-29T19:52:48.345Z" },
+]
+
+[[package]]
 name = "pamqp"
 version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1082,6 +1117,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+mosquitto = [
+    { name = "aiomqtt" },
+]
 numpy = [
     { name = "numpy" },
 ]
@@ -1094,6 +1132,7 @@ redis = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fakeredis" },
     { name = "ipdb" },
     { name = "ipython" },
     { name = "mypy" },
@@ -1119,6 +1158,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "aio-pika", marker = "extra == 'rabbitmq'", specifier = ">=7.1.0" },
+    { name = "aiomqtt", marker = "extra == 'mosquitto'", specifier = ">=2.4.0" },
     { name = "betterproto", extras = ["compiler"], specifier = ">=2.0.0b7,<3" },
     { name = "click", specifier = ">=8.2.1" },
     { name = "grpcio-tools", specifier = ">=1.62.0,<2" },
@@ -1128,10 +1168,11 @@ requires-dist = [
     { name = "redis", marker = "extra == 'redis'", specifier = "<8" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
-provides-extras = ["rabbitmq", "redis", "numpy"]
+provides-extras = ["rabbitmq", "redis", "numpy", "mosquitto"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fakeredis", specifier = ">=2.33.0" },
     { name = "ipdb", specifier = ">=0.13.11,<0.14" },
     { name = "ipython", specifier = ">=8.11.0,<9" },
     { name = "mypy", specifier = ">=1.9.0,<2" },
@@ -1404,6 +1445,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/75/a7/9810d872919697c9d01295633f5d574fb416d47e535f258272ca1f01f447/snowballstemmer-3.0.1.tar.gz", hash = "sha256:6d5eeeec8e9f84d4d56b847692bacf79bc2c8e90c7f80ca4444ff8b6f2e52895", size = 105575, upload-time = "2025-05-09T16:34:51.843Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/78/3565d011c61f5a43488987ee32b6f3f656e7f107ac2782dd57bdd7d91d9a/snowballstemmer-3.0.1-py3-none-any.whl", hash = "sha256:6cd7b3897da8d6c9ffb968a6781fa6532dce9c3618a4b127d920dab764a19064", size = 103274, upload-time = "2025-05-09T16:34:50.371Z" },
+]
+
+[[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
 ]
 
 [[package]]

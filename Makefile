@@ -16,6 +16,7 @@ compile:
 format:
 	uv run ruff check . --select I --fix
 	uv run ruff format .
+	uv run toml-sort -i ./pyproject.toml --sort-first project
 
 .PHONY: lint
 lint:
@@ -24,11 +25,14 @@ lint:
 	uv run toml-sort --check ./pyproject.toml --sort-first project
 	uv run yamllint -d "{extends: relaxed, rules: {line-length: {max: 120}}}" .
 
-.PHONY: test integration-test
+.PHONY: test integration-test t
 test:
 	uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
 	uv run pytest tests/ -m "not integration"
+t:
+	# Usage: make t t=tests/test_connection.py::test_sync_get_message_count
+	PYTHONBREAKPOINT=ipdb.set_trace uv run pytest  ${t} -s -vvvv --durations=0
 integration-test:
 	uv run pytest tests/ -m "integration"
 
@@ -36,7 +40,8 @@ integration-test:
 .PHONY: docs clean build-package publish-test publish-pypi convert-md
 convert-md:
 	uv run python scripts/convert_md.py
-docs:
+
+docs: convert-md
 	uv run sphinx-build -b html docs/source docs/build/html
 
 clean:

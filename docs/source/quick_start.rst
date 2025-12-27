@@ -11,7 +11,7 @@ Add ``protobunny`` to your ``pyproject.toml`` dependencies:
 
 .. code:: shell
 
-   uv add protobunny
+   uv add protobunny[rabbitmq, numpy]
    # or
    poetry add protobunny
 
@@ -20,7 +20,7 @@ You can also add it manually to pyproject.toml dependencies:
 .. code:: toml
 
    dependencies = [
-     "protobunny>=0.1.0",
+     "protobunny[rabbitmq, numpy]>=0.1.0",
      # your other dependencies ...
    ]
 
@@ -32,8 +32,8 @@ Configure the library in pyproject.toml:
    messages-directory = "messages"
    messages-prefix = "acme"
    generated-package-name = "mymessagelib.codegen"
-   mode = "sync"  # or "async"
-   backend = "rabbitmq" # available backends are ['rabbitmq', 'redis', 'python']
+   mode = "async"  # or "sync"
+   backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'mosquitto', 'python']
 
 Install the library with ``uv``, ``poetry`` or ``pip``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,11 +46,15 @@ Install the library with ``uv``, ``poetry`` or ``pip``
 RabbitMQ connection
 ~~~~~~~~~~~~~~~~~~~
 
-Protobunny connects to RabbitMQ or Redis by reading environment variables.
+Protobunny connects to RabbitMQ by reading environment variables.
 
 .. code:: shell
 
    export RABBITMQ_HOST=localhost RABBITMQ_PORT=5672 RABBITMQ_USER=guest RABBITMQ_PASS=guest RABBITMQ_VHOST=/test
+
+For other backends, replace ``RABBITMQ_`` prefix with the backend name
+(e.g. ``REDIS_HOST``). If you are using the ``python`` backend, you
+don’t need to set any environment variables.
 
 For docker-compose or pipelines yaml:
 
@@ -64,9 +68,6 @@ For docker-compose or pipelines yaml:
      RABBITMQ_VHOST: /test
 
 --------------
-
-For Redis, replace ``RABBITMQ`` with ``REDIS`` for the variables above
-
 
 Quick example
 -------------
@@ -114,12 +115,16 @@ manipulate the generated code.
 In ``mymessagelib/codegen`` you should see the generated message
 classes, mirroring the ``package`` declaration in your protobuf files.
 
-If you need to generate the classes in another package, you can pass the
-``--python_betterproto_out`` option:
+If you need to generate the classes in another package (e.g. for tests),
+you can pass the ``--python_betterproto_out`` option:
 
 .. code:: shell
 
-   protobunny -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
+   protobunny generate -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
+
+The following examples are for sync mode and can run from the python
+shell. To use the async mode, import protobunny with
+``from protobunny import asyncio as pb``.
 
 Subscribe to a message
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -131,7 +136,7 @@ Subscribe to a message
    def on_message(message: mml.tests.TestMessage) -> None:
        print("Got:", message)
 
-   pb.subscribe_sync(mml.tests.TestMessage, on_message)
+   pb.subscribe(mml.tests.TestMessage, on_message)
    # Prints 
    # 'Got: TestMessage(content="hello", number=1, data={"test": "test"}, detail=None)' 
    # when a message is received
@@ -147,7 +152,7 @@ message to the topic ``acme.test.TestMessage``.
    import protobunny as pb
    import mymessagelib as mml
    msg =  mml.tests.TestMessage(content="hello", number=1, data={"test": "test"})
-   pb.publish_sync(msg)
+   pb.publish(msg)
 
 Task-style queues
 -----------------
@@ -190,11 +195,11 @@ workers (competing consumers).
    def worker2(task: mml.main.tasks.TaskMessage) -> None:
        print("2- Working on:", task)
 
-   pb.subscribe_sync(mml.main.tasks.TaskMessage, worker1)
-   pb.subscribe_sync(mml.main.tasks.TaskMessage, worker2)
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test1"))
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test2"))
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test3"))
+   pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+   pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+   pb.publish(mml.main.tasks.TaskMessage(content="test1"))
+   pb.publish(mml.main.tasks.TaskMessage(content="test2"))
+   pb.publish(mml.main.tasks.TaskMessage(content="test3"))
 
 You can also introspect/manage an underlying shared queue:
 
@@ -257,8 +262,8 @@ Some protobuf fields are designed to carry arbitrary structured payloads
 (maps/dicts/lists). Protobunny supports transparent conversion so you
 can work with normal Python structures:
 
--  Serialize: dictionaries/lists are encoded into the message field
--  Deserialize: those fields come back as Python structures
+- Serialize: dictionaries/lists are encoded into the message field
+- Deserialize: those fields come back as Python structures
 
 This is particularly useful for metrics, metadata, and structured return
 values in results.
@@ -281,12 +286,11 @@ payloads:
 
    pb.subscribe_logger(log_callback)
 
-
 You can start a logger worker with:
 
 .. code:: shell
 
-    protobunny log
+   protobunny log
 
 --------------
 
@@ -297,4 +301,4 @@ shared connection object:
 
    import protobunny as pb
 
-   conn = pb.get_connection_sync()
+   conn = pb.get_connection()

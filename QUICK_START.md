@@ -6,15 +6,16 @@
 Add `protobunny` to your `pyproject.toml` dependencies:
 
 ```shell
-uv add protobunny
+uv add protobunny[rabbitmq, numpy]
 # or
 poetry add protobunny
 ```
 
 You can also add it manually to pyproject.toml dependencies:
+
 ```toml
 dependencies = [
-  "protobunny>=0.1.0",
+  "protobunny[rabbitmq, numpy]>=0.1.0",
   # your other dependencies ...
 ]
 ```
@@ -26,7 +27,7 @@ messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib.codegen"
 mode = "async"  # or "sync"
-backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'python']
+backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'mosquitto', 'python']
 ```
 
 ### Install the library with `uv`, `poetry` or `pip`
@@ -41,6 +42,8 @@ Protobunny connects to RabbitMQ by reading environment variables.
 ```shell
 export RABBITMQ_HOST=localhost RABBITMQ_PORT=5672 RABBITMQ_USER=guest RABBITMQ_PASS=guest RABBITMQ_VHOST=/test
 ```
+For other backends, replace `RABBITMQ_` prefix with the backend name (e.g. `REDIS_HOST`).
+If you are using the `python` backend, you don't need to set any environment variables.
 
 For docker-compose or pipelines yaml:
 ```yaml
@@ -90,11 +93,14 @@ protobunny generate
 
 In `mymessagelib/codegen` you should see the generated message classes, mirroring the `package` declaration in your protobuf files.
 
-If you need to generate the classes in another package, you can pass the `--python_betterproto_out` option:
+If you need to generate the classes in another package (e.g. for tests), you can pass the `--python_betterproto_out` option:
 
 ```shell
 protobunny generate -I messages --python_betterproto_out=tests tests/**/*.proto tests/*.proto
 ```
+
+The following examples are for sync mode and can run from the python shell.
+To use the async mode, import protobunny with `from protobunny import asyncio as pb`.
 
 ### Subscribe to a message
 ```python
@@ -103,18 +109,19 @@ import mymessagelib as mml
 def on_message(message: mml.tests.TestMessage) -> None:
     print("Got:", message)
 
-pb.subscribe_sync(mml.tests.TestMessage, on_message)
+pb.subscribe(mml.tests.TestMessage, on_message)
 # Prints 
 # 'Got: TestMessage(content="hello", number=1, data={"test": "test"}, detail=None)' 
 # when a message is received
 ```
 ### Publish a message
+
 The following code can run in another process or thread and publishes a message to the topic `acme.test.TestMessage`.
 ```python
 import protobunny as pb
 import mymessagelib as mml
 msg =  mml.tests.TestMessage(content="hello", number=1, data={"test": "test"})
-pb.publish_sync(msg)
+pb.publish(msg)
 ```
 
 ## Task-style queues
@@ -153,11 +160,11 @@ def worker1(task: mml.main.tasks.TaskMessage) -> None:
 def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
 
-pb.subscribe_sync(mml.main.tasks.TaskMessage, worker1)
-pb.subscribe_sync(mml.main.tasks.TaskMessage, worker2)
-pb.publish_sync(mml.main.tasks.TaskMessage(content="test1"))
-pb.publish_sync(mml.main.tasks.TaskMessage(content="test2"))
-pb.publish_sync(mml.main.tasks.TaskMessage(content="test3"))
+pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+pb.publish(mml.main.tasks.TaskMessage(content="test1"))
+pb.publish(mml.main.tasks.TaskMessage(content="test2"))
+pb.publish(mml.main.tasks.TaskMessage(content="test3"))
 ```
 
 You can also introspect/manage an underlying shared queue:
@@ -244,5 +251,5 @@ If you need explicit connection lifecycle control, you can access the shared con
 ```python
 import protobunny as pb
 
-conn = pb.get_connection_sync()
+conn = pb.get_connection()
 ```

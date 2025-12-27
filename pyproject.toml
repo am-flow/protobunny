@@ -1,5 +1,8 @@
 [project]
 name = "protobunny"
+classifiers = [
+  "Development Status :: 3 - Alpha"
+]
 version = "0.1.2b1"
 description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
@@ -33,6 +36,9 @@ dependencies = [
 rabbitmq = ["aio-pika>=7.1.0"]
 redis = ["redis<8"]
 numpy = ["numpy>=1.26"]
+mosquitto = [
+  "aiomqtt>=2.4.0"
+]
 
 [project.scripts]
 protobunny = "protobunny.wrapper:main"
@@ -60,7 +66,8 @@ dev = [
   "mypy>=1.9.0,<2",
   "types-protobuf>=4.25.0.20240410,<5",
   "yamllint>=1.37.1",
-  "toml-sort>=0.24.3"
+  "toml-sort>=0.24.3",
+  "fakeredis>=2.33.0"
 ]
 docs = [
   "sphinx>=8.1.3",
@@ -82,7 +89,7 @@ exclude = "scripts|build|tests|todo"
 messages-directory = "protobunny/protobuf"
 generated-package-name = "protobunny.core"
 force-required-fields = true
-backend = "python"
+backend = "redis"
 mode = "async"
 
 [tool.pytest.ini_options]
@@ -90,10 +97,10 @@ addopts = "--junitxml=pytest_report.xml --cov=. --cov-report=term --cov-report=x
 testpaths = ["./tests/"]
 asyncio_mode = "auto"
 markers = [
-  "integration: tests requiring a real connection to the amqp server. They don't run in CI"
+  "integration: tests requiring a real connection to the servers. They don't run with 'make test'"
 ]
 cache_dir = ".cache/pytest"
-log_cli_level = "INFO"
+log_cli_level = "DEBUG"
 
 [tool.pytest_env]
 RABBITMQ_HOST = "localhost"

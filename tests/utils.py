@@ -1,20 +1,33 @@
 import asyncio
+import pprint
 import time
+from types import ModuleType
 from unittest.mock import ANY
 
 from aio_pika import Message
+from redis import asyncio as redis
+from waiting import TimeoutExpired, wait
 
+from protobunny.backends import BaseConnection
 from protobunny.models import Envelope
 
 
-async def async_wait(condition_func, timeout_seconds=1.0, sleep_seconds=0.1) -> bool:
+async def async_wait(condition_func, timeout=1.0, sleep=0.1) -> bool:
     start_time = time.time()
-    while time.time() - start_time < timeout_seconds:
+    while time.time() - start_time < timeout:
         res = await condition_func()
         if res:
             return True
-        await asyncio.sleep(sleep_seconds)  # This yields control to the loop!
+        await asyncio.sleep(sleep)  # This yields control to the loop!
     return False
+
+
+def sync_wait(condition_func, timeout=1.0, sleep=0.1) -> bool:
+    try:
+        wait(condition_func, timeout_seconds=timeout, sleep_seconds=sleep)
+    except TimeoutExpired:
+        return False
+    return True
 
 
 async def tear_down(event_loop):
@@ -39,57 +52,133 @@ def incoming_message_factory(backend, body: bytes = b"Hello"):
     return Envelope(body=body)
 
 
-def assert_backend_publish(backend, mock_connection, backend_msg, topic, count_in_queue: int = 1):
+async def assert_backend_publish(
+    backend: ModuleType,
+    internal_mock: dict | redis.Redis,
+    mock_connection: "BaseConnection",
+    backend_msg,
+    topic,
+    count_in_queue: int = 1,
+    shared_queue: bool = False,
+):
     backend_name = backend.__name__.split(".")[-1]
-    mock = mock_connection[backend.__name__.split(".")[-1]]
-    if backend_name == "rabbitmq":
-        mock["exchange"].publish.assert_awaited_with(
-            backend_msg, routing_key=topic, mandatory=True, immediate=False
-        )
-    elif backend_name == "redis":
-        mock.xadd.assert_awaited_with(
-            name="protobunny:test.routing.key",
-            fields=dict(
-                body=backend_msg.body, correlation_id=backend_msg.correlation_id, topic=topic
-            ),
-            maxlen=1000,
-        )
-    elif backend_name == "python":
-        assert mock._exclusive_queues[topic] is not None
-        assert (
-            mock.get_message_count(topic) == count_in_queue
-        ), f"count was {mock.get_message_count(topic)}"
+    match backend_name:
+        case "rabbitmq":
+            internal_mock["exchange"].publish.assert_awaited_with(
+                backend_msg, routing_key=topic, mandatory=True, immediate=False
+            )
+
+        case "redis":
+            key = mock_connection.build_topic_key(topic)
+            if shared_queue:
+                # Read the last message from the stream
+                incoming = await internal_mock.xread({key: 0})
+
+                topic, messages = incoming[0]
+
+                msg_id, msg = messages[0]
+                pprint.pprint(msg)
+
+                assert (
+                    len(messages) == count_in_queue
+                ), f"Expected {count_in_queue} message in stream {key}, got {len(messages)}"
+                assert (
+                    msg[b"body"] == backend_msg.body
+                ), f"Expected body {backend_msg.body}, got {msg[b'body']}"
+
+            else:
+                # retest the flow here
+                pubsub = internal_mock.pubsub()
+                await pubsub.subscribe(key)
+                await mock_connection.publish(topic, backend_msg)
+                msg: dict[str, bytes] | None = None
+
+                async def predicate():
+                    nonlocal msg
+                    msg = await pubsub.get_message(timeout=1, ignore_subscribe_messages=True)
+
+                    return msg is not None
+
+                assert await async_wait(predicate)
+
+                assert msg is not None
+                assert (
+                    msg["channel"].decode() == key
+                ), f"Expected {topic}, got {msg['channel'].decode()}"
+                assert (
+                    msg["data"] == backend_msg.body
+                ), f"Expected {backend_msg.body}, got {msg['data']}"
+
+        case "python":
+            assert internal_mock._exclusive_queues[topic] is not None
+            assert (
+                await internal_mock.get_message_count(topic) == count_in_queue
+            ), f"count was {await internal_mock.get_message_count(topic)}"
 
 
-def assert_backend_setup_queue(backend, mock_connection, topic: str, shared: bool) -> None:
+async def assert_backend_setup_queue(
+    backend, internal_mock, topic: str, shared: bool, mock_connection
+) -> None:
     backend_name = backend.__name__.split(".")[-1]
-    mock = mock_connection[backend.__name__.split(".")[-1]]
     if backend_name == "rabbitmq":
-        mock["channel"].declare_queue.assert_called_with(
+        internal_mock["channel"].declare_queue.assert_called_with(
             topic, exclusive=not shared, durable=True, auto_delete=False, arguments=ANY
         )
     elif backend_name == "redis":
-        mock.xgroup_create.assert_awaited_with(
-            name=f"protobunny:{topic}",
-            groupname="shared_group" if shared else ANY,
-            id="0" if shared else "$",
-            mkstream=True,
-        )
+        if shared:
+            streams = await internal_mock.xinfo_groups(f"test:{topic}")
+            assert len(streams) == 1
+            assert (
+                streams[0]["name"].decode() == "shared_group"
+            ), f"Expected 'shared_group', got '{streams[0]['name']}'"
+        else:
+            assert mock_connection.queues[topic] == {"is_shared": False}
+
     elif backend_name == "python":
         if not shared:
-            assert len(mock._exclusive_queues.get(topic)) == 1
+            assert len(internal_mock._exclusive_queues.get(topic)) == 1
         else:
-            assert mock._shared_queues.get(topic)
+            assert internal_mock._shared_queues.get(topic)
 
 
-def assert_backend_connection(backend, mock_connection):
+async def assert_backend_connection(backend, internal_mock):
     backend_name = backend.__name__.split(".")[-1]
-    mock = mock_connection[backend_name]
     if backend_name == "rabbitmq":
         # Verify aio_pika calls
-        mock["connect"].assert_awaited_once()
-        assert mock["channel"].set_qos.called
+        internal_mock["connect"].assert_awaited_once()
+        assert internal_mock["channel"].set_qos.called
         # Check if main and DLX exchanges were declared
-        assert mock["channel"].declare_exchange.call_count == 2
+        assert internal_mock["channel"].declare_exchange.call_count == 2
     elif backend_name == "redis":
-        mock.ping.assert_awaited_once()
+        assert await internal_mock.ping()
+
+
+def get_mocked_connection(backend, redis_client, mock_aio_pika, mocker):
+    backend_name = backend.__name__.split(".")[-1]
+    if backend_name == "redis":
+        real_conn_with_fake_redis = backend.connection.Connection(url="redis://localhost:6379/0")
+        assert real_conn_with_fake_redis._exchange == "test"
+        real_conn_with_fake_redis._connection = redis_client
+
+        def check_connected() -> bool:
+            return real_conn_with_fake_redis._connection is not None
+
+        # Patch is_connected logic
+        mocker.patch.object(real_conn_with_fake_redis, "is_connected", side_effect=check_connected)
+
+        return real_conn_with_fake_redis
+    elif backend_name == "rabbitmq":
+        real_conn_with_fake_aio_pika = backend.connection.Connection(
+            url="amqp://guest:guest@localhost:5672/"
+        )
+        real_conn_with_fake_aio_pika._connection = mock_aio_pika["connection"]
+        real_conn_with_fake_aio_pika.is_connected_event.set()
+        real_conn_with_fake_aio_pika._channel = mock_aio_pika["channel"]
+        real_conn_with_fake_aio_pika._exchange = mock_aio_pika["exchange"]
+        real_conn_with_fake_aio_pika._queue = mock_aio_pika["queue"]
+
+        return real_conn_with_fake_aio_pika
+    else:
+        python_conn = backend.connection.Connection()
+        python_conn.is_connected_event.set()
+        return python_conn
