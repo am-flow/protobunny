@@ -77,8 +77,6 @@ async def assert_backend_publish(
                 topic, messages = incoming[0]
 
                 msg_id, msg = messages[0]
-                pprint.pprint(msg)
-
                 assert (
                     len(messages) == count_in_queue
                 ), f"Expected {count_in_queue} message in stream {key}, got {len(messages)}"

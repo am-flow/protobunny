@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v6
@@ -35,6 +35,9 @@ jobs:
 
       - name: Run tests
         run: make test
+        env:
+          PYTHONASYNCIODEBUG: "1"
+          PYTEST_ADDOPTS: "-vvv --log-level=DEBUG"
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
@@ -43,6 +46,7 @@ jobs:
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
+
 
   lint:
     runs-on: ubuntu-latest

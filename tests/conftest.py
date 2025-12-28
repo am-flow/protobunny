@@ -36,11 +36,17 @@ def test_config() -> protobunny.config.Config:
 
 @pytest.fixture
 async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedis, None]:
+    server = fakeredis.FakeServer()
     client = fakeredis.FakeAsyncRedis(decode_responses=False)
+
     mocker.patch("protobunny.asyncio.backends.redis.connection.redis.from_url", return_value=client)
     # Clear database before each test
     await client.flushdb()
     yield client
+    # Explicitly clear internal fakeredis blocking listeners
+    server.connected = False
+    await client.aclose()
+
 
 
 @pytest.fixture

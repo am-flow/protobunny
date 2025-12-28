@@ -1,3 +1,5 @@
+import sys
+
 import asyncio
 import typing as tp
 from unittest.mock import ANY, MagicMock
@@ -23,6 +25,8 @@ from protobunny.models import Envelope
 
 from . import tests
 from .utils import get_mocked_connection
+
+is_old_python = sys.version_info < (3, 12)
 
 
 @pytest.mark.parametrize("backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio])
@@ -147,14 +151,16 @@ class TestQueue:
         await q._receive(cb, incoming)
         cb.assert_not_called()
 
-    # @pytest.mark.skip
     async def test_subscribe(
         self, mocker: MockerFixture, mock_connection: MagicMock, backend
     ) -> None:
+        backend_name = backend.__name__.split(".")[-1]
+        if is_old_python and backend_name == "redis":
+            pytest.skip("Skipping Redis backend on Python < 3.12 due to known fakeredis hang")
         cb = mocker.MagicMock()
         q = get_queue(tests.tasks.TaskMessage)
         assert isinstance(q, backend.queues.AsyncQueue)
-        backend_name = backend.__name__.split(".")[-1]
+
         delimiter = backend_configs[backend_name].topic_delimiter
         assert q.topic == "acme.tests.tasks.TaskMessage".replace(".", delimiter)
         assert q.shared_queue

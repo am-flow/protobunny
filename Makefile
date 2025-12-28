@@ -32,7 +32,7 @@ test:
 	uv run pytest tests/ -m "not integration"
 t:
 	# Usage: make t t=tests/test_connection.py::test_sync_get_message_count
-	PYTHONBREAKPOINT=ipdb.set_trace uv run pytest  ${t} -s -vvvv --durations=0
+	PYTHONASYNCIODEBUG=1 PYTHONBREAKPOINT=ipdb.set_trace uv run pytest  ${t} -s -vvvv --durations=0
 
 integration-test:
 	uv run pytest tests/ -m "integration"
@@ -65,13 +65,13 @@ test-py310:
 	source .venv310/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev --group docs
 	UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "not integration" -vvv -s
+	PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "not integration" -vvv -s
 
 test-py311:
 	source .venv311/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev --group docs
 	UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "not integration" -vvv -s
+	PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "not integration" -vvv -s
 
 test-py312:
 	source .venv312/bin/activate

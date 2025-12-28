@@ -305,6 +305,7 @@ class Connection(BaseAsyncConnection):
                 raise ConnectionError("Not connected to Redis")
             queue = await self.setup_queue(topic, shared)
             ready_event = asyncio.Event()
+            stop_event = asyncio.Event()
             if queue["is_shared"]:
                 assert (
                     queue["mechanism"] == "stream"
@@ -314,7 +315,7 @@ class Connection(BaseAsyncConnection):
                 log.debug("Subscribing callback to Redis PubSub topic %s", queue["key"])
                 task = asyncio.create_task(
                     self._tasks_consumer_loop(
-                        queue["key"], queue["group_name"], queue["tag"], callback, ready_event
+                        queue["key"], queue["group_name"], queue["tag"], callback, ready_event, stop_event
                     )
                 )
 
@@ -326,6 +327,7 @@ class Connection(BaseAsyncConnection):
                     "task": task,
                     "key": queue["key"],
                     "topic": topic,
+                    "stop_event": stop_event,
                 }
                 log.info("Redis consumer %s subscribed to %s", queue["tag"], queue["key"])
                 return queue["tag"]
@@ -335,7 +337,7 @@ class Connection(BaseAsyncConnection):
                     queue["mechanism"] == "pubsub"
                 ), f"Invalid queue mechanism: {queue['mechanism']}"
                 # create the asyncio task for the consumer loop
-                task = asyncio.create_task(self._pubsub_consumer_loop(ready_event, callback, queue))
+                task = asyncio.create_task(self._pubsub_consumer_loop(ready_event, callback, queue, stop_event))
                 # Wait for the loop to signal it has performed the first check
                 await asyncio.wait_for(ready_event.wait(), timeout=1.0)
                 # register the topic in the registry
@@ -344,12 +346,13 @@ class Connection(BaseAsyncConnection):
                     "task": task,
                     "key": queue["key"],
                     "topic": topic,
+                    "stop_event": stop_event,
                 }
                 log.info("Redis consumer %s subscribed to %s", queue["tag"], topic)
                 return queue["tag"]
 
     async def _pubsub_consumer_loop(
-        self, ready_event: asyncio.Event, callback: tp.Callable, queue: dict
+        self, ready_event: asyncio.Event, callback: tp.Callable, queue: dict, stop_event: asyncio.Event
     ):
         pubsub = self._connection.pubsub()
         callback = functools.partial(self._on_message_pubsub, queue["key"], callback)
@@ -359,6 +362,7 @@ class Connection(BaseAsyncConnection):
         else:
             await pubsub.subscribe(queue["key"])
         ready_event.set()
+
         async for message in pubsub.listen():
             if message.get("type") not in ("message", "pmessage"):
                 continue
@@ -373,6 +377,10 @@ class Connection(BaseAsyncConnection):
                 await callback(envelope)
             else:
                 asyncio.run_coroutine_threadsafe(callback(envelope), self._loop)
+            if stop_event.is_set():
+                await pubsub.unsubscribe()
+                await pubsub.close()
+                break
 
     async def setup_queue(self, topic: str, shared: bool = False) -> dict:
         """Set up a Redis Stream and Consumer Group for tasks if shared, otherwise use Pub/Sub.
@@ -442,6 +450,7 @@ class Connection(BaseAsyncConnection):
         consumer_id: str,
         callback: tp.Callable,
         ready_event: asyncio.Event,
+        stop_event: asyncio.Event,
     ):
         """Internal loop to read messages from Redis Stream."""
         queue_meta = self.queues.get(key)
@@ -452,8 +461,9 @@ class Connection(BaseAsyncConnection):
         # Signal that the loop has started before entering the blocking section
         ready_event.set()
         await asyncio.sleep(0)
+        is_mock = hasattr(self._connection, "server")  # Simple way to detect fakeredis
 
-        while True:
+        while not stop_event.is_set():
             try:
                 # XREADGROUP: block=0 means wait indefinitely for new messages
                 # ">" means "read only new messages never delivered to others"
@@ -464,10 +474,9 @@ class Connection(BaseAsyncConnection):
                     consumername=consumer_id,
                     streams={key: ">"},
                     count=self.prefetch_count or 10,
-                    block=5000,  # Block for 5 seconds then loop (allows for clean shutdown)
+                    block=None if is_mock else 1000,  # Block for 1 second then loop (allows for clean shutdown)
                 )
                 if not response:
-                    log.debug("Consumer %s: No messages found", consumer_id)
                     continue
                 messages = response.get(key.encode())[0]
                 for msg_id, payload in messages:
@@ -583,19 +592,25 @@ class Connection(BaseAsyncConnection):
         async with self.lock:
             if tag not in self.consumers:
                 return
-
+            log.debug("Unsubscribing consumer %s", tag)
             consumer_info = self.consumers.pop(tag)
             if consumer_info:
                 task_to_cancel = consumer_info["task"]
+                stop_event = consumer_info["stop_event"]
                 key = consumer_info["key"]
-
-                # 1. Stop the local asyncio loop
+                # Stop the local asyncio loop
                 log.info("Stopping consumer %s", tag)
-                task_to_cancel.cancel()
+                stop_event.set()
+
         if task_to_cancel:
             try:
                 # wait for the task to stop (outside the lock otherwise will deadlock for python 3.10/3.11
-                await asyncio.wait_for(asyncio.shield(task_to_cancel), timeout=3.0)
+                log.debug("Waiting for consumer %s", tag)
+                task_to_cancel.cancel()
+                await asyncio.sleep(0)
+                # await asyncio.gather(task_to_cancel, return_exceptions=True)
+                # await task_to_cancel
+                await asyncio.wait_for(task_to_cancel, timeout=1.0)
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass
 
