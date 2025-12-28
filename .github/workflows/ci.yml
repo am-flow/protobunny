@@ -211,7 +211,8 @@ jobs:
 
       - name: Smoke test MQTT
         run: |
-          sudo apt-get install -y mosquitto-clients
+          sudo apt-get update
+          sudo apt-get install mosquitto-clients
           mosquitto_pub -h localhost -p 1883 -t ci/test -m "hello"
           mosquitto_sub -h localhost -p 1883 -t ci/test -C 1
 
