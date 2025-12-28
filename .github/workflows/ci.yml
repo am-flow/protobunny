@@ -97,7 +97,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration.py -k python
+        run: uv run python -m pytest tests/test_integration.py -k python -vvv -s
 
 
   integration_test_rabbitmq:
@@ -137,7 +137,7 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration.py -k rabbitmq
+        run: uv run python -m pytest tests/test_integration.py -k rabbitmq -vvv -s
         env:
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: 5672
@@ -172,7 +172,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration.py -k redis
+        run: uv run python -m pytest tests/test_integration.py -k redis -vvv -s
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
@@ -209,8 +209,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Smoke test MQTT
+        run: |
+          sudo apt-get install -y mosquitto-clients
+          mosquitto_pub -h localhost -p 1883 -t ci/test -m "hello"
+          mosquitto_sub -h localhost -p 1883 -t ci/test -C 1
+
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration.py -k mosquitto
+        run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
         env:
-          MOSQUITTO_HOST: localhost
-          MOSQUITTO_PORT: 1883
+          MQTT_HOST: localhost
