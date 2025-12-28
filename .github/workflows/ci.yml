@@ -212,9 +212,11 @@ jobs:
       - name: Smoke test MQTT
         run: |
           sudo apt-get update
-          sudo apt-get install mosquitto-clients
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install mosquitto-clients
           mosquitto_pub -h localhost -p 1883 -t ci/test -m "hello"
           mosquitto_sub -h localhost -p 1883 -t ci/test -C 1
+        env:
+          DEBIAN_FRONTEND: noninteractive
 
       - name: Run tests
         run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
