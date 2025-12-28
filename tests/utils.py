@@ -1,5 +1,4 @@
 import asyncio
-import pprint
 import time
 from types import ModuleType
 from unittest.mock import ANY
