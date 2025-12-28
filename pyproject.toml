@@ -3,7 +3,7 @@ name = "protobunny"
 classifiers = [
   "Development Status :: 3 - Alpha"
 ]
-version = "0.1.2b1"
+version = "0.1.2a1"
 description = "Protobuf messages and python mqtt messaging toolkit"
 authors = [
   {name = "Domenico Nappo", email = "domenico.nappo@am-flow.com"},
@@ -67,7 +67,8 @@ dev = [
   "types-protobuf>=4.25.0.20240410,<5",
   "yamllint>=1.37.1",
   "toml-sort>=0.24.3",
-  "fakeredis>=2.33.0"
+  "fakeredis>=2.33.0",
+  "tox>=4.30.3"
 ]
 docs = [
   "sphinx>=8.1.3",

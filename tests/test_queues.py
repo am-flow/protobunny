@@ -118,7 +118,7 @@ class TestQueue:
 
         await q.purge()
         mock_connection.purge.assert_called_once_with(
-            "acme.tests.tasks.TaskMessage".replace(".", delimiter)
+            "acme.tests.tasks.TaskMessage".replace(".", delimiter), reset_groups=False
         )
         q = get_queue(tests.TestMessage)
         with pytest.raises(RuntimeError) as exc:

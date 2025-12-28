@@ -27,7 +27,10 @@ Protobunny supports two common consumption models:
    queue; messages are distributed among them (competing consumers).
 
 Which one is used depends on the message/topic type and how the queue is
-defined by the library conventions.
+defined by the library conventions. In protobunny,
+all messages that are part of the package or of a subpackage of `tasks`, are considered Task messages and will be published on shared queues.
+
+A Task message will be consumed by **one** of the subscribed worker (your callback function) while a standard message will be received by all listeners to the PubSub queue.
 
 Results (reply-style messages)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -69,10 +72,8 @@ queues.
      optional commons.JsonContent options=50;
    }
 
-If a message is treated as a “task queue” message by the library
-conventions, ``subscribe`` will use a **shared queue** (multiple workers
-consuming messages from one queue). The load is distributed among
-workers (competing consumers).
+For a “task queue” message, the ``subscribe`` function will use a **shared queue** (multiple workers
+consuming messages from one queue). The load is distributed among workers (competing consumers) according the backend load balancing algorithm.
 
 .. code:: python
 
@@ -85,11 +86,12 @@ workers (competing consumers).
    def worker2(task: mml.main.tasks.TaskMessage) -> None:
        print("2- Working on:", task)
 
-   pb.subscribe_sync(mml.main.tasks.TaskMessage, worker1)
-   pb.subscribe_sync(mml.main.tasks.TaskMessage, worker2)
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test1"))
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test2"))
-   pb.publish_sync(mml.main.tasks.TaskMessage(content="test3"))
+    # subscribe two workers
+   pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+   pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+   pb.publish(mml.main.tasks.TaskMessage(content="test1"))
+   pb.publish(mml.main.tasks.TaskMessage(content="test2"))
+   pb.publish(mml.main.tasks.TaskMessage(content="test3"))
 
 You can also introspect/manage an underlying shared queue:
 
@@ -101,7 +103,7 @@ You can also introspect/manage an underlying shared queue:
 
    queue = pb.get_queue(mml.main.tasks.TaskMessage)
 
-   # Only shared queues can be purged and counted
+   # Only shared queues can be purged and counted otherwise a ValueError is raised
    count = queue.get_message_count()
    print("Queued:", count)
    queue.purge()

@@ -450,13 +450,16 @@ class BaseSyncQueue(BaseQueue, ABC):
             # In case the subscription has .# as binding key,
             # this method catches also results message for all the topics in that namespace.
             return
-        msg: "ProtoBunnyMessage" = deserialize_message(message.routing_key, message.body)
+        # msg: "ProtoBunnyMessage" = deserialize_message(message.routing_key, message.body)
         try:
-            callback(msg)
+            callback(deserialize_message(message.routing_key, message.body))
         except RequeueMessage:
             raise
         except Exception as exc:  # pylint: disable=W0703
             log.exception("Could not process message: %s", str(message.body))
+            msg = deserialize_message(message.routing_key, message.body)
+            if not msg:
+                log.warning("Could not deserialize with topic: %s", str(message.routing_key))
             result = msg.make_result(return_code=ReturnCode.FAILURE, error=str(exc))
             self.publish_result(
                 result, topic=msg.result_topic, correlation_id=message.correlation_id
@@ -533,11 +536,11 @@ class BaseSyncQueue(BaseQueue, ABC):
             )
             self.result_subscription = None
 
-    def purge(self) -> None:
+    def purge(self, **kwargs) -> None:
         """Delete all messages from the queue."""
         if not self.shared_queue:
             raise RuntimeError("Can only purge shared queues")
-        self.get_connection().purge(self.topic)
+        self.get_connection().purge(self.topic, **kwargs)
 
     def get_message_count(self) -> int:
         """Get current message count."""

@@ -489,7 +489,7 @@ class BaseQueue(ABC):
         ...
 
     @abstractmethod
-    def purge(self) -> None:
+    def purge(self, **kwargs) -> None:
         ...
 
     @abstractmethod

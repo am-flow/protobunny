@@ -53,5 +53,5 @@ class Connection(BaseSyncConnection):
             return self._async_conn
         return self.async_class(**kwargs)
 
-    def reset_stream_groups(self, topic: str) -> None:
-        self._run_coro(self._async_conn.reset_stream_groups(topic))
+    def reset_stream_groups(self, stream_key: str) -> None:
+        self._run_coro(self._async_conn.reset_stream_groups(stream_key))

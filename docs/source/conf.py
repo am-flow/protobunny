@@ -32,8 +32,8 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns: list[str] = []
 html_favicon = "_images/favicon.svg"
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
+html_logo = "_images/logo.png"
+html_theme_options = {
+    "announcement": "<em>Important</em> protobunny is in alpha!",
+}
 html_theme = "furo"

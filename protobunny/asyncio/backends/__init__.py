@@ -234,12 +234,12 @@ class BaseAsyncQueue(BaseQueue, ABC):
             await conn.unsubscribe(self.result_subscription, if_unused=False, if_empty=False)
             self.result_subscription = None
 
-    async def purge(self) -> None:
+    async def purge(self, reset_groups: bool = False) -> None:
         """Delete all messages from the queue."""
         if not self.shared_queue:
             raise RuntimeError("Can only purge shared queues")
         conn = await self.get_connection()
-        await conn.purge(self.topic)
+        await conn.purge(self.topic, reset_groups=reset_groups)
 
     async def get_message_count(self) -> int | None:
         """Get current message count."""

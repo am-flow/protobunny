@@ -167,6 +167,7 @@ class Connection(BaseAsyncConnection):
                     try:
                         task.cancel()
                         # We give the task a moment to wrap up if needed
+                        await asyncio.sleep(0)  # force context switching
                         await asyncio.wait([task], timeout=2.0)
                     except Exception as e:
                         log.warning("Error stopping Redis consumer %s: %s", tag, e)
@@ -310,6 +311,7 @@ class Connection(BaseAsyncConnection):
                 ), f"Invalid queue mechanism: {queue['mechanism']}"
 
                 # create the asyncio task for the consumer loop
+                log.debug("Subscribing callback to Redis PubSub topic %s", queue["key"])
                 task = asyncio.create_task(
                     self._tasks_consumer_loop(
                         queue["key"], queue["group_name"], queue["tag"], callback, ready_event
@@ -387,17 +389,12 @@ class Connection(BaseAsyncConnection):
             raise ConnectionError("Not connected to Redis")
 
         key = self.build_topic_key(topic)
-
-        # Define the group name
-        # Shared = 'shared_group' for tasks messages
-        # Not Shared = unique ID per instance
-        group_name = "shared_group" if shared else f"fanout_{uuid.uuid4().hex[:8]}"
-
-        # Check local caches
-        if key in self.queues:
-            return self.queues[key]
-
         tag = f"consumer_{uuid.uuid4().hex[:8]}"
+
+        # # Check local caches
+        # if not shared and key in self.queues:
+        #     return self.queues[key]
+
         if shared:
             group_name = "shared_group"
             log.debug(
@@ -432,7 +429,7 @@ class Connection(BaseAsyncConnection):
                 "tag": tag,
                 "topic": topic,
                 "is_shared": False,
-                "group_name": group_name,
+                "group_name": f"fanout_{uuid.uuid4().hex[:8]}",
                 "key": key,
             }
         self.queues[key] = queue_meta
@@ -480,8 +477,6 @@ class Connection(BaseAsyncConnection):
             except Exception as e:
                 log.error("Error in Redis consumer loop: %s", e)
                 await asyncio.sleep(1)  # Backoff on error
-            finally:
-                log.debug("Consumer loop for %s stopped", consumer_id)
 
     async def _on_message_pubsub(
         self, topic: str, callback, envelope: IncomingMessageProtocol
@@ -584,24 +579,27 @@ class Connection(BaseAsyncConnection):
             # Pending Entry List (PEL) for retry logic.
 
     async def unsubscribe(self, tag: str, if_unused: bool = True, if_empty: bool = True) -> None:
+        task_to_cancel = None
         async with self.lock:
             if tag not in self.consumers:
                 return
 
             consumer_info = self.consumers.pop(tag)
             if consumer_info:
-                task = consumer_info["task"]
+                task_to_cancel = consumer_info["task"]
                 key = consumer_info["key"]
-                topic = consumer_info["topic"]
 
                 # 1. Stop the local asyncio loop
                 log.info("Stopping consumer %s", tag)
-                task.cancel()
-                try:
-                    await asyncio.wait_for(task, timeout=3.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
+                task_to_cancel.cancel()
+        if task_to_cancel:
+            try:
+                # wait for the task to stop (outside the lock otherwise will deadlock for python 3.10/3.11
+                await asyncio.wait_for(asyncio.shield(task_to_cancel), timeout=3.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
 
+        async with self.lock:
             queue_meta = self.queues.get(key)
             if not queue_meta:
                 return

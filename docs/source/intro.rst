@@ -1,11 +1,3 @@
-.. figure::
-   https://raw.githubusercontent.com/am-flow/protobunny/main/images/logo_small.png
-   :alt: logo
-
-   logo
-
---------------
-
 Protobunny
 ==========
 

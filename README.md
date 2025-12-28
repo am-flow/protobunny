@@ -1,7 +1,3 @@
-![logo](https://raw.githubusercontent.com/am-flow/protobunny/main/images/logo_small.png)
-
----
-
 # Protobunny
 
 Note: The project is in early development.
