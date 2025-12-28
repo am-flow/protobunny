@@ -179,9 +179,11 @@ jobs:
 
   integration_test_mosquitto:
     runs-on: ubuntu-latest
+
     services:
       mosquitto:
         image: eclipse-mosquitto:2
+
         ports:
           - 1883:1883
         options: >-
@@ -189,8 +191,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
-        volumes:
-          - .github/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
     steps:
       - uses: actions/checkout@v6
