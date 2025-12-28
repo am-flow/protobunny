@@ -191,8 +191,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
-        volumes:
-          - /tmp/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
     steps:
       - uses: actions/checkout@v6
@@ -201,6 +199,13 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+
+      - name: Configure Mosquitto for anonymous access
+        run: |
+          docker exec ${{ job.services.mosquitto.id }} sh -c "echo 'listener 1883' > /mosquitto/config/mosquitto.conf"
+          docker exec ${{ job.services.mosquitto.id }} sh -c "echo 'allow_anonymous true' >> /mosquitto/config/mosquitto.conf"
+          docker restart ${{ job.services.mosquitto.id }}
+          sleep 5
 
       - name: Set up Python 3.12
         run: uv python install 3.12
