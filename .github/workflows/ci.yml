@@ -191,6 +191,17 @@ jobs:
             mosquitto -c /mosquitto-no-auth.conf
           sleep 3
 
+      - name: Debug Mosquitto
+        run: |
+          echo "=== Container logs ==="
+          docker logs mosquitto
+          echo "=== Config file ==="
+          docker exec mosquitto cat /mosquitto-no-auth.conf
+          echo "=== Processes ==="
+          docker exec mosquitto ps aux
+          echo "=== Network ==="
+          docker exec mosquitto netstat -tlnp || docker exec mosquitto ss -tlnp
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
