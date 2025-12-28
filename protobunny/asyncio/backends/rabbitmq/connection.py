@@ -45,9 +45,6 @@ async def disconnect() -> None:
 class Connection(BaseAsyncConnection):
     """Async RabbitMQ Connection wrapper."""
 
-    _lock: asyncio.Lock | None = None
-    instance_by_vhost: dict[str, "Connection | None"] = {}
-
     def __init__(
         self,
         username: str | None = None,
@@ -101,7 +98,6 @@ class Connection(BaseAsyncConnection):
             self._url = f"amqp://{username}:{password}@{host}:{port}/{clean_vhost}?heartbeat={heartbeat}&timeout={timeout}&fail_fast=no"
         else:
             self._url = url
-        self._loop: asyncio.AbstractEventLoop | None = None
         self._exchange_name = exchange_name
         self._dl_exchange = dl_exchange
         self._dl_queue = dl_queue
@@ -114,27 +110,13 @@ class Connection(BaseAsyncConnection):
         self.consumers: dict[str, str] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
-        self._is_connected_event: asyncio.Event | None = None
-        try:
-            self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # Fallback if __init__ is called outside a running loop
-            # (though get_connection should be called inside one)
-            self._loop = None
-
-    @property
-    def is_connected_event(self) -> asyncio.Event:
-        """Lazily create the event in the current running loop."""
-        if self._is_connected_event is None:
-            self._is_connected_event = asyncio.Event()
-        return self._is_connected_event
-
-    @classmethod
-    def _get_class_lock(cls) -> asyncio.Lock:
-        """Ensure the class lock is bound to the current running loop."""
-        if cls._lock is None:
-            cls._lock = asyncio.Lock()
-        return cls._lock
+        # self._loop: asyncio.AbstractEventLoop | None = None
+        # try:
+        #     self._loop = asyncio.get_running_loop()
+        # except RuntimeError:
+        #     # Fallback if __init__ is called outside a running loop
+        #     # (though get_connection should be called inside one)
+        #     self._loop = None
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -143,34 +125,41 @@ class Connection(BaseAsyncConnection):
             self._instance_lock = asyncio.Lock()
         return self._instance_lock
 
-    @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "Connection":
-        """Get singleton instance (async)."""
-        current_loop = asyncio.get_running_loop()
-        async with cls._get_class_lock():
-            instance = cls.instance_by_vhost.get(vhost)
-            # Check if we have an instance AND if it belongs to the CURRENT loop
-            if instance:
-                # We need to check if the instance's internal loop matches our current loop
-                # and if that loop is actually still running.
-                if instance._loop != current_loop or not instance.is_connected_event.is_set():
-                    log.warning("Found stale connection for %s (loop mismatch). Resetting.", vhost)
-                    await instance.disconnect()  # Cleanup the old one
-                    instance = None
+    @property
+    def is_connected_event(self) -> asyncio.Event:
+        """Lazily create the event in the current running loop."""
+        if self._is_connected_event is None:
+            self._is_connected_event = asyncio.Event()
+        return self._is_connected_event
 
-            if instance is None:
-                log.debug("Creating fresh connection for %s", vhost)
-                new_instance = cls(vhost=vhost)
-                new_instance._loop = current_loop  # Store the loop it was born in
-                await new_instance.connect()
-                cls.instance_by_vhost[vhost] = new_instance
-                instance = new_instance
-            log.info("Returning singleton AsyncRmqConnection instance for vhost %s", vhost)
-            return instance
+    # @classmethod
+    # async def get_connection(cls, vhost: str = "/") -> "Connection":
+    #     """Get singleton instance (async)."""
+    #     current_loop = asyncio.get_running_loop()
+    #     async with cls._get_class_lock():
+    #         instance = cls.instance_by_vhost.get(vhost)
+    #         # Check if we have an instance AND if it belongs to the CURRENT loop
+    #         if instance:
+    #             # We need to check if the instance's internal loop matches our current loop
+    #             # and if that loop is actually still running.
+    #             if instance._loop != current_loop or not instance.is_connected_event.is_set():
+    #                 log.warning("Found stale connection for %s (loop mismatch). Resetting.", vhost)
+    #                 await instance.disconnect()  # Cleanup the old one
+    #                 instance = None
+    #
+    #         if instance is None:
+    #             log.debug("Creating fresh connection for %s", vhost)
+    #             new_instance = cls(vhost=vhost)
+    #             new_instance._loop = current_loop  # Store the loop it was born in
+    #             await new_instance.connect()
+    #             cls.instance_by_vhost[vhost] = new_instance
+    #             instance = new_instance
+    #         log.info("Returning singleton AsyncRmqConnection instance for vhost %s", vhost)
+    #         return instance
 
-    def is_connected(self) -> bool:
-        """Check if connection is established and healthy."""
-        return self.is_connected_event.is_set()
+    # def is_connected(self) -> bool:
+    #     """Check if connection is established and healthy."""
+    #     return self.is_connected_event.is_set()
 
     @property
     def connection(self) -> AbstractRobustConnection:

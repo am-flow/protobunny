@@ -7,9 +7,11 @@ import pytest
 
 import protobunny as pb_sync
 from protobunny import asyncio as pb
+from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
 from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
+from protobunny.backends import mosquitto as mosquitto_backend
 from protobunny.backends import python as python_backend
 from protobunny.backends import rabbitmq as rabbitmq_backend
 from protobunny.backends import redis as redis_backend
@@ -24,7 +26,9 @@ log = logging.getLogger(__name__)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio, mosquitto_backend_aio]
+)
 class TestTasks:
     msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
     received = {
@@ -117,7 +121,9 @@ class TestTasks:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("backend", [rabbitmq_backend, redis_backend, python_backend])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend]
+)
 class TestTasksSync:
     msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
     received = {
@@ -152,6 +158,7 @@ class TestTasksSync:
         # Assert the patching is working for setting the backend
         connection = pb_sync.get_connection()
         assert isinstance(connection, backend.connection.Connection)
+        assert sync_wait(connection.is_connected)
         task_queue = pb_sync.get_queue(self.msg)
         assert task_queue.topic == "acme.tests.tasks.TaskMessage".replace(
             ".", test_config.backend_config.topic_delimiter

@@ -33,7 +33,29 @@ templates_path = ["_templates"]
 exclude_patterns: list[str] = []
 html_favicon = "_images/favicon.svg"
 html_logo = "_images/logo.png"
+html_theme = "furo"
+html_css_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
+]
+html_title = f"v{release}"
 html_theme_options = {
     "announcement": "<em>Important</em> protobunny is in alpha!",
+    "light_css_variables": {
+        "color-brand-primary": "#f8ba26",
+        "color-brand-content": "#f8ba26",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#f8ba26",
+        "color-brand-content": "#f8ba26",
+    },
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/am-flow/protobunny",
+            "html": "",
+            "class": "fa-brands fa-solid fa-github fa-2x",
+        },
+    ],
 }
-html_theme = "furo"

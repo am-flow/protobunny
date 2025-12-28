@@ -6,13 +6,15 @@ from unittest.mock import ANY, MagicMock
 import pytest
 from pytest_mock import MockerFixture
 
-import protobunny as pb_sync
+import protobunny as pb_base
 from protobunny import asyncio as pb
 from protobunny.asyncio.backends import LoggingAsyncQueue
+from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
 from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
 from protobunny.backends import LoggingSyncQueue
+from protobunny.backends import mosquitto as mosquitto_backend
 from protobunny.backends import python as python_backend
 from protobunny.backends import rabbitmq as rabbitmq_backend
 from protobunny.backends import redis as redis_backend
@@ -23,61 +25,77 @@ from protobunny.helpers import (
 from protobunny.models import Envelope
 
 from . import tests
-from .utils import get_mocked_connection
 
 is_old_python = sys.version_info < (3, 12)
 
 
-@pytest.mark.parametrize("backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio, mosquitto_backend_aio]
+)
 class TestQueue:
     @pytest.fixture(autouse=True)
     async def mock_connections(
-        self, backend, mocker, mock_redis_client, mock_aio_pika, test_config
+        self, backend, mocker, mock_redis_client, mock_aio_pika, test_config, mock_mosquitto
     ) -> tp.AsyncGenerator[dict, None]:
         backend_name = backend.__name__.split(".")[-1]
         test_config.mode = "async"
         test_config.backend = backend_name
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
-        mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.backends, "default_configuration", test_config)
-        mocker.patch.object(pb.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
-        queues_module = getattr(pb.backends, f"{backend_name}").queues
-        connection_module = getattr(pb.backends, backend_name).connection
-        if hasattr(queues_module, "default_configuration"):
-            mocker.patch.object(queues_module, "default_configuration", test_config)
-        if hasattr(connection_module, "default_configuration"):
-            mocker.patch.object(connection_module, "default_configuration", test_config)
 
-        assert pb_sync.helpers.get_backend() == backend
+        mocker.patch.object(pb_base.config, "default_configuration", test_config)
+        mocker.patch.object(pb_base.models, "default_configuration", test_config)
+        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
+        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
+        mocker.patch.object(pb.backends, "default_configuration", test_config)
+
+        if hasattr(backend.connection, "default_configuration"):
+            mocker.patch.object(backend.connection, "default_configuration", test_config)
+        if hasattr(backend.queues, "default_configuration"):
+            mocker.patch.object(backend.queues, "default_configuration", test_config)
+
+        pb.backend = backend
+        mocker.patch("protobunny.helpers.get_backend", return_value=backend)
+        mocker.patch.object(pb_base, "disconnect", backend.connection.disconnect)
+        mocker.patch.object(pb_base, "get_backend", return_value=backend)
+
+        assert pb_base.helpers.get_backend() == backend
+        assert pb_base.get_backend() == backend
+        assert pb_base.helpers.get_backend() == backend
         assert pb.get_backend() == backend
         assert isinstance(get_queue(tests.TestMessage), backend.queues.AsyncQueue)
-        conn_with_fake_internal_conn = get_mocked_connection(
-            backend, mock_redis_client, mock_aio_pika, mocker
-        )
-        mocker.patch.object(pb, "get_connection", return_value=conn_with_fake_internal_conn)
-        mocker.patch.object(pb, "disconnect", side_effect=backend.connection.disconnect)
-        mocker.patch(
-            "protobunny.asyncio.backends.BaseAsyncQueue.get_connection",
-            return_value=conn_with_fake_internal_conn,
-        )
+
+        mock = mocker.AsyncMock(spec=backend.connection.Connection)
+        match backend_name:
+            case "redis":
+                mock._connection = mock_redis_client
+            case "rabbitmq":
+                mock._connection = mock_aio_pika
+            case "mosquitto":
+                mock._connection = mock_mosquitto
+            case "python":
+                mock = backend.connection.Connection()
+                mock.is_connected_event.set()
+
+        mocker.patch.object(pb, "get_connection", return_value=mock)
+        mocker.patch("protobunny.asyncio.backends.BaseAsyncQueue.get_connection", return_value=mock)
         mocker.patch(
             f"protobunny.asyncio.backends.{backend_name}.connection.get_connection",
-            return_value=conn_with_fake_internal_conn,
+            return_value=mock,
         )
-        assert await pb.get_connection() == conn_with_fake_internal_conn
-        assert (
-            conn_with_fake_internal_conn.is_connected()
-        ), f"{backend_name} connection is not connected"
+        await pb.disconnect()
+        assert asyncio.iscoroutinefunction(pb.disconnect)
 
         yield {
             "rabbitmq": mock_aio_pika,
             "redis": mock_redis_client,
-            "connection": conn_with_fake_internal_conn,
-            "python": conn_with_fake_internal_conn._connection,
+            "connection": mock,
+            "python": mock._connection,
+            "mosquitto": mock_mosquitto,
         }
+        connection_module = getattr(pb_base.backends, backend_name).connection
+        connection_module.Connection.instance_by_vhost.clear()
+
         connection_module.Connection.instance_by_vhost.clear()
 
     @pytest.fixture
@@ -103,6 +121,8 @@ class TestQueue:
 
     async def test_get_message_count(self, mock_connection, backend) -> None:
         backend_name = backend.__name__.split(".")[-1]
+        if backend_name == "mosquitto":
+            pytest.skip("Skipping Mosquitto backend: it doesn't implement get_message_count")
         delimiter = backend_configs[backend_name].topic_delimiter
         q = get_queue(tests.tasks.TaskMessage)
         await q.get_message_count()
@@ -209,7 +229,9 @@ class TestQueue:
         mock_connection.subscribe.assert_called_once_with(topic, ANY, shared=False)
 
 
-@pytest.mark.parametrize("backend", [rabbitmq_backend, redis_backend, python_backend])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend]
+)
 class TestSyncQueue:
     @pytest.fixture(autouse=True, scope="function")
     def mock_connection(
@@ -220,38 +242,39 @@ class TestSyncQueue:
         test_config.backend = backend_name
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
-        mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
+
+        mocker.patch.object(pb_base.config, "default_configuration", test_config)
+        mocker.patch.object(pb_base.models, "default_configuration", test_config)
+        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
+        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
         mocker.patch.object(pb.backends.redis.connection, "default_configuration", test_config)
+
         if hasattr(backend.connection, "default_configuration"):
             mocker.patch.object(backend.connection, "default_configuration", test_config)
         if hasattr(backend.queues, "default_configuration"):
             mocker.patch.object(backend.queues, "default_configuration", test_config)
 
-        pb_sync.backend = backend
+        pb_base.backend = backend
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb_sync, "get_connection", backend.connection.get_connection)
-        mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
-        mocker.patch.object(pb_sync, "get_backend", return_value=backend)
+        mocker.patch.object(pb_base, "disconnect", backend.connection.disconnect)
+        mocker.patch.object(pb_base, "get_backend", return_value=backend)
 
-        assert pb_sync.helpers.get_backend() == backend
-        assert pb_sync.get_backend() == backend
-        assert pb_sync.helpers.get_backend() == backend
+        assert pb_base.helpers.get_backend() == backend
+        assert pb_base.get_backend() == backend
+        assert pb_base.helpers.get_backend() == backend
         assert pb.get_backend() == backend
         assert isinstance(get_queue(tests.TestMessage), backend.queues.SyncQueue)
+
         mock = mocker.MagicMock(spec=backend.connection.Connection)  # should be a Sync connection
-        mocker.patch.object(pb_sync, "get_connection", return_value=mock)
-        mocker.patch.object(pb_sync, "disconnect", side_effect=backend.connection.disconnect)
+        mocker.patch.object(pb_base, "get_connection", return_value=mock)
         mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
         mocker.patch(
             f"protobunny.backends.{backend_name}.connection.get_connection", return_value=mock
         )
-        assert not asyncio.iscoroutine(pb_sync.disconnect)
-        pb_sync.disconnect()
+        assert not asyncio.iscoroutinefunction(pb_base.disconnect)
+        pb_base.disconnect()
         yield mock
-        connection_module = getattr(pb_sync.backends, backend_name).connection
+        connection_module = getattr(pb_base.backends, backend_name).connection
         connection_module.Connection.instance_by_vhost.clear()
 
     def test_get_queue(self, backend) -> None:
@@ -345,7 +368,7 @@ class TestSyncQueue:
         mock_connection.unsubscribe.assert_called_once_with(ANY, if_unused=False, if_empty=False)
 
     def test_logger(self, mock_connection: MagicMock, backend) -> None:
-        q = pb_sync.subscribe_logger()
+        q = pb_base.subscribe_logger()
         assert isinstance(q, LoggingSyncQueue)
         delimiter = backend_configs[backend.__name__.split(".")[-1]].topic_delimiter
         wildcard = backend_configs[backend.__name__.split(".")[-1]].multi_wildcard_delimiter

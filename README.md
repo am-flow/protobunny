@@ -1,6 +1,9 @@
 # Protobunny
 
+```{warning}
 Note: The project is in early development.
+```
+
 
 The `protobunny` library simplifies messaging for asynchronous tasks by providing:
 
@@ -10,13 +13,13 @@ The `protobunny` library simplifies messaging for asynchronous tasks by providin
 * Message publishing/subscribing with typed topics
 * Generate and consume `Result` messages (success/failure + optional return payload)
 * Protocol Buffers messages serialization/deserialization
-* Support “task-like” queues (shared/competing consumers) vs broadcast subscriptions 
+* Support “task-like” queues (shared/competing consumers) vs. broadcast subscriptions 
 * Support async and sync contexts
 * Transparently serialize "JSON-like" payload fields (numpy-friendly)
 
 ## Requirements
 
-- Python >= 3.10, < 3.13
+- Python >= 3.10, < 3.14
 
 ## Project scope
 

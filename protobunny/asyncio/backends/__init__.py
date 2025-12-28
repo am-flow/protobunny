@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import logging
 import typing as tp
@@ -8,6 +9,7 @@ from ...helpers import get_backend
 from ...models import (
     AsyncCallback,
     BaseQueue,
+    Envelope,
     IncomingMessageProtocol,
     LoggerCallback,
     ProtoBunnyMessage,
@@ -17,6 +19,12 @@ from ...models import (
     deserialize_result_message,
     get_body,
 )
+
+if tp.TYPE_CHECKING:
+    # This only runs during IDE linting or Mypy runs
+    from typing_extensions import Self
+else:
+    from typing import Any as Self
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +69,7 @@ class BaseConnection(ABC):
         ...
 
     @abstractmethod
-    def is_connected(self) -> bool | tp.Awaitable[bool]:
+    def is_connected(self) -> bool:
         ...
 
     @abstractmethod
@@ -96,11 +104,68 @@ class BaseConnection(ABC):
 
 
 class BaseAsyncConnection(BaseConnection, ABC):
-    instance_by_vhost: dict[str, "BaseAsyncConnection"]
+    _lock: asyncio.Lock | None = None
+    instance_by_vhost: dict[str, Self] = {}
+
+    @abstractmethod
+    async def connect(self, timeout: float = 30) -> None:
+        ...
+
+    @abstractmethod
+    async def disconnect(self, timeout: float = 30) -> None:
+        ...
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._is_connected_event: asyncio.Event | None = None
         self.vhost = kwargs.get("vhost", "")
+        self._loop: asyncio.AbstractEventLoop | None = None
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Fallback if __init__ is called outside a running loop
+            # (though get_connection should be called inside one)
+            self._loop = None
+
+    @classmethod
+    def _get_class_lock(cls) -> asyncio.Lock:
+        """Ensure the class lock is bound to the current running loop."""
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+        return cls._lock
+
+    @property
+    @abstractmethod
+    def is_connected_event(self) -> asyncio.Event:
+        ...
+
+    @classmethod
+    async def get_connection(cls, vhost: str = "/") -> Self:
+        """Get singleton instance (async)."""
+        current_loop = asyncio.get_running_loop()
+        async with cls._get_class_lock():
+            instance = cls.instance_by_vhost.get(vhost)
+            # Check if we have an instance AND if it belongs to the CURRENT loop
+            if instance:
+                # We need to check if the instance's internal loop matches our current loop
+                # and if that loop is actually still running.
+                if instance._loop != current_loop or not instance.is_connected_event.is_set():
+                    log.warning("Found stale connection for %s (loop mismatch). Resetting.", vhost)
+                    await instance.disconnect()  # Cleanup the old one
+                    instance = None
+
+            if instance is None:
+                log.debug("Creating fresh connection for %s", vhost)
+                new_instance = cls(vhost=vhost)
+                new_instance._loop = current_loop  # Store the loop it was born in
+                await new_instance.connect()
+                cls.instance_by_vhost[vhost] = new_instance
+                instance = new_instance
+            return instance
+
+    def is_connected(self) -> bool:
+        """Check if connection is established and healthy."""
+        return self.is_connected_event.is_set()
 
 
 class BaseAsyncQueue(BaseQueue, ABC):
@@ -125,9 +190,12 @@ class BaseAsyncQueue(BaseQueue, ABC):
             callback: a callable accepting a message as only argument.
             message: the IncomingMessageProtocol object received from the queue.
         """
+        delimiter = default_configuration.backend_config.topic_delimiter
         if not message.routing_key:
             raise ValueError("Routing key was not set. Invalid topic")
-        if message.routing_key == self.result_topic or message.routing_key.endswith(".result"):
+        if message.routing_key == self.result_topic or message.routing_key.endswith(
+            f"{delimiter}result"
+        ):
             # Skip a result message. Handling result messages happens in `_receive_results` method.
             # In case the subscription has .# as binding key,
             # this method would catch results message for all the topics in that namespace.
@@ -255,11 +323,37 @@ class BaseAsyncQueue(BaseQueue, ABC):
         conn = await self.get_connection()
         return await conn.get_consumer_count(self.topic)
 
+    def get_tag(self) -> str:
+        return self.subscription
+
+    @staticmethod
+    async def send_message(
+        topic: str, body: bytes, correlation_id: str | None = None, persistent: bool = True
+    ) -> None:
+        """Low-level message sending implementation.
+
+        Args:
+            topic: a topic name for direct routing or a routing key with special binding keys
+            body: serialized message (e.g. a serialized protobuf message or a json string)
+            correlation_id: is present for result messages
+            persistent: if true will use aio_pika.DeliveryMode.PERSISTENT
+
+        Returns:
+
+        """
+        backend = get_backend()
+        message = Envelope(
+            body=body,
+            correlation_id=correlation_id or b"",
+        )
+        conn = await backend.connection.get_connection()
+        await conn.publish(topic, message)
+
 
 class LoggingAsyncQueue(BaseAsyncQueue):
     """Represents a specialized queue for logging purposes.
 
-    >>> import protobunny as pb
+    >>> from protobunny import asyncio as pb
     >>> async def add_logger():
     >>>     await pb.subscribe_logger()  # it uses the default logger_callback
 
@@ -267,14 +361,14 @@ class LoggingAsyncQueue(BaseAsyncQueue):
     Note that the callback must be sync even for the async logger and
     it must be a function who purely calls the logging module and can perform other non IO operations
 
-    >>> def log_callback(message: aio_pika.IncomingMessage, msg_content: str):
+    >>> def log_callback(message, msg_content: str):
     >>>     print(message.body)
     >>> async def add_logger():
     >>>     await pb.subscribe_logger(log_callback)
 
     You can use functools.partial to add more arguments
 
-    >>> def log_callback_with_args(message: aio_pika.IncomingMessage, msg_content: str, maxlength: int):
+    >>> def log_callback_with_args(message, msg_content: str, maxlength: int):
     >>>     print(message.body[maxlength])
     >>> import functools
     >>> functools.partial(log_callback_with_args, maxlength=100)
@@ -313,7 +407,7 @@ class LoggingAsyncQueue(BaseAsyncQueue):
     async def _receive(
         self,
         log_callback: "LoggerCallback",  # the callback function for logging is always a sync function
-        message: "IncomingMessageProtocols",
+        message: "IncomingMessageProtocol",
     ) -> None:
         """Call the logging callback.
 

@@ -100,7 +100,7 @@ class Connection(BaseAsyncConnection):
             else:
                 url = f"redis://{host}:{port}/{vhost}?protocol=3"
         self._url = url
-        self._loop: asyncio.AbstractEventLoop | None = None
+        # self._loop: asyncio.AbstractEventLoop | None = None
         self._connection: redis.Redis | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
@@ -109,16 +109,10 @@ class Connection(BaseAsyncConnection):
         self.consumers: dict[str, dict[str, tp.Any]] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
-        self._is_connected_event: asyncio.Event | None = None
-        try:
-            self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # Fallback if __init__ is called outside a running loop
-            # (though get_connection should be called inside one)
-            self._loop = None
 
         self._delimiter = default_configuration.backend_config.topic_delimiter
-        self._exchange = f"{default_configuration.project_name}"
+        # self._exchange = f"{default_configuration.project_name}"
+        self._exchange = default_configuration.backend_config.namespace
 
     async def __aenter__(self) -> "Connection":
         await self.connect()
@@ -196,41 +190,12 @@ class Connection(BaseAsyncConnection):
                 Connection.instance_by_vhost.pop(self.vhost, None)
                 log.info("Redis connection closed")
 
-    @classmethod
-    async def get_connection(cls, vhost: str = "/") -> "Connection":
-        """Get singleton instance (async)."""
-        current_loop = asyncio.get_running_loop()
-        async with cls._get_class_lock():
-            instance = cls.instance_by_vhost.get(vhost)
-            # Check if we have an instance AND if it belongs to the CURRENT loop
-            if instance:
-                # We need to check if the instance's internal loop matches our current loop
-                # and if that loop is actually still running.
-                if instance._loop != current_loop or not instance.is_connected():
-                    log.warning("Found stale connection for %s (loop mismatch). Resetting.", vhost)
-                    await instance.disconnect()  # Cleanup the old one
-                    instance = None
-
-            if instance is None:
-                log.debug("Creating fresh connection for %s", vhost)
-                new_instance = cls(vhost=vhost)
-                new_instance._loop = current_loop  # Store the loop it was born in
-                await new_instance.connect()
-                cls.instance_by_vhost[vhost] = new_instance
-                instance = new_instance
-            log.info("Returning singleton AsyncConnection instance for vhost %s", vhost)
-            return instance
-
     @property
     def is_connected_event(self) -> asyncio.Event:
         """Lazily create the event in the current running loop."""
         if self._is_connected_event is None:
             self._is_connected_event = asyncio.Event()
         return self._is_connected_event
-
-    def is_connected(self) -> bool:
-        """Check if connection is established and healthy."""
-        return self.is_connected_event.is_set()
 
     @property
     def connection(self) -> "redis.Redis":

@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 
 class AsyncQueue(BaseAsyncQueue):
-    """Message queue backed by pika and RabbitMQ."""
+    """Message queue backed by asyncio.Queue."""
 
     def get_tag(self) -> str:
         return self.topic

@@ -11,7 +11,7 @@ config.yml
 todo.txt
 *.sqlite3
 .*_cache
-.venv
+.venv*
 .DS_Store
 /pytest_report*
 test.*

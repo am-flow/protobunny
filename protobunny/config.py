@@ -29,12 +29,22 @@ AvailableBackends = tp.Literal["rabbitmq", "python", "redis", "mosquitto"]
 log = logging.getLogger(__name__)
 
 
-BackEndConfig = namedtuple("BackedConfig", "topic_delimiter multi_wildcard_delimiter")
+BackEndConfig = namedtuple(
+    "BackedConfig", "topic_delimiter multi_wildcard_delimiter namespace", defaults=(None,) * 3
+)
 
-rabbitmq_backend_config = BackEndConfig(topic_delimiter=".", multi_wildcard_delimiter="#")
-python_backend_config = BackEndConfig(topic_delimiter=".", multi_wildcard_delimiter="#")
-redis_backend_config = BackEndConfig(topic_delimiter=":", multi_wildcard_delimiter="*")
-mosquitto_backend_config = BackEndConfig(topic_delimiter="/", multi_wildcard_delimiter="#")
+rabbitmq_backend_config = BackEndConfig(
+    topic_delimiter=".", multi_wildcard_delimiter="#", namespace=""
+)
+python_backend_config = BackEndConfig(
+    topic_delimiter=".", multi_wildcard_delimiter="#", namespace=""
+)
+redis_backend_config = BackEndConfig(
+    topic_delimiter=":", multi_wildcard_delimiter="*", namespace="protobunny"
+)
+mosquitto_backend_config = BackEndConfig(
+    topic_delimiter="/", multi_wildcard_delimiter="#", namespace="protobunny"
+)
 
 backend_configs = {
     "rabbitmq": rabbitmq_backend_config,

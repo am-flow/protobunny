@@ -148,7 +148,7 @@ class Connection(BaseLocalConnection):
         suffix = f"shared-{context_id}" if shared else context_id
         return f"local-sub-{topic}-{suffix}"
 
-    async def setup_queue(self, topic: str, shared: bool) -> asyncio.Queue:
+    async def setup_queue(self, topic: str, shared: bool = False) -> asyncio.Queue:
         """Create appropriate queue type."""
         if topic == self.logger_prefix:
             self._connection.logger_queue = asyncio.Queue()

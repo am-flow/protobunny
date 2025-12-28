@@ -7,9 +7,10 @@ import pytest
 import redis.asyncio as redis
 from aio_pika import IncomingMessage
 
-import protobunny as pb_sync
+import protobunny as pb_base
 from protobunny import RequeueMessage
 from protobunny import asyncio as pb
+from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
 from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
@@ -31,12 +32,14 @@ from .utils import (
 )
 
 
-@pytest.mark.parametrize("backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio, mosquitto_backend_aio]
+)
 @pytest.mark.asyncio
 class TestConnection:
     @pytest.fixture(autouse=True)
     async def mock_connections(
-        self, backend, mocker, mock_redis_client, mock_aio_pika, test_config
+        self, backend, mocker, mock_redis_client, mock_aio_pika, mock_mosquitto, test_config
     ) -> tp.AsyncGenerator[dict[str, AsyncMock | None], None]:
         backend_name = backend.__name__.split(".")[-1]
 
@@ -44,20 +47,20 @@ class TestConnection:
         test_config.backend = backend_name
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
-        mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.backends, "default_configuration", test_config)
+        mocker.patch.object(pb_base.config, "default_configuration", test_config)
+        mocker.patch.object(pb_base.models, "default_configuration", test_config)
+        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
+        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
         mocker.patch.object(pb.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
         connection_module = getattr(pb.backends, backend_name).connection
         if hasattr(connection_module, "default_configuration"):
             mocker.patch.object(connection_module, "default_configuration", test_config)
 
-        assert pb_sync.helpers.get_backend() == backend
+        assert pb_base.helpers.get_backend() == backend
         assert pb.get_backend() == backend
         assert isinstance(get_queue(tests.tasks.TaskMessage), backend.queues.AsyncQueue)
         conn_with_fake_internal_conn = get_mocked_connection(
-            backend, mock_redis_client, mock_aio_pika, mocker
+            backend, mock_redis_client, mock_aio_pika, mocker, mock_mosquitto
         )
         mocker.patch.object(pb, "get_connection", return_value=conn_with_fake_internal_conn)
         mocker.patch.object(pb, "disconnect", side_effect=backend.connection.disconnect)
@@ -74,6 +77,7 @@ class TestConnection:
             "redis": mock_redis_client,
             "connection": conn_with_fake_internal_conn,
             "python": conn_with_fake_internal_conn._connection,
+            "mosquitto": mock_mosquitto,
         }
         connection_module.Connection.instance_by_vhost.clear()
 

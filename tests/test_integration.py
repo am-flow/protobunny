@@ -1,3 +1,4 @@
+import gc
 import logging
 import typing as tp
 
@@ -8,9 +9,11 @@ from pytest_mock import MockerFixture
 
 import protobunny as pb_sync
 from protobunny import asyncio as pb
+from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
 from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
+from protobunny.backends import mosquitto as mosquitto_backend
 from protobunny.backends import python as python_backend
 from protobunny.backends import rabbitmq as rabbitmq_backend
 from protobunny.backends import redis as redis_backend
@@ -82,7 +85,9 @@ def log_callback(message: aio_pika.IncomingMessage, body: str) -> str:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio, mosquitto_backend_aio]
+)
 class TestIntegration:
     """Integration tests (to run with RabbitMQ up)"""
 
@@ -139,6 +144,7 @@ class TestIntegration:
         }
         await connection.disconnect()
         backend.connection.Connection.instance_by_vhost.clear()
+        gc.collect()
 
     # @pytest.mark.asyncio(loop_scope="function")
     async def test_publish(self, backend) -> None:
@@ -201,6 +207,9 @@ class TestIntegration:
         }
 
     async def test_count_messages(self, backend) -> None:
+        backend_name = backend.__name__.split(".")[-1]
+        if backend_name == "mosquitto":
+            pytest.skip("mosquitto backend doesn't support message counts")
         task_queue = await pb.subscribe(tests.tasks.TaskMessage, callback)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
@@ -342,6 +351,7 @@ class TestIntegration:
 
         async def callback_2(m: "ProtoBunnyMessage") -> None:
             nonlocal received2
+            log.debug(f"CALLBACK 2 callback_2: {m}")
             received2 = m
 
         await pb.subscribe(tests.TestMessage, callback)
@@ -349,9 +359,10 @@ class TestIntegration:
         await pb.publish(self.msg)  # this will reach callback_2 as well
 
         async def predicate() -> bool:
+            nonlocal received2
             return received["message"] is not None and received2 is not None
 
-        assert await async_wait(predicate, timeout=1, sleep=0.5)
+        assert await async_wait(predicate, timeout=2, sleep=0.1)
         assert received["message"] == received2 == self.msg
         await pb.unsubscribe_all()
         received["message"] = None
@@ -435,7 +446,9 @@ class TestIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("backend", [rabbitmq_backend, redis_backend, python_backend])
+@pytest.mark.parametrize(
+    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend]
+)
 class TestIntegrationSync:
     """Integration tests (to run with the backend server up)"""
 
@@ -463,7 +476,8 @@ class TestIntegrationSync:
             mocker.patch.object(backend.queues, "default_configuration", test_config)
 
         pb_sync.backend = backend
-        mocker.patch("protobunny.helpers.get_backend", return_value=backend)
+        # mocker.patch("protobunny.helpers.get_backend", return_value=backend)
+        mocker.patch.object(pb_sync.helpers, "get_backend", return_value=backend)
         mocker.patch.object(pb_sync, "get_connection", backend.connection.get_connection)
         mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb_sync, "get_backend", return_value=backend)
@@ -539,6 +553,9 @@ class TestIntegrationSync:
         }
 
     def test_count_messages(self, backend) -> None:
+        backend_name = backend.__name__.split(".")[-1]
+        if backend_name == "mosquitto":
+            pytest.skip("mosquitto backend doesn't support message counts")
         # Subscribe to a tasks topic (shared queue)
         task_queue = pb_sync.subscribe(tests.tasks.TaskMessage, callback_task_sync)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])

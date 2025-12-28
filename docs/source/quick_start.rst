@@ -258,15 +258,32 @@ Subscribe to results for a message type
 JSON-like content fields
 ------------------------
 
-Some protobuf fields are designed to carry arbitrary structured payloads
-(maps/dicts/lists). Protobunny supports transparent conversion so you
-can work with normal Python structures:
+Protobuf supports maps and lists as message fields. Maps can’t have
+arbitrary structures: the values of a map must be of the same type.
+
+Protobunny adds a layer over protobuf to carry arbitrary structured
+payloads (dicts/lists), by supporting transparent conversion so you can
+work with normal Python structures:
 
 - Serialize: dictionaries/lists are encoded into the message field
 - Deserialize: those fields come back as Python structures
 
 This is particularly useful for metrics, metadata, and structured return
 values in results.
+
+Example: The TaskMessage above has a ``options`` field that can carry
+arbitrary JSON-like payload.
+
+.. code:: python
+
+   import mymessagelib as mml
+
+   msg = mml.tests.TaskMessage(content="test1", options={"test":"Test", "number_list": [1,2,3]})
+   serialized = bytes(msg)
+   print(serialized)
+   deserialized = mml.tests.TaskMessage.parse(serialized)
+   print(deserialized)
+   assert deserialized.options == {"test":"Test", "number_list": [1,2,3]}
 
 --------------
 

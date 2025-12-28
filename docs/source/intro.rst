@@ -1,7 +1,7 @@
 Protobunny
 ==========
 
-Note: The project is in early development.
+.. warning:: The project is in early development.
 
 The ``protobunny`` library simplifies messaging for asynchronous tasks
 by providing:
@@ -21,7 +21,7 @@ by providing:
 Requirements
 ------------
 
-- Python >= 3.10, < 3.13
+- Python >= 3.10, < 3.14
 
 Project scope
 -------------

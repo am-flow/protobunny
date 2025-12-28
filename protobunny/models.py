@@ -534,8 +534,10 @@ def deserialize_message(topic: str | None, body: bytes) -> "ProtoBunnyMessage | 
     """
     if not topic:
         raise ValueError("Routing key was not set. Invalid topic")
+    # remove backend namespace prefix
     log.debug("Deserializing message: %s", topic)
     message_type: type["ProtoBunnyMessage"] = get_message_class_from_topic(topic)
+    log.debug("Found Message type: %s", message_type)
     return message_type().parse(body) if message_type else None
 
 

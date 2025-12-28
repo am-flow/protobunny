@@ -236,7 +236,6 @@ class BaseSyncConnection(BaseConnection, ABC):
                 cls.instance_by_vhost[vhost] = cls(vhost=vhost)
             if not cls.instance_by_vhost[vhost].is_connected():
                 cls.instance_by_vhost[vhost].connect()
-            log.info("Returning singleton SyncConnection instance for vhost %s", vhost)
             return cls.instance_by_vhost[vhost]
 
     def publish(
@@ -445,7 +444,10 @@ class BaseSyncQueue(BaseQueue, ABC):
         """
         if not message.routing_key:
             raise ValueError("Routing key was not set. Invalid topic")
-        if message.routing_key == self.result_topic or message.routing_key.endswith(".result"):
+        delimiter = default_configuration.backend_config.topic_delimiter
+        if message.routing_key == self.result_topic or message.routing_key.endswith(
+            f"{delimiter}result"
+        ):
             # Skip a result message. Handling result messages happens in `_receive_results` method.
             # In case the subscription has .# as binding key,
             # this method catches also results message for all the topics in that namespace.
@@ -459,7 +461,11 @@ class BaseSyncQueue(BaseQueue, ABC):
             log.exception("Could not process message: %s", str(message.body))
             msg = deserialize_message(message.routing_key, message.body)
             if not msg:
-                log.warning("Could not deserialize with topic: %s", str(message.routing_key))
+                log.warning(
+                    "Could not deserialize with routing key: %s - not publishing a result",
+                    str(message.routing_key),
+                )
+                return
             result = msg.make_result(return_code=ReturnCode.FAILURE, error=str(exc))
             self.publish_result(
                 result, topic=msg.result_topic, correlation_id=message.correlation_id

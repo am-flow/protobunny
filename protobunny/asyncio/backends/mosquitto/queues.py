@@ -1,6 +1,6 @@
 import logging
 
-from .. import (
+from protobunny.asyncio.backends import (
     BaseAsyncQueue,
 )
 
@@ -8,4 +8,5 @@ log = logging.getLogger(__name__)
 
 
 class AsyncQueue(BaseAsyncQueue):
-    pass
+    def get_tag(self) -> str:
+        return self.subscription

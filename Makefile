@@ -30,40 +30,41 @@ test:
 	uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
 	uv run pytest tests/ -m "not integration"
+
 t:
 	# Usage: make t t=tests/test_connection.py::test_sync_get_message_count
-	PYTHONASYNCIODEBUG=1 PYTHONBREAKPOINT=ipdb.set_trace uv run pytest  ${t} -s -vvvv --durations=0
+	PYTHONASYNCIODEBUG=1 PYTHONBREAKPOINT=ipdb.set_trace uv run pytest ${t} -s -vvvv --durations=0
 
 integration-test:
-	uv run pytest tests/ -m "integration"
+	uv run pytest tests/ -m "integration" ${t}
 
 integration-test-py310:
 	source .venv310/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
-	UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "integration" -vvv -s
+	UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest ${t} -m "integration" -vvv -s
 
 integration-test-py311:
 	source .venv311/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
-	UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "integration" -vvv -s
+	UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest ${t} -m "integration" -vvv -s
 
 integration-test-py312:
 	source .venv312/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
-	UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest tests/ -m "integration" -vvv -s
+	UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest ${t} -m "integration" -vvv -s
 
 integration-test-py313:
 	source .venv313/bin/activate
 	UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
-	UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "integration" -vvv -s
+	UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest ${t} -m "integration" -vvv -s
 
 test-py310:
 	source .venv310/bin/activate
@@ -88,7 +89,7 @@ test-py312:
 
 test-py313:
 	source .venv313/bin/activate
-	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv sync --extra rabbitmq --extra redis --dev
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev
 	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
 	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "not integration" -vvv -s
