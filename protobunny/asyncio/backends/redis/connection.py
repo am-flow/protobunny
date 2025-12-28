@@ -315,7 +315,12 @@ class Connection(BaseAsyncConnection):
                 log.debug("Subscribing callback to Redis PubSub topic %s", queue["key"])
                 task = asyncio.create_task(
                     self._tasks_consumer_loop(
-                        queue["key"], queue["group_name"], queue["tag"], callback, ready_event, stop_event
+                        queue["key"],
+                        queue["group_name"],
+                        queue["tag"],
+                        callback,
+                        ready_event,
+                        stop_event,
                     )
                 )
 
@@ -337,7 +342,9 @@ class Connection(BaseAsyncConnection):
                     queue["mechanism"] == "pubsub"
                 ), f"Invalid queue mechanism: {queue['mechanism']}"
                 # create the asyncio task for the consumer loop
-                task = asyncio.create_task(self._pubsub_consumer_loop(ready_event, callback, queue, stop_event))
+                task = asyncio.create_task(
+                    self._pubsub_consumer_loop(ready_event, callback, queue, stop_event)
+                )
                 # Wait for the loop to signal it has performed the first check
                 await asyncio.wait_for(ready_event.wait(), timeout=1.0)
                 # register the topic in the registry
@@ -352,7 +359,11 @@ class Connection(BaseAsyncConnection):
                 return queue["tag"]
 
     async def _pubsub_consumer_loop(
-        self, ready_event: asyncio.Event, callback: tp.Callable, queue: dict, stop_event: asyncio.Event
+        self,
+        ready_event: asyncio.Event,
+        callback: tp.Callable,
+        queue: dict,
+        stop_event: asyncio.Event,
     ):
         pubsub = self._connection.pubsub()
         callback = functools.partial(self._on_message_pubsub, queue["key"], callback)
@@ -474,7 +485,9 @@ class Connection(BaseAsyncConnection):
                     consumername=consumer_id,
                     streams={key: ">"},
                     count=self.prefetch_count or 10,
-                    block=None if is_mock else 1000,  # Block for 1 second then loop (allows for clean shutdown)
+                    block=None
+                    if is_mock
+                    else 1000,  # Block for 1 second then loop (allows for clean shutdown)
                 )
                 if not response:
                     continue

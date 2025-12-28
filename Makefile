@@ -63,27 +63,27 @@ integration-test-py313:
 
 test-py310:
 	source .venv310/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev --group docs
-	UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "not integration" -vvv -s
+	VIRTUAL_ENV=.venv310 UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv310 UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	VIRTUAL_ENV=.venv310 PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "not integration" -vvv -s
 
 test-py311:
 	source .venv311/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev --group docs
-	UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "not integration" -vvv -s
+	VIRTUAL_ENV=.venv311 UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv311 UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	VIRTUAL_ENV=.venv311 PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "not integration" -vvv -s
 
 test-py312:
 	source .venv312/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev --group docs
-	UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest tests/ -m "not integration" -vvv -s
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest tests/ -m "not integration" -vvv -s
 
 test-py313:
 	source .venv313/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev --group docs
-	UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
-	UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "not integration" -vvv -s
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv sync --extra rabbitmq --extra redis --dev
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "not integration" -vvv -s
 
 # Releasing
 .PHONY: docs clean build-package publish-test publish-pypi convert-md

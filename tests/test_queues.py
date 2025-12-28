@@ -1,6 +1,5 @@
-import sys
-
 import asyncio
+import sys
 import typing as tp
 from unittest.mock import ANY, MagicMock
 

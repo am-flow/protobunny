@@ -48,7 +48,6 @@ async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedi
     await client.aclose()
 
 
-
 @pytest.fixture
 async def mock_aio_pika():
     """Mocks the entire aio_pika connection chain."""
