@@ -211,8 +211,8 @@ jobs:
 
       - name: Smoke test MQTT
         run: |
-          docker exec ${{ job.services.mosquitto.id }} mosquitto_pub -h localhost -p 1883 -t ci/test -m "hello"
-          docker exec ${{ job.services.mosquitto.id }} mosquitto_sub -h localhost -p 1883 -t ci/test -C 1
+          docker exec ${{ job.services.mosquitto.id }} mosquitto_pub -h localhost -t ci/test -m "hello"
+          docker exec ${{ job.services.mosquitto.id }} mosquitto_sub -h localhost -t ci/test -C 1
 
       - name: Run tests
         run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
