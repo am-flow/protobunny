@@ -35,7 +35,7 @@ jobs:
         run: |
           if [ "${{ matrix.python-version }}" == "3.13" ]; then
             # Sync everything EXCEPT the 'numpy' extra
-            uv sync --extra rabbitmq --extra redis --dev
+            uv sync --extra rabbitmq --extra redis --dev --extra mosquitto
           else
             # Install everything for older versions
             uv sync --all-extras
@@ -179,31 +179,21 @@ jobs:
 
   integration_test_mosquitto:
     runs-on: ubuntu-latest
+    services:
+      mosquitto:
+        image: eclipse-mosquitto:2
+        ports:
+          - 1883:1883
+        options: >-
+          --health-cmd "mosquitto_sub -h localhost -t '$SYS/#' -C 1 || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        volumes:
+          - .github/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
     steps:
       - uses: actions/checkout@v6
-      - name: Start Mosquitto
-        run: |
-          docker run -d \
-            --name mosquitto_test \
-            -p 1883:1883 \
-            eclipse-mosquitto:latest \
-            mosquitto -c /dev/null --allow-anonymous true --listener 1883
-
-      - name: Wait for Mosquitto to be ready
-        run: |
-          # Try to connect every 1s until successful (max 10 tries)
-          for i in {1..10}; do
-            if docker exec mosquitto_test mosquitto_sub -t 'health' -E -i 'hc' -C 1; then
-              echo "Mosquitto is ready!"
-              exit 0
-            fi
-            echo "Waiting for Mosquitto..."
-            sleep 1
-          done
-          echo "Mosquitto failed to start"
-          docker logs mosquitto_test
-          exit 1
-
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -224,7 +214,3 @@ jobs:
         env:
           MOSQUITTO_HOST: localhost
           MOSQUITTO_PORT: 1883
-
-      - name: Cleanup Mosquitto
-        if: always()
-        run: docker rm -f mosquitto_test
