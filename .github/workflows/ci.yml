@@ -180,32 +180,22 @@ jobs:
   integration_test_mosquitto:
     runs-on: ubuntu-latest
 
-    services:
-      mosquitto:
-        image: eclipse-mosquitto:2
-
-        ports:
-          - 1883:1883
-        options: >-
-          --health-cmd "mosquitto_sub -h localhost -t '$SYS/#' -C 1 || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - uses: actions/checkout@v6
+      - name: Start Mosquitto docker container with anonymous access enabled
+        run: |
+          docker run -d --name mosquitto \
+            -p 1883:1883 \
+            eclipse-mosquitto:2 \
+            mosquitto -c /mosquitto-no-auth.conf
+          sleep 3
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-
-      - name: Configure Mosquitto for anonymous access
-        run: |
-          docker exec ${{ job.services.mosquitto.id }} sh -c "echo 'listener 1883' > /mosquitto/config/mosquitto.conf"
-          docker exec ${{ job.services.mosquitto.id }} sh -c "echo 'allow_anonymous true' >> /mosquitto/config/mosquitto.conf"
-          docker restart ${{ job.services.mosquitto.id }}
-          sleep 5
 
       - name: Set up Python 3.12
         run: uv python install 3.12
@@ -216,21 +206,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
-      - name: Create Mosquitto config
-        run: |
-          echo "listener 1883" > /tmp/mosquitto.conf
-          echo "allow_anonymous true" >> /tmp/mosquitto.conf
-
-      - name: Restart Mosquitto with config
-        run: docker restart ${{ job.services.mosquitto.id }}
-
-      - name: Wait for Mosquitto
-        run: sleep 5
-
       - name: Smoke test MQTT
         run: |
-          docker exec ${{ job.services.mosquitto.id }} mosquitto_pub -h localhost -t ci/test -m "hello"
-          docker exec ${{ job.services.mosquitto.id }} mosquitto_sub -h localhost -t ci/test -C 1
+          docker exec mosquitto mosquitto_pub -h localhost -t ci/test -m "hello"
+          docker exec mosquitto mosquitto_sub -h localhost -t ci/test -C 1 -W 3
 
       - name: Run tests
         run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
