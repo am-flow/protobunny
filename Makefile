@@ -39,25 +39,25 @@ integration-test:
 
 integration-test-py310:
 	source .venv310/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev --group docs
+	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "integration" -vvv -s
 
 integration-test-py311:
 	source .venv311/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev --group docs
+	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "integration" -vvv -s
 
 integration-test-py312:
 	source .venv312/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev --group docs
+	UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest tests/ -m "integration" -vvv -s
 
 integration-test-py313:
 	source .venv313/bin/activate
-	UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev --group docs
+	UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev
 	UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "integration" -vvv -s
 

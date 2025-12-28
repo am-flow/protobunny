@@ -23,7 +23,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-          cache-suffix: ${{ github.sha }}
+          cache-suffix: "py${{ matrix.python-version }}-${{ github.sha }}"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}

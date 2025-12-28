@@ -1163,7 +1163,6 @@ dependencies = [
     { name = "betterproto", extra = ["compiler"] },
     { name = "click" },
     { name = "grpcio-tools" },
-    { name = "numpy" },
     { name = "pytest-env" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
@@ -1215,7 +1214,6 @@ requires-dist = [
     { name = "betterproto", extras = ["compiler"], specifier = ">=2.0.0b7,<3" },
     { name = "click", specifier = ">=8.2.1" },
     { name = "grpcio-tools", specifier = ">=1.62.0,<2" },
-    { name = "numpy", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'numpy'", specifier = ">=1.26" },
     { name = "pytest-env", specifier = ">=1.1.3" },
     { name = "redis", marker = "extra == 'redis'", specifier = "<8" },
