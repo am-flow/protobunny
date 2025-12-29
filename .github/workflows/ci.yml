@@ -216,8 +216,8 @@ jobs:
       - name: Smoke test MQTT (Container-to-Host)
         run: |
           # Use a lightweight alpine image that already has the client
-          docker run --rm --network host efrecon/mqtt-client sub -h 127.0.0.1 -t "ci/test" -C 1 -W 5
-          docker run --rm --network host efrecon/mqtt-client pub -h 127.0.0.1 -t "ci/test" -m "hello"
+          docker run --rm --network container:mosquitto efrecon/mqtt-client sub -h 127.0.0.1 -t "ci/test" -C 1 -W 5 -d
+          docker run --rm --network container:mosquitto efrecon/mqtt-client pub -h 127.0.0.1 -t "ci/test" -m "hello" -d
 
       - name: Run tests
         run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
