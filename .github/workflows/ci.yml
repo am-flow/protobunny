@@ -186,7 +186,7 @@ jobs:
           docker run -d -p 1883:1883 --name mos eclipse-mosquitto:latest \
           /usr/sbin/mosquitto -c /mosquitto-no-auth.conf
 
-      - name: Debug Mosquitto
+      - name: Log Mosquitto container
         run: |
           sleep 3
           echo "=== Container logs ==="
@@ -215,11 +215,9 @@ jobs:
 
       - name: Smoke test MQTT
         run: |
-          # 1. Wait for the port to actually be open
+          # Wait for the port to be open
           timeout 30s sh -c 'until nc -z localhost 1883; do sleep 1; done'
 
-          # 2. Use a simple python one-liner to verify a real MQTT handshake
-          # This won't loop or flake like the shell client in a container
           uv run python -c "
           import paho.mqtt.client as mqtt
           import sys
