@@ -32,6 +32,15 @@ all messages that are part of the package or of a subpackage of `tasks`, are con
 
 A Task message will be consumed by **one** of the subscribed worker (your callback function) while a standard message will be received by all listeners to the PubSub queue.
 
+==========  =============================== =========================================
+Feature     ml.ChatMessage (Regular)        ml.tasks.ArchiveMessage (Task)
+==========  =============================== =========================================
+Pattern     Broadcast (Pub/Sub)	Worker      Queue (Producer/Consumer)
+Delivery    Every subscriber gets a copy    Only one worker gets a copy
+Use Case    Real-time UI updates, Presence  DB Writes, Emailing, Image Processing
+==========  =============================== =========================================
+
+
 Results (reply-style messages)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

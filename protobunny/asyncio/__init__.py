@@ -1,3 +1,6 @@
+import asyncio
+import signal
+
 """
 A module providing support for messaging and communication using RabbitMQ as the backend.
 
@@ -11,7 +14,6 @@ generated package-specific configurations, and other base utilities. Exports are
 as per the backend configuration.
 
 """
-
 __all__ = [
     "get_message_count",
     "get_queue",
@@ -23,9 +25,6 @@ __all__ = [
     "unsubscribe",
     "unsubscribe_all",
     "unsubscribe_results",
-    # from .core
-    "commons",
-    "results",
     # from .config
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
@@ -34,8 +33,12 @@ __all__ = [
     "RequeueMessage",
     "ConnectionError",
     "reset_connection",
-    "get_connection",
+    "connect",
     "disconnect",
+    "run_forever",
+    # from .core
+    "commons",
+    "results",
 ]
 
 import inspect
@@ -56,30 +59,42 @@ from ..exceptions import ConnectionError, RequeueMessage
 from ..registry import default_registry
 
 if tp.TYPE_CHECKING:
-    from ..models import AsyncCallback, LoggerCallback, ProtoBunnyMessage
+    from types import ModuleType
+
+    from ..core.results import Result
+    from ..models import (
+        AsyncCallback,
+        IncomingMessageProtocol,
+        LoggerCallback,
+        ProtoBunnyMessage,
+    )
 
 
 from ..helpers import get_backend, get_queue
 from .backends import BaseAsyncQueue, LoggingAsyncQueue
 
-########################
-# Base Methods
-########################
+__version__ = version(PACKAGE_NAME)
+
+############################
+# -- Async top-level methods
+############################
 
 log = logging.getLogger(PACKAGE_NAME)
 
 
-try:
+async def reset_connection():
     backend = get_backend()
-except ValueError as exc:
-    raise exc
+    return await backend.connection.reset_connection()
 
 
-reset_connection = backend.connection.reset_connection
-get_connection = backend.connection.get_connection
-disconnect = backend.connection.disconnect
+async def connect():
+    backend = get_backend()
+    return await backend.connection.connect()
 
-# -- Async top-level methods
+
+async def disconnect():
+    backend = get_backend()
+    return await backend.connection.disconnect()
 
 
 async def publish(message: "ProtoBunnyMessage") -> None:
@@ -249,7 +264,32 @@ def is_module_tasks(module_name: str) -> bool:
     return "tasks" in module_name.split(".")
 
 
-__version__ = version(PACKAGE_NAME)
+def run_forever(main: tp.Callable[..., tp.Awaitable[None]]) -> None:
+    asyncio.run(_run_forever(main))
+
+
+async def _run_forever(main: tp.Callable[..., tp.Awaitable[None]]) -> None:
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    async def shutdown(signum: int) -> None:
+        log.info("Shutting down protobunny connections %s", signal.Signals(signum).name)
+        await unsubscribe_all()
+        await disconnect()
+        stop_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        # Note: add_signal_handler requires a callback, so we use a lambda
+        def _handler(s: int) -> asyncio.Task[None]:
+            return asyncio.create_task(shutdown(s))
+
+        loop.add_signal_handler(sig, _handler, sig)
+
+    log.info("Started. Press Ctrl+C to exit.")
+    # Wait here forever (non-blocking) until shutdown() is called
+    await main()
+    await stop_event.wait()
+
 
 #######################################################
 # Dynamically added by post_compile.py

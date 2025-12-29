@@ -118,12 +118,12 @@ class TestIntegration:
 
         pb.backend = backend
         mocker.patch("protobunny.asyncio.backends.get_backend", return_value=backend)
-        mocker.patch.object(pb, "get_connection", backend.connection.get_connection)
+        mocker.patch.object(pb, "connect", backend.connection.connect)
         mocker.patch.object(pb, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb, "get_backend", return_value=backend)
 
         # Assert the patching is working for setting the backend
-        connection = await pb.get_connection()
+        connection = await pb.connect()
         assert isinstance(connection, backend.connection.Connection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage".replace(
@@ -215,7 +215,7 @@ class TestIntegration:
         task_queue = await pb.subscribe(tests.tasks.TaskMessage, callback)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
         # we subscribe to create the queue in RabbitMQ
-        connection = await pb.get_connection()
+        connection = await pb.connect()
         # remove past messages
         await connection.purge(task_queue.topic, reset_groups=True)
 
@@ -483,12 +483,12 @@ class TestIntegrationSync:
         pb_sync.backend = backend
         # mocker.patch("protobunny.helpers.get_backend", return_value=backend)
         mocker.patch.object(pb_sync.helpers, "get_backend", return_value=backend)
-        mocker.patch.object(pb_sync, "get_connection", backend.connection.get_connection)
+        mocker.patch.object(pb_sync, "connect", backend.connection.connect)
         mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb_sync, "get_backend", return_value=backend)
 
         # Assert the patching is working for setting the backend
-        connection = pb_sync.get_connection()
+        connection = pb_sync.connect()
         assert isinstance(connection, backend.connection.Connection)
         queue = pb_sync.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage".replace(
@@ -567,7 +567,7 @@ class TestIntegrationSync:
         # Subscribe to a tasks topic (shared queue)
         task_queue = pb_sync.subscribe(tests.tasks.TaskMessage, callback_task_sync)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
-        connection = pb_sync.get_connection()
+        connection = pb_sync.connect()
         # remove past messages
         connection.purge(task_queue.topic, reset_groups=True)
         # we unsubscribe so the published messages

@@ -77,10 +77,10 @@ class TestQueue:
                 mock = backend.connection.Connection()
                 mock.is_connected_event.set()
 
-        mocker.patch.object(pb, "get_connection", return_value=mock)
+        mocker.patch.object(pb, "connect", return_value=mock)
         mocker.patch("protobunny.asyncio.backends.BaseAsyncQueue.get_connection", return_value=mock)
         mocker.patch(
-            f"protobunny.asyncio.backends.{backend_name}.connection.get_connection",
+            f"protobunny.asyncio.backends.{backend_name}.connection.connect",
             return_value=mock,
         )
         await pb.disconnect()
@@ -266,11 +266,9 @@ class TestSyncQueue:
         assert isinstance(get_queue(tests.TestMessage), backend.queues.SyncQueue)
 
         mock = mocker.MagicMock(spec=backend.connection.Connection)  # should be a Sync connection
-        mocker.patch.object(pb_base, "get_connection", return_value=mock)
+        mocker.patch.object(pb_base, "connect", return_value=mock)
         mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-        mocker.patch(
-            f"protobunny.backends.{backend_name}.connection.get_connection", return_value=mock
-        )
+        mocker.patch(f"protobunny.backends.{backend_name}.connection.connect", return_value=mock)
         assert not asyncio.iscoroutinefunction(pb_base.disconnect)
         pb_base.disconnect()
         yield mock

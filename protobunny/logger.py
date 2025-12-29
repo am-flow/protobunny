@@ -38,7 +38,9 @@ import typing as tp
 from functools import partial
 from types import FrameType
 
-import protobunny as pb
+import protobunny as pb_sync
+from protobunny import asyncio as pb
+from protobunny.config import load_config
 from protobunny.models import IncomingMessageProtocol, LoggerCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -93,12 +95,12 @@ def _get_parser() -> argparse.ArgumentParser:
 def start_logger_sync(callback: "LoggerCallback", prefix: str) -> None:
     # If subscribe_logger is called without arguments,
     # it uses a default logger callback
-    queue = pb.subscribe_logger_sync(callback, prefix)
+    queue = pb_sync.subscribe_logger(callback, prefix)
 
     def _handler(signum: int, _: FrameType | None) -> None:
         log.info("Received signal %s, shutting down %s", signal.Signals(signum).name, str(queue))
         queue.unsubscribe(if_empty=False, if_unused=False)
-        pb.disconnect_sync()
+        pb_sync.disconnect()
 
     signal.signal(signal.SIGINT, _handler)
     signal.signal(signal.SIGTERM, _handler)
@@ -136,7 +138,8 @@ if __name__ == "__main__":
     args = _get_parser().parse_args()
     filter_regex = re.compile(args.filter) if args.filter else None
     func = partial(log_callback, args.max_length, filter_regex)
-    if args.mode == "async":
+    config = load_config()
+    if config.use_async:
         asyncio.run(start_logger(func, args.prefix))
     else:
         start_logger_sync(func, args.prefix)

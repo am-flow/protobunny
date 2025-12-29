@@ -62,14 +62,14 @@ class TestConnection:
         conn_with_fake_internal_conn = get_mocked_connection(
             backend, mock_redis_client, mock_aio_pika, mocker, mock_mosquitto
         )
-        mocker.patch.object(pb, "get_connection", return_value=conn_with_fake_internal_conn)
+        mocker.patch.object(pb, "connect", return_value=conn_with_fake_internal_conn)
         mocker.patch.object(pb, "disconnect", side_effect=backend.connection.disconnect)
         mocker.patch(
             "protobunny.asyncio.backends.BaseAsyncQueue.get_connection",
             return_value=conn_with_fake_internal_conn,
         )
         mocker.patch(
-            f"protobunny.asyncio.backends.{backend_name}.connection.get_connection",
+            f"protobunny.asyncio.backends.{backend_name}.connection.connect",
             return_value=conn_with_fake_internal_conn,
         )
         yield {
@@ -164,8 +164,8 @@ class TestConnection:
 
     @pytest.mark.asyncio
     async def test_singleton_logic(self, backend):
-        conn1 = await backend.connection.get_connection()
-        conn2 = await backend.connection.get_connection()
+        conn1 = await backend.connection.connect()
+        conn2 = await backend.connection.connect()
         assert conn1 is conn2
         await conn1.disconnect()
 

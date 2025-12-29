@@ -108,7 +108,7 @@ class BaseSyncConnection(BaseConnection, ABC):
     _lock: threading.RLock
     _stopped: asyncio.Event | None
     instance_by_vhost: dict[str, "BaseSyncConnection"]
-    async_class: tp.Type["BaseAsyncConnection | None"]
+    async_class: "type[BaseAsyncConnection] | None"
 
     def __init__(self, **kwargs):
         """Initialize sync connection.
@@ -129,9 +129,10 @@ class BaseSyncConnection(BaseConnection, ABC):
         self._started = False
         self.instance_by_vhost = {}
 
-    @abstractmethod
     def get_async_connection(self, **kwargs) -> "BaseAsyncConnection":
-        ...
+        if hasattr(self, "_async_conn"):
+            return self._async_conn
+        return self.async_class(**kwargs)
 
     def _run_loop(self) -> None:
         """Run the event loop in a dedicated thread."""
@@ -404,7 +405,7 @@ class BaseSyncConnection(BaseConnection, ABC):
 class BaseSyncQueue(BaseQueue, ABC):
     def get_connection(self) -> BaseConnection:
         backend = get_backend()
-        return backend.connection.get_connection()
+        return backend.connection.connect()
 
     def publish(self, message: "ProtoBunnyMessage") -> None:
         """Publish a message to the queue.
@@ -571,13 +572,14 @@ class LoggingSyncQueue(BaseSyncQueue):
     """Represents a specialized queue for logging purposes.
 
     >>> import protobunny as pb
-    >>> pb.subscribe_logger_sync()  # it uses the default logger_callback
+    >>> pb.subscribe_logger()  # it uses the default logger_callback
 
-    You can add a custom callback that accepts message: aio_pika.IncomingMessage, msg_content: str as arguments.
+    You can add a custom callback that accepts the envelope message from the backend and msg_content: str as arguments.
+    The type of message will respect the protocol IncomingMessageProtocol
 
-    >>> def log_callback(message: aio_pika.IncomingMessage, msg_content: str):
+    >>> def log_callback(message: "IncomingMessageProtocol", msg_content: str):
     >>>     print(message.body)
-    >>> pb.subscribe_logger_sync(log_callback)
+    >>> pb.subscribe_logger(log_callback)
 
     You can use functools.partial to add more arguments
 

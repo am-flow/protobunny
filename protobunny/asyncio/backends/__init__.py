@@ -171,7 +171,7 @@ class BaseAsyncConnection(BaseConnection, ABC):
 class BaseAsyncQueue(BaseQueue, ABC):
     async def get_connection(self) -> "BaseAsyncConnection":
         backend = get_backend()
-        return await backend.connection.get_connection()
+        return await backend.connection.connect()
 
     async def publish(self, message: ProtoBunnyMessage) -> None:
         """Publish a message to the queue.
@@ -349,7 +349,7 @@ class BaseAsyncQueue(BaseQueue, ABC):
             body=body,
             correlation_id=correlation_id or b"",
         )
-        conn = await backend.connection.get_connection()
+        conn = await backend.connection.connect()
         await conn.publish(topic, message)
 
 

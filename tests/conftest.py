@@ -120,7 +120,7 @@ async def mock_aio_pika():
 def mock_sync_rmq_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=rabbitmq_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection", return_value=mock)
+    mocker.patch("protobunny.backends.rabbitmq.connection.connect", return_value=mock)
     yield mock
 
 
@@ -135,7 +135,7 @@ async def mock_rmq_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncM
 def mock_sync_redis_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=redis_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.get_connection", return_value=mock)
+    mocker.patch("protobunny.backends.rabbitmq.connection.connect", return_value=mock)
     yield mock
 
 
@@ -150,7 +150,7 @@ async def mock_redis_connection(mocker: MockerFixture) -> tp.AsyncGenerator[Asyn
 def mock_sync_mqtt_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=mosquitto_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.mosquitto.connection.get_connection", return_value=mock)
+    mocker.patch("protobunny.backends.mosquitto.connection.connect", return_value=mock)
     yield mock
 
 
@@ -220,3 +220,12 @@ def pika_messages_eq() -> tp.Generator[None, None, None]:
     aio_pika.Message.__eq__ = compare_aio_pika_messages  # type: ignore
     yield
     aio_pika.Message.__eq__ = object.__eq__  # type: ignore
+
+
+@pytest.fixture(autouse=True)
+def clear_cached_func() -> tp.Generator[None, None, None]:
+    from protobunny.helpers import _build_routing_key
+
+    _build_routing_key.cache_clear()
+    yield
+    _build_routing_key.cache_clear()

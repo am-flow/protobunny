@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("RABBITMQ_VHOST", "/")
 
 
-def get_connection() -> "Connection":
+def connect() -> "Connection":
     """Get the singleton async connection."""
     conn = Connection.get_connection(vhost=VHOST)
     return conn
@@ -20,18 +20,17 @@ def get_connection() -> "Connection":
 
 def reset_connection() -> "Connection":
     """Reset the singleton connection."""
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
-    return get_connection()
+    return connect()
 
 
 def disconnect() -> None:
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
 
 
 class Connection(BaseSyncConnection):
-
     """Synchronous wrapper around Async Rmq Connection.
 
     Manages a dedicated event loop in a background thread to run async operations.
@@ -49,8 +48,3 @@ class Connection(BaseSyncConnection):
     _stopped: asyncio.Event | None = None
     instance_by_vhost: dict[str, "Connection"] = {}
     async_class = RabbitMQConnection
-
-    def get_async_connection(self, **kwargs) -> "Connection":
-        if hasattr(self, "_async_conn"):
-            return self._async_conn
-        return self.async_class(**kwargs)

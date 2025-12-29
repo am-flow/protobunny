@@ -20,7 +20,7 @@ def setup_config(mocker, test_config) -> None:
 
 def test_sync_send_message(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
-    queue = pb.get_queue(msg, backend="rabbitmq")
+    queue = pb.get_queue(msg, backend_name="rabbitmq")
     queue.publish(msg)
     expected_payload = aio_pika.Message(
         bytes(msg),

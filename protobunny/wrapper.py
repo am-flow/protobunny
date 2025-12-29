@@ -78,8 +78,9 @@ def cli():
 @cli.command()
 @click.option("-I", "--proto_path", multiple=True, help="Protobuf search path.")
 @click.option("--python_betterproto_out", help="Output directory for generated classes.")
+@click.option("--source-dir", help="Root directory for generated classes., defaults to current dir")
 @click.argument("rest", nargs=-1)
-def generate(proto_path, python_betterproto_out, rest) -> None:
+def generate(proto_path, python_betterproto_out, source_dir, rest) -> None:
     config = load_config()
     # betterproto_out it can be different from the configured package name so it can optionally be set on cli
     # (e.g. when generating messages for tests instead that main lib `mymessagelib.codegen`)
@@ -108,17 +109,22 @@ def generate(proto_path, python_betterproto_out, rest) -> None:
         cmd.extend(rest)
     else:
         cmd.extend(protobuffer_files)
+
     # Generate py files with protoc for user protobuf messages
     result = subprocess.run(cmd)
     if result.returncode > 0:
         sys.exit(result.returncode)
+
     # Execute internal post compile script for user's betterproto generated classes
     post_compile_script = Path(__file__).parent.parent / "scripts" / "post_compile.py"
-    generated_package_name = betterproto_out.replace(os.sep, ".")
+    source_dir = (
+        source_dir or "./" if python_betterproto_out else config.generated_package_root or "./"
+    )
     cmd = [
         "python",
         str(post_compile_script),
-        f"--proto-pkg={generated_package_name}",
+        f"--proto-pkg={python_betterproto_out or config.generated_package_name}",
+        f"--source-dir={source_dir or config.generated_package_root or './'}",
     ]
     result = subprocess.run(cmd)
     sys.exit(result.returncode)
@@ -127,14 +133,12 @@ def generate(proto_path, python_betterproto_out, rest) -> None:
 @cli.command()
 @click.option("-f", "--filter", "filter_pattern", help="Regex to filter messages.")
 @click.option("-l", "--max-length", default=60, type=int, help="Cut off messages longer than this.")
-@click.option(
-    "-m", "--mode", type=click.Choice(["async", "sync"]), default="async", help="Execution mode."
-)
 @click.option("-p", "--prefix", help="Logger prefix (defaults to config prefix).")
-def log(filter_pattern, max_length, mode, prefix) -> None:
+def log(filter_pattern, max_length, prefix) -> None:
+    config = load_config()
     filter_regex = re.compile(filter_pattern) if filter_pattern else None
     func = functools.partial(log_callback, max_length, filter_regex)
-    if mode == "async":
+    if config.use_async:
         asyncio.run(start_logger(func, prefix))
     else:
         start_logger_sync(func, prefix)

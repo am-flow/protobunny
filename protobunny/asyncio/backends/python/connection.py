@@ -330,16 +330,16 @@ class Connection(BaseLocalConnection):
 
 
 # Convenience functions
-async def get_connection() -> Connection:
+async def connect() -> Connection:
     return await Connection.get_connection(vhost=VHOST)
 
 
 async def reset_connection() -> Connection:
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()
-    return await get_connection()
+    return await connect()
 
 
 async def disconnect() -> None:
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()

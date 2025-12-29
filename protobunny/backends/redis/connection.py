@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
 
 
-def get_connection() -> "Connection":
+def connect() -> "Connection":
     """Get the singleton async connection."""
     conn = Connection.get_connection(vhost=VHOST)
     return conn
@@ -21,13 +21,13 @@ def get_connection() -> "Connection":
 
 def reset_connection() -> "Connection":
     """Reset the singleton connection."""
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
-    return get_connection()
+    return connect()
 
 
 def disconnect() -> None:
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
 
 
@@ -47,11 +47,6 @@ class Connection(BaseSyncConnection):
     _stopped: asyncio.Event | None = None
     instance_by_vhost: dict[str, "Connection"] = {}
     async_class = RedisConnection
-
-    def get_async_connection(self, **kwargs) -> "Connection":
-        if hasattr(self, "_async_conn"):
-            return self._async_conn
-        return self.async_class(**kwargs)
 
     def reset_stream_groups(self, stream_key: str) -> None:
         self._run_coro(self._async_conn.reset_stream_groups(stream_key))

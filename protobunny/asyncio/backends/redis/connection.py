@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
 
 
-async def get_connection() -> "Connection":
+async def connect() -> "Connection":
     """Get the singleton async connection."""
     conn = await Connection.get_connection(vhost=VHOST)
     return conn
@@ -30,13 +30,13 @@ async def get_connection() -> "Connection":
 
 async def reset_connection() -> "Connection":
     """Reset the singleton connection."""
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()
-    return await get_connection()
+    return await connect()
 
 
 async def disconnect() -> None:
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()
 
 
@@ -375,10 +375,6 @@ class Connection(BaseAsyncConnection):
         key = self.build_topic_key(topic)
         tag = f"consumer_{uuid.uuid4().hex[:8]}"
 
-        # # Check local caches
-        # if not shared and key in self.queues:
-        #     return self.queues[key]
-
         if shared:
             group_name = "shared_group"
             log.debug(
@@ -462,8 +458,9 @@ class Connection(BaseAsyncConnection):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log.error("Error in Redis consumer loop: %s", e)
-                await asyncio.sleep(1)  # Backoff on error
+                if "UNBLOCKED" not in str(e):
+                    log.error("Error in Redis consumer loop: %s", e)
+                    await asyncio.sleep(1)  # Backoff on error
 
     async def _on_message_pubsub(
         self, topic: str, callback, envelope: IncomingMessageProtocol
@@ -571,24 +568,19 @@ class Connection(BaseAsyncConnection):
         async with self.lock:
             if tag not in self.consumers:
                 return
-            log.debug("Unsubscribing consumer %s", tag)
             consumer_info = self.consumers.pop(tag)
             if consumer_info:
                 task_to_cancel = consumer_info["task"]
                 stop_event = consumer_info["stop_event"]
                 key = consumer_info["key"]
                 # Stop the local asyncio loop
-                log.info("Stopping consumer %s", tag)
                 stop_event.set()
 
         if task_to_cancel:
             try:
                 # wait for the task to stop (outside the lock otherwise will deadlock for python 3.10/3.11
-                log.debug("Waiting for consumer %s", tag)
                 task_to_cancel.cancel()
                 await asyncio.sleep(0)
-                # await asyncio.gather(task_to_cancel, return_exceptions=True)
-                # await task_to_cancel
                 await asyncio.wait_for(task_to_cancel, timeout=1.0)
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass

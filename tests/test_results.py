@@ -29,7 +29,7 @@ def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection, test_conf
     mocker.patch.object(pb.backends, "default_configuration", test_config)
     mocker.patch.object(pb.helpers, "default_configuration", test_config)
     pb.backend = rabbitmq_backend
-    mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
+    mocker.patch.object(pb, "connect", rabbitmq_backend.connection.connect)
     mocker.patch.object(pb.helpers.default_configuration, "backend", "rabbitmq")
     queue = pb.get_queue(tests.TestMessage)
     assert isinstance(queue, rabbitmq_backend.queues.SyncQueue)

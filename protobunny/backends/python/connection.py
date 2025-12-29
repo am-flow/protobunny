@@ -283,16 +283,16 @@ class Connection(BaseLocalConnection):
 
 
 # Convenience functions
-def get_connection() -> Connection:
+def connect() -> Connection:
     return Connection.get_connection(vhost=VHOST)
 
 
 def reset_connection() -> Connection:
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
-    return get_connection()
+    return connect()
 
 
 def disconnect() -> None:
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()

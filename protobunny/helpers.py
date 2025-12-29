@@ -1,3 +1,4 @@
+import functools
 import importlib
 import sys
 import typing
@@ -45,8 +46,11 @@ def get_backend(backend: str | None = None) -> ModuleType:
     """
     backend = backend or default_configuration.backend
     module = ".asyncio" if default_configuration.use_async else ""
+    module_name = f"protobunny{module}.backends.{backend}"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
     try:
-        module = importlib.import_module(f"protobunny{module}.backends.{backend}")
+        module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
         suggestion = ""
         if backend not in default_configuration.available_backends:
@@ -63,7 +67,7 @@ def get_backend(backend: str | None = None) -> ModuleType:
 
 def get_queue(
     pkg_or_msg: "ProtoBunnyMessage | type['ProtoBunnyMessage'] | ModuleType",
-    backend: str | None = None,
+    backend_name: str | None = None,
 ) -> "BaseSyncQueue|BaseAsyncQueue":
     """Factory method to get an AsyncQueue/SyncQueue instance based on
       - the message type (e.g. mylib.subpackage.subsubpackage.MyMessage)
@@ -73,14 +77,34 @@ def get_queue(
     Args:
         pkg_or_msg: A message instance, a message class, or a module
             containing message definitions.
-        backend: backend name to use
+        backend_name: backend name to use
 
     Returns:
         Async/SyncQueue: A queue instance configured for the relevant topic.
     """
-    backend = backend or default_configuration.backend
+    backend_name = backend_name or default_configuration.backend
     queue_type = "AsyncQueue" if default_configuration.use_async else "SyncQueue"
-    return getattr(get_backend(backend=backend).queues, queue_type)(get_topic(pkg_or_msg))
+    return getattr(get_backend(backend=backend_name).queues, queue_type)(get_topic(pkg_or_msg))
+
+
+@functools.lru_cache(maxsize=100)
+def _build_routing_key(module: str, cls_name: str) -> str:
+    # Build the routing key from the module and class name
+    backend = default_configuration.backend_config
+    delimiter = backend.topic_delimiter
+    routing_key = f"{module}.{cls_name}"
+    config = default_configuration
+    if not routing_key.startswith(config.generated_package_name):
+        raise ValueError(
+            f"Invalid topic {routing_key}, must start with {config.generated_package_name}."
+        )
+    # As convention, we set the topic name to the message class name,
+    # left-stripped of the root generated package name
+    # (e.g. my_messaging_lib.codegen.vision.control.Start => vision.control.Start)
+    routing_key = routing_key.split(f"{config.generated_package_name}.", maxsplit=1)[1].replace(
+        ".", delimiter
+    )
+    return routing_key
 
 
 def build_routing_key(
@@ -103,10 +127,10 @@ def build_routing_key(
 
     """
     backend = default_configuration.backend_config
-    delimiter = backend.topic_delimiter
     wildcard = backend.multi_wildcard_delimiter
     module_name = ""
     class_name = ""
+
     if isinstance(pkg_or_msg, betterproto.Message):
         module_name = pkg_or_msg.__module__
         class_name = pkg_or_msg.__class__.__name__
@@ -117,16 +141,4 @@ def build_routing_key(
         module_name = pkg_or_msg.__name__
         class_name = wildcard  # wildcard routing key for subscribing to all messages in a module
 
-    # Build the routing key from the module and class name
-    # class_name = class_name.replace(".", delimiter)
-    routing_key = f"{module_name}.{class_name}"
-    config = default_configuration
-    if not routing_key.startswith(config.generated_package_name):
-        raise ValueError(
-            f"Invalid topic {routing_key}, must start with {config.generated_package_name}."
-        )
-    # As convention, we set the topic name to the message class name,
-    # left-stripped of the root generated package name
-    # (e.g. my_messaging_lib.codegen.vision.control.Start => vision.control.Start)
-    routing_key = routing_key.split(f"{config.generated_package_name}.", maxsplit=1)[1]
-    return routing_key.replace(".", delimiter)
+    return _build_routing_key(module_name, class_name)

@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("RABBITMQ_VHOST", "/")
 
 
-async def get_connection() -> "Connection":
+async def connect() -> "Connection":
     """Get the singleton async connection."""
     conn = await Connection.get_connection(vhost=VHOST)
     return conn
@@ -32,13 +32,13 @@ async def get_connection() -> "Connection":
 
 async def reset_connection() -> "Connection":
     """Reset the singleton connection."""
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()
-    return await get_connection()
+    return await connect()
 
 
 async def disconnect() -> None:
-    connection = await get_connection()
+    connection = await connect()
     await connection.disconnect()
 
 

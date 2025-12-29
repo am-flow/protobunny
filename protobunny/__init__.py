@@ -23,9 +23,6 @@ __all__ = [
     "unsubscribe",
     "unsubscribe_all",
     "unsubscribe_results",
-    # from .core
-    "commons",
-    "results",
     # from .config
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
@@ -34,15 +31,21 @@ __all__ = [
     "RequeueMessage",
     "ConnectionError",
     "reset_connection",
-    "get_connection",
+    "connect",
     "disconnect",
+    "run_forever",
+    # from .core
+    "commons",
+    "results",
 ]
 
 import logging
+import signal
+import sys
 import textwrap
 import typing as tp
 from importlib.metadata import version
-from types import ModuleType
+from types import FrameType, ModuleType
 
 from .backends import BaseSyncQueue, LoggingSyncQueue
 from .config import (  # noqa
@@ -56,18 +59,34 @@ from .helpers import get_backend, get_queue
 from .registry import default_registry
 
 if tp.TYPE_CHECKING:
-    from .models import LoggerCallback
+    from .core.results import Result
+    from .models import (
+        IncomingMessageProtocol,
+        LoggerCallback,
+        ProtoBunnyMessage,
+        SyncCallback,
+    )
 
-# Import the configured backend
-try:
+
+############################
+# -- Sync top-level methods
+############################
+
+
+def reset_connection():
     backend = get_backend()
-except ValueError as exc:
-    raise exc
+    return backend.connection.reset_connection()
 
 
-reset_connection = backend.connection.reset_connection
-get_connection = backend.connection.get_connection
-disconnect = backend.connection.disconnect
+def connect():
+    backend = get_backend()
+    return backend.connection.connect()
+
+
+def disconnect():
+    backend = get_backend()
+    return backend.connection.disconnect()
+
 
 __version__ = version(PACKAGE_NAME)
 
@@ -149,7 +168,6 @@ def subscribe_results(
     # register subscription to unsubscribe later
     with default_registry.sync_lock:
         default_registry.register_results(pkg, queue)
-        # results_subscriptions_sync[pkg] = queue
     return queue
 
 
@@ -170,11 +188,9 @@ def unsubscribe(
             default_registry.unregister_tasks(registry_key)
         else:
             queue = default_registry.get_subscription(registry_key)
-            # if not queue:
-            #     raise ValueError(f"No subscription found for {registry_key}")
             if queue:
                 queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-            default_registry.unregister_subscription(registry_key)
+                default_registry.unregister_subscription(registry_key)
 
 
 def unsubscribe_results(
@@ -248,6 +264,26 @@ def subscribe_logger(
     queue, cb = LoggingSyncQueue(prefix), resolved_callback
     queue.subscribe(cb)
     return queue
+
+
+def run_forever() -> None:
+    def shutdown(signum: int, _: FrameType | None) -> None:
+        log.info("Shutting down protobunny connections %s", signal.Signals(signum).name)
+        unsubscribe_all()
+        disconnect()
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+    log.info("Protobunny Started. Press Ctrl+C to exit.")
+    signal.pause()
+    log.info("Protobunny Stopped. Press Ctrl+C to exit.")
+
+
+def config_lib() -> None:
+    """Add the generated package root to the sys.path."""
+    lib_root = default_configuration.generated_package_root
+    if lib_root and lib_root not in sys.path:
+        sys.path.append(lib_root)
 
 
 #######################################################

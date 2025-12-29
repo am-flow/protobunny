@@ -46,10 +46,9 @@ class TestTasks:
         # Patch global configuration for all modules that use it
         mocker.patch.object(pb_sync.config, "default_configuration", test_config)
         mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-
         mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
+        mocker.patch.object(pb_sync.backends, "default_configuration", test_config)
         mocker.patch.object(pb.backends, "default_configuration", test_config)
-
         if hasattr(backend.connection, "default_configuration"):
             mocker.patch.object(backend.connection, "default_configuration", test_config)
         if hasattr(backend.queues, "default_configuration"):
@@ -57,12 +56,12 @@ class TestTasks:
 
         pb.backend = backend
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb, "get_connection", backend.connection.get_connection)
+        mocker.patch.object(pb, "connect", backend.connection.connect)
         mocker.patch.object(pb, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb, "get_backend", return_value=backend)
 
         # Assert the patching is working for setting the backend
-        connection = await pb.get_connection()
+        connection = await pb.connect()
         assert isinstance(connection, backend.connection.Connection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.tasks.TaskMessage".replace(
@@ -152,11 +151,11 @@ class TestTasksSync:
         pb_sync.backend = backend
         mocker.patch("protobunny.backends.get_backend", return_value=backend)
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb_sync, "get_connection", backend.connection.get_connection)
+        mocker.patch.object(pb_sync, "connect", backend.connection.connect)
         mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
 
         # Assert the patching is working for setting the backend
-        connection = pb_sync.get_connection()
+        connection = pb_sync.connect()
         assert isinstance(connection, backend.connection.Connection)
         assert sync_wait(connection.is_connected)
         task_queue = pb_sync.get_queue(self.msg)

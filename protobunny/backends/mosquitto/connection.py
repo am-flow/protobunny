@@ -17,7 +17,7 @@ from ...models import Envelope, IncomingMessageProtocol
 from .. import BaseConnection
 
 
-def get_connection() -> "Connection":
+def connect() -> "Connection":
     """Get the singleton async connection."""
     conn = Connection.get_connection(vhost=VHOST)
     return conn
@@ -25,13 +25,13 @@ def get_connection() -> "Connection":
 
 def reset_connection() -> "Connection":
     """Reset the singleton connection."""
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
-    return get_connection()
+    return connect()
 
 
 def disconnect() -> None:
-    connection = get_connection()
+    connection = connect()
     connection.disconnect()
 
 
