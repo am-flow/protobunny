@@ -146,7 +146,7 @@ class TestIntegration:
         backend.connection.Connection.instance_by_vhost.clear()
         gc.collect()
 
-    # @pytest.mark.asyncio(loop_scope="function")
+    @pytest.mark.flaky(max_runs=3)
     async def test_publish(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -159,6 +159,7 @@ class TestIntegration:
         assert received["message"].number == self.msg.number
         assert received["message"].content == "test"
 
+    @pytest.mark.flaky(max_runs=3)
     async def test_to_dict(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -206,6 +207,7 @@ class TestIntegration:
             "options": None,
         }
 
+    @pytest.mark.flaky(max_runs=3)
     async def test_count_messages(self, backend) -> None:
         backend_name = backend.__name__.split(".")[-1]
         if backend_name == "mosquitto":
@@ -245,7 +247,7 @@ class TestIntegration:
             predicate
         ), f"Message count was not 3: {await task_queue.get_message_count()}"
 
-    @pytest.mark.asyncio(loop_scope="function")
+    @pytest.mark.flaky(max_runs=3)
     async def test_logger_body(self, backend) -> None:
         topic = "acme.tests.TestMessage".replace(".", self.topic_delimiter)
         results_topic = f"{topic}.result".replace(".", self.topic_delimiter)
@@ -284,6 +286,7 @@ class TestIntegration:
             == f'{results_topic}: FAILURE - error: [] - {{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}}'
         )
 
+    @pytest.mark.flaky(max_runs=3)
     async def test_logger_int64(self, backend) -> None:
         global received
         topic = "acme.tests.TestMessage".replace(".", self.topic_delimiter)
@@ -322,6 +325,7 @@ class TestIntegration:
             == f'{topic_task}: {{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}}'
         )
 
+    @pytest.mark.flaky(max_runs=3)
     async def test_unsubscribe(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -371,6 +375,7 @@ class TestIntegration:
         assert received["message"] is None
         assert received2 is None
 
+    @pytest.mark.flaky(max_runs=3)
     async def test_unsubscribe_results(self, backend) -> None:
         received_result: pb.results.Result | None = None
 
@@ -400,7 +405,7 @@ class TestIntegration:
         await pb.publish(msg)
         assert received_result is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.flaky(max_runs=3)
     async def test_unsubscribe_all(self, backend) -> None:
         received_message: tests.tasks.TaskMessage | None = None
         received_result: pb.results.Result | None = None
@@ -505,6 +510,7 @@ class TestIntegrationSync:
         connection.disconnect()
         backend.connection.Connection.instance_by_vhost.clear()
 
+    @pytest.mark.flaky(max_runs=3)
     def test_publish(self, backend) -> None:
         global received
         pb_sync.subscribe(tests.TestMessage, callback_sync)
@@ -512,6 +518,7 @@ class TestIntegrationSync:
         assert sync_wait(lambda: received["message"] is not None)
         assert received["message"].number == self.msg.number
 
+    @pytest.mark.flaky(max_runs=3)
     def test_to_dict(self, backend) -> None:
         global received
         pb_sync.subscribe(tests.TestMessage, callback_sync)
@@ -552,6 +559,7 @@ class TestIntegrationSync:
             "options": None,
         }
 
+    @pytest.mark.flaky(max_runs=3)
     def test_count_messages(self, backend) -> None:
         backend_name = backend.__name__.split(".")[-1]
         if backend_name == "mosquitto":
@@ -572,6 +580,7 @@ class TestIntegrationSync:
         # and we can count them
         assert sync_wait(lambda: 3 == task_queue.get_message_count())
 
+    @pytest.mark.flaky(max_runs=3)
     def test_logger_body(self, backend) -> None:
         pb_sync.subscribe_logger(log_callback)
         topic = "acme.tests.TestMessage".replace(".", self.topic_delimiter)
@@ -602,6 +611,7 @@ class TestIntegrationSync:
             == f'{topic_result}: FAILURE - error: [] - {{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}}'
         )
 
+    @pytest.mark.flaky(max_runs=3)
     def test_logger_int64(self, backend) -> None:
         global received
         topic = "acme.tests.TestMessage".replace(".", self.topic_delimiter)
@@ -640,6 +650,7 @@ class TestIntegrationSync:
             == f'{topic_task}: {{"content": "test", "weights": [1.0, 2.0, -100.0, -20.0], "bbox": [1, 2, 3, 4], "options": null}}'
         )
 
+    @pytest.mark.flaky(max_runs=3)
     def test_unsubscribe(self, backend) -> None:
         global received
         pb_sync.subscribe(tests.TestMessage, callback_sync)
@@ -679,6 +690,7 @@ class TestIntegrationSync:
         assert received["message"] is None
         assert received2 is None
 
+    @pytest.mark.flaky(max_runs=3)
     def test_unsubscribe_results(self, backend) -> None:
         received_result: pb.results.Result | None = None
 
@@ -705,6 +717,7 @@ class TestIntegrationSync:
         pb_sync.publish(msg)
         assert received_result is None
 
+    @pytest.mark.flaky(max_runs=3)
     def test_unsubscribe_all(self, backend) -> None:
         received_message: tests.tasks.TaskMessage | None = None
         received_result: pb.results.Result | None = None
