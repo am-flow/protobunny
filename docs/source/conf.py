@@ -26,6 +26,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",  # Supports Google/NumPy style docstrings
     "sphinx.ext.viewcode",
+    "myst_parser",
 ]
 
 

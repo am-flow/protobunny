@@ -5,10 +5,10 @@ import os
 import threading
 import time
 import typing as tp
-import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+import can_ada
 import paho.mqtt.client as mqtt
 
 from ...config import default_configuration
@@ -103,13 +103,13 @@ class Connection(BaseConnection):
     ):
         super().__init__()
         if url:
-            parsed = urllib.parse.urlparse(url)
-            self.host = parsed.hostname or host or "127.0.0.1"
+            parsed = can_ada.parse(url)
+            self.host = parsed.hostname or host or "localhost"
             self.port = parsed.port or port or 1883
-            self.username = urllib.parse.unquote(parsed.username) if parsed.username else username
-            self.password = urllib.parse.unquote(parsed.password) if parsed.password else password
+            self.username = parsed.username or username
+            self.password = parsed.password or password
         else:
-            self.host = host or os.environ.get("MQTT_HOST") or "127.0.0.1"
+            self.host = host or os.environ.get("MQTT_HOST") or "localhost"
             self.port = int(port or os.environ.get("MQTT_PORT") or 1883)
             self.username = username or os.environ.get("MQTT_USERNAME")
             self.password = password or os.environ.get("MQTT_PASSWORD")

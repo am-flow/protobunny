@@ -1,4 +1,5 @@
-"""Implements a Redis Connection with both sync and async support"""
+"""Implements a Redis Connection"""
+
 import asyncio
 import functools
 import logging
@@ -99,8 +100,8 @@ class Connection(BaseAsyncConnection):
                 url = f"redis://:{password}@{host}:{port}/{vhost}?protocol=3"
             else:
                 url = f"redis://{host}:{port}/{vhost}?protocol=3"
+
         self._url = url
-        # self._loop: asyncio.AbstractEventLoop | None = None
         self._connection: redis.Redis | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
@@ -111,7 +112,6 @@ class Connection(BaseAsyncConnection):
         self._instance_lock: asyncio.Lock | None = None
 
         self._delimiter = default_configuration.backend_config.topic_delimiter
-        # self._exchange = f"{default_configuration.project_name}"
         self._exchange = default_configuration.backend_config.namespace
 
     async def __aenter__(self) -> "Connection":
@@ -166,10 +166,10 @@ class Connection(BaseAsyncConnection):
                     except Exception as e:
                         log.warning("Error stopping Redis consumer %s: %s", tag, e)
 
-                # 2. Shutdown Thread Executor (if used for sync callbacks)
+                # Shutdown Thread Executor (if used for sync callbacks)
                 self.executor.shutdown(wait=False, cancel_futures=True)
 
-                # 3. Close the Redis Connection Pool
+                # Close the Redis Connection Pool
                 if self._connection:
                     # aclose() closes the connection pool and all underlying connections
                     await asyncio.wait_for(self._connection.aclose(), timeout=timeout)
@@ -179,7 +179,7 @@ class Connection(BaseAsyncConnection):
             except Exception:
                 log.exception("Error during Redis disconnect")
             finally:
-                # 4. Reset state
+                # Reset state
                 self._connection = None
                 self._exchange = None  # (Stream name/prefix)
                 self.queues.clear()  # (Local queue metadata)
@@ -470,7 +470,7 @@ class Connection(BaseAsyncConnection):
     ) -> None:
         if isinstance(envelope.body, str):
             envelope.body.encode()  # Ensure it's bytes if it was auto-decoded
-        # 2. Create the Envelope
+
         key = self.build_topic_key(topic)
         try:
             log.debug("Running callback for topic %s", key)
@@ -536,7 +536,7 @@ class Connection(BaseAsyncConnection):
         correlation_id = normalized_payload.get("correlation_id", b"").decode()
         if isinstance(body, str):
             body = body.encode()  # Ensure it's bytes if it was auto-decoded
-        # 2. Create the Envelope
+        # Create the Envelope
         envelope = Envelope(
             body=body,
             correlation_id=correlation_id,
@@ -554,7 +554,8 @@ class Connection(BaseAsyncConnection):
         except RequeueMessage:
             log.warning("Requeuing message on topic '%s' after RequeueMessage exception", topic)
             # In Redis, to "requeue" so it's processed again:
-            # 1. XADD again and 2. XACK the current ID
+            # XADD again and
+            # XACK the current ID
             await asyncio.sleep(self.requeue_delay)
             await self._connection.xadd(name=stream_key, fields=payload)
             await self._connection.xack(stream_key, group_name, msg_id)
@@ -663,7 +664,7 @@ class Connection(BaseAsyncConnection):
                         if "no such key" not in str(e).lower():
                             raise e
 
-                # 3. Clear local metadata cache
+                # Clear local metadata cache
                 if stream_key in self.queues:
                     self.queues.pop(stream_key)
 

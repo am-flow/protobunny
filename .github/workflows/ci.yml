@@ -179,20 +179,16 @@ jobs:
 
   integration_test_mosquitto:
     runs-on: ubuntu-latest
-
-
     steps:
       - uses: actions/checkout@v6
-      - name: Start Mosquitto docker container with anonymous access enabled
+      - name: Run Mosquitto
         run: |
-          docker run -d --name mosquitto \
-            -p 1883:1883 \
-            eclipse-mosquitto:2 \
-            mosquitto -c /mosquitto-no-auth.conf
-          sleep 3
+          docker run -d -p 1883:1883 --name mosquitto eclipse-mosquitto:latest \
+          /usr/sbin/mosquitto -c /mosquitto-no-auth.conf
 
       - name: Debug Mosquitto
         run: |
+          sleep 3
           echo "=== Container logs ==="
           docker logs mosquitto
           echo "=== Config file ==="

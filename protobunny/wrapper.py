@@ -18,7 +18,7 @@ See protobunny generate --help for more options.
 Start a logger in console. See protobunny log --help for more options.
 
 
-Configuration for pyproject.toml
+Full configuration for pyproject.toml
 
 .. code-block:: toml
 
@@ -26,8 +26,13 @@ Configuration for pyproject.toml
     messages-directory = 'messages'
     messages-prefix = 'acme'
     generated-package-name = 'mymessagelib.codegen'
+    generated-package-root = "./"
+    backend = "rabbitmq"
+    force-required-fields = true
+    mode = "async"
+    log-redis-tasks = true
 
-The following command generates betterproto python classes in the `mymessagelib.codegen` directory:
+The following command will generate protobunny decorated betterproto classes in the `mymessagelib/codegen` directory:
 
 .. code-block:: shell
 
@@ -51,7 +56,6 @@ config_error = None
 try:
     import protobunny
 
-    # backend = get_backend()
     from . import __version__, get_backend
 except (ModuleNotFoundError, ValueError, ImportError) as e:
     config_error = e
@@ -79,13 +83,16 @@ def generate(proto_path, python_betterproto_out, rest) -> None:
     config = load_config()
     # betterproto_out it can be different from the configured package name so it can optionally be set on cli
     # (e.g. when generating messages for tests instead that main lib `mymessagelib.codegen`)
-    betterproto_out = python_betterproto_out or config.generated_package_name.replace(".", os.sep)
+    betterproto_out = python_betterproto_out
+    if not betterproto_out:
+        betterproto_out = os.path.join(
+            config.generated_package_root, config.generated_package_name.replace(".", os.sep)
+        )
     proto_paths = list(proto_path) or [config.messages_directory]
     lib_proto_path = Path(__file__).parent / "protobuf"  # path to internal protobuf files
     proto_paths.append(str(lib_proto_path))
     proto_paths = [f"--proto_path={pp}" for pp in proto_paths]
 
-    generated_package_name = betterproto_out.replace(os.sep, ".")
     Path(betterproto_out).mkdir(parents=True, exist_ok=True)
     protobuffer_files: Iterator[str] = glob.iglob(
         f"./{config.messages_directory}/**/*.proto", recursive=True
@@ -106,8 +113,13 @@ def generate(proto_path, python_betterproto_out, rest) -> None:
     if result.returncode > 0:
         sys.exit(result.returncode)
     # Execute internal post compile script for user's betterproto generated classes
-    post_compile_path = Path(__file__).parent.parent / "scripts" / "post_compile.py"
-    cmd = ["python", str(post_compile_path), f"--proto-pkg={generated_package_name}"]
+    post_compile_script = Path(__file__).parent.parent / "scripts" / "post_compile.py"
+    generated_package_name = betterproto_out.replace(os.sep, ".")
+    cmd = [
+        "python",
+        str(post_compile_script),
+        f"--proto-pkg={generated_package_name}",
+    ]
     result = subprocess.run(cmd)
     sys.exit(result.returncode)
 

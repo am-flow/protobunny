@@ -110,13 +110,6 @@ class Connection(BaseAsyncConnection):
         self.consumers: dict[str, str] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
-        # self._loop: asyncio.AbstractEventLoop | None = None
-        # try:
-        #     self._loop = asyncio.get_running_loop()
-        # except RuntimeError:
-        #     # Fallback if __init__ is called outside a running loop
-        #     # (though get_connection should be called inside one)
-        #     self._loop = None
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -131,35 +124,6 @@ class Connection(BaseAsyncConnection):
         if self._is_connected_event is None:
             self._is_connected_event = asyncio.Event()
         return self._is_connected_event
-
-    # @classmethod
-    # async def get_connection(cls, vhost: str = "/") -> "Connection":
-    #     """Get singleton instance (async)."""
-    #     current_loop = asyncio.get_running_loop()
-    #     async with cls._get_class_lock():
-    #         instance = cls.instance_by_vhost.get(vhost)
-    #         # Check if we have an instance AND if it belongs to the CURRENT loop
-    #         if instance:
-    #             # We need to check if the instance's internal loop matches our current loop
-    #             # and if that loop is actually still running.
-    #             if instance._loop != current_loop or not instance.is_connected_event.is_set():
-    #                 log.warning("Found stale connection for %s (loop mismatch). Resetting.", vhost)
-    #                 await instance.disconnect()  # Cleanup the old one
-    #                 instance = None
-    #
-    #         if instance is None:
-    #             log.debug("Creating fresh connection for %s", vhost)
-    #             new_instance = cls(vhost=vhost)
-    #             new_instance._loop = current_loop  # Store the loop it was born in
-    #             await new_instance.connect()
-    #             cls.instance_by_vhost[vhost] = new_instance
-    #             instance = new_instance
-    #         log.info("Returning singleton AsyncRmqConnection instance for vhost %s", vhost)
-    #         return instance
-
-    # def is_connected(self) -> bool:
-    #     """Check if connection is established and healthy."""
-    #     return self.is_connected_event.is_set()
 
     @property
     def connection(self) -> AbstractRobustConnection:
@@ -387,8 +351,6 @@ class Connection(BaseAsyncConnection):
             message: The incoming message
         """
         try:
-            # 1. Check if the callback is a coroutine function
-            # Note: inspect.iscoroutinefunction works on partials too
             if inspect.iscoroutinefunction(callback):
                 # Run directly in the event loop
                 await callback(message)

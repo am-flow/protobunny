@@ -479,7 +479,8 @@ class BaseSyncQueue(BaseQueue, ABC):
 
         """
         if self.subscription is not None:
-            raise ValueError("Cannot subscribe twice")
+            log.warning("Already subscribed...")
+            return
         func = functools.partial(self._receive, callback)
         self.subscription = self.get_connection().subscribe(
             self.topic, func, shared=self.shared_queue
@@ -507,14 +508,16 @@ class BaseSyncQueue(BaseQueue, ABC):
         """
         try:
             result = deserialize_result_message(message.body)
-            # `result.source_message` is a protobuf.Any instance.
-            # It has `type_url` property that describes the type of message.
-            # To reconstruct the source message you can  do it by using the Result.source property or
-            # base methods.
-            # >>> source_message = result.source
-            # or more explicitly
-            # >> message_type = get_message_class_from_type_url(result.source_message.type_url)
-            # >> source_message = message_type().parse(result.source_message.value)
+            """
+            `result.source_message` is a protobuf.Any instance.
+            It has `type_url` property that describes the type of message.
+            To reconstruct the source message you can  do it by using the Result.source property or
+            base methods.
+            >>> source_message = result.source
+            or more explicitly
+            >> message_type = get_message_class_from_type_url(result.source_message.type_url)
+            >> source_message = message_type().parse(result.source_message.value)
+            """
             callback(result)
         except Exception:  # pylint: disable=W0703
             log.exception("Could not process result: %s", str(message.body))
@@ -527,8 +530,9 @@ class BaseSyncQueue(BaseQueue, ABC):
         Args:
             callback : function to call when results come in.
         """
-        if self.result_subscription is not None:
-            raise ValueError("Can not subscribe to results twice")
+        if self.subscription is not None:
+            log.warning("Already subscribed...")
+            return
         func = functools.partial(self._receive_result, callback)
         self.result_subscription = self.get_connection().subscribe(
             self.result_topic, func, shared=False

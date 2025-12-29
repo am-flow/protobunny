@@ -224,7 +224,9 @@ class BaseAsyncQueue(BaseQueue, ABC):
         The AsyncQueue._receive method is called from there to deserialize the message and in turn calls the user callback.
         """
         if self.subscription is not None:
-            raise ValueError("Cannot subscribe twice")
+            log.warning("Already subscribed...")
+            return
+
         func = functools.partial(self._receive, callback)
         conn = await self.get_connection()
         self.subscription = await conn.subscribe(self.topic, func, shared=self.shared_queue)
@@ -289,8 +291,9 @@ class BaseAsyncQueue(BaseQueue, ABC):
         Args:
             callback : function to call when results come in.
         """
-        if self.result_subscription is not None:
-            raise ValueError("Can not subscribe to results twice")
+        if self.subscription is not None:
+            log.warning("Already subscribed...")
+            return
         func = functools.partial(self._receive_result, callback)
         conn = await self.get_connection()
         self.result_subscription = await conn.subscribe(self.result_topic, func, shared=False)

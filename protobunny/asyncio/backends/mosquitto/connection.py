@@ -3,11 +3,11 @@ import asyncio
 import logging
 import os
 import typing as tp
-import urllib
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import aiomqtt
+import can_ada
 
 from ....config import default_configuration
 from ....exceptions import ConnectionError, PublishError, RequeueMessage
@@ -57,11 +57,11 @@ class Connection(BaseAsyncConnection):
         super().__init__()
         if url:
             # Parse the URL instead
-            parsed = urllib.parse.urlparse(url)
+            parsed = can_ada.parse(url)
             host = parsed.hostname or host
             port = parsed.port or port or 1883
-            username = urllib.parse.quote(parsed.username, safe="")
-            password = urllib.parse.quote(parsed.password, safe="")
+            username = parsed.username
+            password = parsed.password
         else:
             host or os.environ.get("MQTT_HOST") or os.environ.get("MOSQUITTO_HOST")
             port or os.environ.get("MQTT_PORT") or os.environ.get("MOSQUITTO_PORT")

@@ -62,6 +62,7 @@ class Config:
     project_root: str = "./"
     force_required_fields: bool = False
     generated_package_name: str = "codegen"
+    generated_package_root: str = "./"
     mode: tp.Literal["sync", "async"] = "async"
     backend: "AvailableBackends" = "rabbitmq"
     backend_config: BackEndConfig = rabbitmq_backend_config
