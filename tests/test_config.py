@@ -19,7 +19,7 @@ def test_config_default_values():
         config = load_config()
         assert config.messages_prefix == "pb"
         assert config.backend == "rabbitmq"
-        assert config.mode == "sync"
+        assert config.mode == "async"
 
 
 def test_config_from_env(monkeypatch):

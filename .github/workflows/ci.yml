@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v6
@@ -23,6 +23,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+          cache-suffix: "py${{ matrix.python-version }}-${{ github.sha }}"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -31,10 +32,20 @@ jobs:
         run: uv venv --python ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: |
+          if [ "${{ matrix.python-version }}" == "3.13" ]; then
+            # Sync everything EXCEPT the 'numpy' extra
+            uv sync --extra rabbitmq --extra redis --dev --extra mosquitto
+          else
+            # Install everything for older versions
+            uv sync --all-extras
+          fi
 
       - name: Run tests
         run: make test
+        env:
+          PYTHONASYNCIODEBUG: "1"
+          PYTEST_ADDOPTS: "-vvv --log-level=DEBUG"
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
@@ -43,6 +54,7 @@ jobs:
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
+
 
   lint:
     runs-on: ubuntu-latest
@@ -85,7 +97,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_python.py
+        run: uv run python -m pytest tests/test_integration.py -k python -vvv -s
 
 
   integration_test_rabbitmq:
@@ -125,7 +137,7 @@ jobs:
           docker exec ${{ job.services.rabbitmq.id }} rabbitmqctl set_permissions -p /test guest ".*" ".*" ".*"
 
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_rabbitmq.py
+        run: uv run python -m pytest tests/test_integration.py -k rabbitmq -vvv -s
         env:
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: 5672
@@ -160,7 +172,67 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run python -m pytest tests/test_integration_redis.py
+        run: uv run python -m pytest tests/test_integration.py -k redis -vvv -s
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+
+  integration_test_mosquitto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Mosquitto
+        run: |
+          docker run -d -p 1883:1883 --name mos eclipse-mosquitto:latest \
+          /usr/sbin/mosquitto -c /mosquitto-no-auth.conf
+
+      - name: Log Mosquitto container
+        run: |
+          sleep 3
+          echo "=== Container logs ==="
+          docker logs mos
+          echo "=== Config file ==="
+          docker exec mos cat /mosquitto-no-auth.conf
+          echo "=== Processes ==="
+          docker exec mos ps aux
+          echo "=== Network ==="
+          docker exec mos netstat -tlnp || docker exec mosquitto ss -tlnp
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Smoke test MQTT
+        run: |
+          # Wait for the port to be open
+          timeout 30s sh -c 'until nc -z localhost 1883; do sleep 1; done'
+
+          uv run python -c "
+          import paho.mqtt.client as mqtt
+          import sys
+
+          client = mqtt.Client()
+          try:
+              client.connect('127.0.0.1', 1883, 10)
+              print('MQTT Handshake Successful')
+              sys.exit(0)
+          except Exception as e:
+              print(f'Failed to connect: {e}')
+              sys.exit(1)
+          "
+
+      - name: Run tests
+        run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
+        env:
+          MQTT_HOST: 127.0.0.1

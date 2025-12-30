@@ -3,17 +3,31 @@ import uuid
 import betterproto
 import pytest
 
-from protobunny.backends import deserialize_message
-from protobunny.base import get_queue
+import protobunny as pb_sync
+from protobunny import asyncio as pb
+from protobunny.backends import python as python_backend
+from protobunny.helpers import get_queue
 from protobunny.models import (
     MessageMixin,
     MissingRequiredFields,
+    deserialize_message,
     get_message_class_from_topic,
     get_message_class_from_type_url,
     get_topic,
 )
 
 from . import tests
+
+
+@pytest.fixture(autouse=True)
+def setup_config(mocker, test_config) -> None:
+    test_config.mode = "async"
+    test_config.backend = "python"
+    mocker.patch.object(pb_sync.config, "default_configuration", test_config)
+    mocker.patch.object(pb_sync.models, "default_configuration", test_config)
+    mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
+    mocker.patch.object(pb.backends, "default_configuration", test_config)
+    mocker.patch.object(python_backend.connection, "default_configuration", test_config)
 
 
 def test_json_serializer() -> None:
@@ -69,12 +83,8 @@ def test_message_class_from_topic() -> None:
 
 
 def test_get_topic() -> None:
-    t = get_topic(tests.tasks.TaskMessage())
-    assert t.name == "acme.tests.tasks.TaskMessage"
-    assert t.is_task_queue
-    t = get_topic(tests.TestMessage())
-    assert t.name == "acme.tests.TestMessage"
-    assert not t.is_task_queue
+    assert get_topic(tests.tasks.TaskMessage()) == "acme.tests.tasks.TaskMessage"
+    assert get_topic(tests.TestMessage()) == "acme.tests.TestMessage"
 
 
 def test_deserialize() -> None:
@@ -83,7 +93,7 @@ def test_deserialize() -> None:
     )
     serialized = bytes(message)
     topic = get_topic(message)
-    deserialized = deserialize_message(topic.name, serialized)
+    deserialized = deserialize_message(topic, serialized)
     assert deserialized.color == tests.Color.GREEN
     assert deserialized == message
 

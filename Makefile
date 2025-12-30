@@ -16,6 +16,7 @@ compile:
 format:
 	uv run ruff check . --select I --fix
 	uv run ruff format .
+	uv run toml-sort -i ./pyproject.toml --sort-first project
 
 .PHONY: lint
 lint:
@@ -24,19 +25,82 @@ lint:
 	uv run toml-sort --check ./pyproject.toml --sort-first project
 	uv run yamllint -d "{extends: relaxed, rules: {line-length: {max: 120}}}" .
 
-.PHONY: test integration-test
+.PHONY: test integration-test t
 test:
 	uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
 	make format
 	uv run pytest tests/ -m "not integration"
+
+t:
+	# Usage: make t t=tests/test_connection.py::test_sync_get_message_count
+	PYTHONASYNCIODEBUG=1 PYTHONBREAKPOINT=ipdb.set_trace uv run pytest ${t} -s -vvvv --durations=0
+
 integration-test:
-	uv run pytest tests/ -m "integration"
+	uv run pytest tests/ -m "integration" ${t}
+
+integration-test-py310:
+	source .venv310/bin/activate
+	UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev
+	UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest ${t} -m "integration" -vvv -s
+
+integration-test-py311:
+	source .venv311/bin/activate
+	UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev
+	UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest ${t} -m "integration" -vvv -s
+
+integration-test-py312:
+	source .venv312/bin/activate
+	UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev
+	UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest ${t} -m "integration" -vvv -s
+
+integration-test-py313:
+	source .venv313/bin/activate
+	UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev
+	UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest ${t} -m "integration" -vvv -s
+
+test-py310:
+	source .venv310/bin/activate
+	VIRTUAL_ENV=.venv310 UV_PROJECT_ENVIRONMENT=.venv310 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv310 UV_PROJECT_ENVIRONMENT=.venv310 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	VIRTUAL_ENV=.venv310 PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv310 uv run pytest tests/ -m "not integration" -vvv -s
+
+test-py311:
+	source .venv311/bin/activate
+	VIRTUAL_ENV=.venv311 UV_PROJECT_ENVIRONMENT=.venv311 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv311 UV_PROJECT_ENVIRONMENT=.venv311 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	VIRTUAL_ENV=.venv311 PYTHONASYNCIODEBUG=1 UV_PROJECT_ENVIRONMENT=.venv311 uv run pytest tests/ -m "not integration" -vvv -s
+
+test-py312:
+	source .venv312/bin/activate
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	VIRTUAL_ENV=.venv312 UV_PROJECT_ENVIRONMENT=.venv312 uv run pytest tests/ -m "not integration" -vvv -s
+
+test-py313:
+	source .venv313/bin/activate
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv sync --all-extras --dev
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run protobunny generate -I tests/proto --python_betterproto_out=tests tests/proto/*.proto
+	make format
+	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "not integration" -vvv -s
 
 # Releasing
-.PHONY: docs clean build-package publish-test publish-pypi convert-md
-convert-md:
-	uv run python scripts/convert_md.py
-docs:
+.PHONY: docs clean build-package publish-test publish-pypi copy-md
+copy-md:
+	cp ./README.md docs/source/intro.md
+	cp ./QUICK_START.md docs/source/quick_start.md
+
+docs: copy-md
 	uv run sphinx-build -b html docs/source docs/build/html
 
 clean:

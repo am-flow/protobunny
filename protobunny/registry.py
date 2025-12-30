@@ -3,7 +3,7 @@ import threading
 import typing as tp
 from collections import defaultdict
 
-from .backends import BaseQueue
+from .models import BaseQueue
 
 
 class SubscriptionRegistry:

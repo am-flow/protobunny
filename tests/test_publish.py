@@ -1,17 +1,26 @@
 from unittest.mock import ANY, MagicMock
 
 import aio_pika
+import pytest
 from aio_pika import DeliveryMode
 
 import protobunny as pb
-from protobunny import get_queue
 
 from . import tests
 
 
+@pytest.fixture(autouse=True)
+def setup_config(mocker, test_config) -> None:
+    test_config.mode = "sync"
+    mocker.patch.object(pb.config, "default_configuration", test_config)
+    mocker.patch.object(pb.models, "default_configuration", test_config)
+    mocker.patch.object(pb.backends, "default_configuration", test_config)
+    mocker.patch.object(pb.helpers, "default_configuration", test_config)
+
+
 def test_sync_send_message(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
-    queue = get_queue(msg, backend="rabbitmq")
+    queue = pb.get_queue(msg, backend_name="rabbitmq")
     queue.publish(msg)
     expected_payload = aio_pika.Message(
         bytes(msg),
@@ -26,15 +35,15 @@ def test_sync_send_message(mock_sync_rmq_connection: MagicMock) -> None:
 def test_sync_subscribe(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage()
     func = lambda x: print(x)  # noqa: E731
-    pb.subscribe_sync(msg, func)
+    pb.subscribe(msg, func)
     mock_sync_rmq_connection.subscribe.assert_called_with(
         "acme.tests.TestMessage", ANY, shared=False
     )
-    pb.subscribe_sync(tests.tasks.TaskMessage, func)
+    pb.subscribe(tests.tasks.TaskMessage, func)
     mock_sync_rmq_connection.subscribe.assert_called_with(
         "acme.tests.tasks.TaskMessage", ANY, shared=True
     )
-    pb.subscribe_results_sync(tests.tasks.TaskMessage, func)
+    pb.subscribe_results(tests.tasks.TaskMessage, func)
     mock_sync_rmq_connection.subscribe.assert_called_with(
         "acme.tests.tasks.TaskMessage.result", ANY, shared=False
     )

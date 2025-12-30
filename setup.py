@@ -89,6 +89,7 @@ project_urls = {
 setup(
     name=PROJECT_NAME,
     version=VERSION,
+    classifiers=["Development Status :: 3 - Alpha"],
     author="Domenico Nappo, Sander Koelstra, Sem Mulder",
     include_package_data=True,
     package_data=package_data,

@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 import typing as tp
+from collections import namedtuple
 
 try:
     import tomllib
@@ -23,9 +24,34 @@ MESSAGES_DIRECTORY = "protobuf/protobunny"
 ENV_PREFIX = "PROTOBUNNY_"
 INI_FILE = "protobunny.ini"
 
-AvailableBackends = tp.Literal["rabbitmq", "python", "redis"]
+AvailableBackends = tp.Literal["rabbitmq", "python", "redis", "mosquitto"]
 
 log = logging.getLogger(__name__)
+
+
+BackEndConfig = namedtuple(
+    "BackedConfig", "topic_delimiter multi_wildcard_delimiter namespace", defaults=(None,) * 3
+)
+
+rabbitmq_backend_config = BackEndConfig(
+    topic_delimiter=".", multi_wildcard_delimiter="#", namespace=""
+)
+python_backend_config = BackEndConfig(
+    topic_delimiter=".", multi_wildcard_delimiter="#", namespace=""
+)
+redis_backend_config = BackEndConfig(
+    topic_delimiter=":", multi_wildcard_delimiter="*", namespace="protobunny"
+)
+mosquitto_backend_config = BackEndConfig(
+    topic_delimiter="/", multi_wildcard_delimiter="#", namespace="protobunny"
+)
+
+backend_configs = {
+    "rabbitmq": rabbitmq_backend_config,
+    "python": python_backend_config,
+    "redis": redis_backend_config,
+    "mosquitto": mosquitto_backend_config,
+}
 
 
 @dataclasses.dataclass
@@ -36,13 +62,19 @@ class Config:
     project_root: str = "./"
     force_required_fields: bool = False
     generated_package_name: str = "codegen"
-    mode: tp.Literal["sync", "async"] = "sync"
-    backend: AvailableBackends = "rabbitmq"
-    available_backends = ("rabbitmq", "python", "redis")
+    generated_package_root: str = "./"
+    mode: tp.Literal["sync", "async"] = "async"
+    backend: "AvailableBackends" = "rabbitmq"
+    backend_config: BackEndConfig = rabbitmq_backend_config
+    log_task_in_redis: bool = False
+    available_backends = ("rabbitmq", "python", "redis", "mosquitto")
 
     def __post_init__(self) -> None:
         if self.mode not in ("sync", "async"):
             raise ValueError(f"Invalid mode: {self.mode}. Must be one of: sync, async")
+        if not self.backend:
+            raise ValueError("Backend not configured.")
+        self.backend_config = backend_configs.get(self.backend)
 
     @property
     def use_async(self) -> bool:
@@ -50,7 +82,7 @@ class Config:
 
     @functools.cached_property
     def logger_prefix(self) -> str:
-        return f"{self.messages_prefix}.#"
+        return f"{self.messages_prefix}{self.backend_config.topic_delimiter}{self.backend_config.multi_wildcard_delimiter}"
 
 
 @functools.cache
@@ -77,7 +109,8 @@ def load_config() -> Config:
     unknown_params = passed_params - set(available_params)
     if unknown_params:
         log.warning(
-            f"Config params: [{', '.join(unknown_params)}] are not handled in protobunny version {VERSION}. Ignoring. Available params: {', '.join(available_params)}"
+            f"Config params: [{', '.join(unknown_params)}] are not handled in protobunny version {VERSION}. "
+            f"Ignoring. Available params: {', '.join(available_params)}"
         )
     return Config(
         **{
@@ -159,4 +192,4 @@ def get_project_version() -> str:
 
 
 VERSION = get_project_version()
-configuration = load_config()
+default_configuration = load_config()

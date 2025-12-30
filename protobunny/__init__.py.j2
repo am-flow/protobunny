@@ -12,74 +12,276 @@ as per the backend configuration.
 
 """
 __all__ = [
-    # from .backends
     "get_backend",
-    # from .base
     "get_message_count",
-    "get_queue",
     "publish",
     "publish_result",
     "subscribe",
     "subscribe_logger",
-    "subscribe_logger_sync",
     "subscribe_results",
     "unsubscribe",
     "unsubscribe_all",
     "unsubscribe_results",
-    "publish_sync",
-    "publish_result_sync",
-    "subscribe_sync",
-    "subscribe_results_sync",
-    "unsubscribe_sync",
-    "unsubscribe_all_sync",
-    "unsubscribe_results_sync",
-    "get_message_count_sync",
-    # from .{{ generated_package_name }}
-    {% for i in main_imports|sort %}
-    "{{ i }}",
-    {% endfor %}
-
     # from .config
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
     "ROOT_GENERATED_PACKAGE_NAME",
-    "configuration",
-    # from .backends.rabbitmq
+    "default_configuration",
     "RequeueMessage",
     "ConnectionError",
-    "reset_connection_sync",
     "reset_connection",
-    "get_connection_sync",
-    "get_connection",
+    "connect",
     "disconnect",
-    "disconnect_sync",
+    "run_forever",
+    # from .{{ generated_package_name }}
+    {% for i in main_imports|sort %}
+    "{{ i }}",
+    {% endfor %}
 ]
 
-from csv import excel
-from importlib.metadata import version
+import sys
 
-from .base import (  # noqa
-    get_backend,
-    get_message_count,
-    get_queue,
-    publish,
-    publish_result,
-    subscribe,
-    subscribe_logger,
-    subscribe_logger_sync,
-    subscribe_results,
-    unsubscribe,
-    unsubscribe_all,
-    unsubscribe_results,
-    publish_sync,
-    publish_result_sync,
-    subscribe_sync,
-    subscribe_results_sync,
-    unsubscribe_sync,
-    unsubscribe_all_sync,
-    unsubscribe_results_sync,
-    get_message_count_sync,
+import signal
+import logging
+import textwrap
+import typing as tp
+
+from importlib.metadata import version
+from types import ModuleType, FrameType
+
+from .config import (  # noqa
+    GENERATED_PACKAGE_NAME,
+    PACKAGE_NAME,
+    ROOT_GENERATED_PACKAGE_NAME,
+    default_configuration,
 )
+from .exceptions import RequeueMessage, ConnectionError
+from .registry import default_registry
+
+from .helpers import get_backend, get_queue
+from .backends import LoggingSyncQueue, BaseSyncQueue
+
+if tp.TYPE_CHECKING:
+    from .models import LoggerCallback, ProtoBunnyMessage, SyncCallback, IncomingMessageProtocol
+    from .core.results import Result
+
+
+############################
+# -- Sync top-level methods
+############################
+
+
+def reset_connection():
+    backend = get_backend()
+    return backend.connection.reset_connection()
+
+
+def connect():
+    backend = get_backend()
+    return backend.connection.connect()
+
+
+def disconnect():
+    backend = get_backend()
+    return backend.connection.disconnect()
+
+
+__version__ = version(PACKAGE_NAME)
+
+
+log = logging.getLogger(PACKAGE_NAME)
+
+
+def publish(message: "ProtoBunnyMessage") -> None:
+    """Synchronously publish a message to its corresponding queue.
+
+    This method automatically determines the correct topic based on the
+    protobuf message type.
+
+    Args:
+        message: The Protobuf message instance to be published.
+    """
+    queue = get_queue(message)
+    queue.publish(message)
+
+
+def publish_result(
+    result: "Result", topic: str | None = None, correlation_id: str | None = None
+) -> None:
+    """Publish the result message to the result topic of the source message
+
+    Args:
+        result: a Result instance.
+        topic: The topic to send the message to.
+            Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
+        correlation_id:
+    """
+    queue = get_queue(result.source)
+    queue.publish_result(result, topic, correlation_id)
+
+
+def subscribe(
+    pkg_or_msg: "type[ProtoBunnyMessage] | ModuleType",
+    callback: "SyncCallback",
+) -> "BaseSyncQueue":
+    """Subscribe a callback function to the topic.
+
+    Args:
+        pkg_or_msg: The topic to subscribe to as message class or module.
+        callback: The callback function that consumes the received message.
+
+    Returns:
+        The Queue object. You can access the subscription via its `subscription` attribute.
+    """
+    register_key = str(pkg_or_msg)
+
+    with default_registry.sync_lock:
+        queue = get_queue(pkg_or_msg)
+        if queue.shared_queue:
+            # It's a task. Handle multiple subscriptions
+            # queue = get_queue(pkg_or_msg)
+            queue.subscribe(callback)
+            default_registry.register_task(register_key, queue)
+        else:
+            # exclusive queue
+            queue = default_registry.get_subscription(register_key) or queue
+            queue.subscribe(callback)
+            # register subscription to unsubscribe later
+            default_registry.register_subscription(register_key, queue)
+    return queue
+
+
+def subscribe_results(
+    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    callback: "SyncCallback",
+) -> "BaseSyncQueue":
+    """Subscribe a callback function to the result topic.
+
+    Args:
+        pkg:
+        callback:
+    """
+    queue = get_queue(pkg)
+    queue.subscribe_results(callback)
+    # register subscription to unsubscribe later
+    with default_registry.sync_lock:
+        default_registry.register_results(pkg, queue)
+    return queue
+
+
+def unsubscribe(
+    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    if_unused: bool = True,
+    if_empty: bool = True,
+) -> None:
+    """Remove a subscription for a message/package"""
+    module_name = pkg.__module__ if hasattr(pkg, "__module__") else pkg.__name__
+    registry_key = default_registry.get_key(pkg)
+
+    with default_registry.sync_lock:
+        if is_module_tasks(module_name):
+            queues = default_registry.get_tasks(registry_key)
+            for queue in queues:
+                queue.unsubscribe()
+            default_registry.unregister_tasks(registry_key)
+        else:
+            queue = default_registry.get_subscription(registry_key)
+            if queue:
+                queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
+                default_registry.unregister_subscription(registry_key)
+
+
+def unsubscribe_results(
+    pkg: "type[ProtoBunnyMessage] | ModuleType",
+) -> None:
+    """Remove all in-process subscriptions for a message/package result topic"""
+    with default_registry.sync_lock:
+        queue = default_registry.unregister_results(pkg)
+        if queue:
+            queue.unsubscribe_results()
+
+
+def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
+    """
+    Remove all active in-process subscriptions.
+
+    This clears standard subscriptions, result subscriptions, and task
+    subscriptions, effectively stopping all message consumption for this process.
+    """
+    with default_registry.sync_lock:
+        queues = default_registry.get_all_subscriptions()
+        for q in queues:
+            q.unsubscribe(if_unused=False, if_empty=False)
+        default_registry.unregister_all_subscriptions()
+        queues = default_registry.get_all_results()
+        for q in queues:
+            q.unsubscribe_results()
+        default_registry.unregister_all_results()
+        queues = default_registry.get_all_tasks(flat=True)
+        for q in queues:
+            q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
+        default_registry.unregister_all_tasks()
+
+
+def get_message_count(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q = get_queue(msg_type)
+    count = q.get_message_count()
+    return count
+
+
+def is_module_tasks(module_name: str) -> bool:
+    return "tasks" in module_name.split(".")
+
+
+def default_log_callback(message: "IncomingMessageProtocol", msg_content: str) -> None:
+    """Default callback for the logging service"""
+    log.info(
+        "<%s>(cid:%s) %s",
+        message.routing_key,
+        message.correlation_id,
+        textwrap.shorten(msg_content, width=120),
+    )
+
+
+def _prepare_logger_queue(
+    queue_cls: type["LoggingSyncQueue"], log_callback: "LoggerCallback | None", prefix: str | None
+) -> tuple["LoggingSyncQueue", "LoggerCallback"]:
+    """Initializes the requested queue class."""
+    resolved_callback = log_callback or default_log_callback
+    return queue_cls(prefix), resolved_callback
+
+
+def subscribe_logger(
+    log_callback: "LoggerCallback | None" = None, prefix: str | None = None
+) -> "LoggingSyncQueue":
+    resolved_callback = log_callback or default_log_callback
+    queue, cb = LoggingSyncQueue(prefix), resolved_callback
+    queue.subscribe(cb)
+    return queue
+
+
+def run_forever() -> None:
+
+    def shutdown(signum: int, _: FrameType | None) -> None:
+        log.info("Shutting down protobunny connections %s", signal.Signals(signum).name)
+        unsubscribe_all()
+        disconnect()
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+    log.info("Protobunny Started. Press Ctrl+C to exit.")
+    signal.pause()
+    log.info("Protobunny Stopped. Press Ctrl+C to exit.")
+
+
+def config_lib() -> None:
+    """Add the generated package root to the sys.path."""
+    lib_root = default_configuration.generated_package_root
+    if lib_root and lib_root not in sys.path:
+        sys.path.append(lib_root)
+
 
 #######################################################
 # Dynamically added by post_compile.py
@@ -89,26 +291,3 @@ from .{{ generated_package_name }} import (  # noqa
 {% endfor %}
 )
 #######################################################
-
-from .config import (  # noqa
-    GENERATED_PACKAGE_NAME,
-    PACKAGE_NAME,
-    ROOT_GENERATED_PACKAGE_NAME,
-    configuration,
-)
-from .exceptions import RequeueMessage, ConnectionError
-from .backends import get_backend
-
-try:
-    backend = get_backend()
-except ValueError as exc:
-    raise exc
-
-reset_connection_sync = backend.connection.reset_connection_sync
-reset_connection = backend.connection.reset_connection
-get_connection_sync = backend.connection.get_connection_sync
-get_connection = backend.connection.get_connection
-disconnect = backend.connection.disconnect
-disconnect_sync = backend.connection.disconnect_sync
-
-__version__ = version(PACKAGE_NAME)

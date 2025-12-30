@@ -7,7 +7,6 @@ Note: It must be executed after code generation/post install script.
 - It's included in make command `compile` and in setup.py for lib installations.
 - It's part of the protobunny compile command
 """
-
 import argparse
 import black
 import logging
@@ -113,15 +112,18 @@ def write_main_init(main_imports: list[str], main_package: str, source_dir: str 
     path = Path(source_dir) / top_level_package
     if not path.exists():
         return
-    init_path = path / "__init__.py"
+    # Write the main __init__.py files for the protobunny (both sync and async)
+    init_paths = [path / "asyncio" / "__init__.py", path / "__init__.py"]
     # look for a jinja template in the main directory
-    if (path / "__init__.py.j2").exists():
-        write_from_template(generated_package_name, init_path, main_imports, path)
-    else:
-        with open(init_path, mode="w+") as fh:
-            write_header(fh)
-            for subpackage in main_imports:
-                fh.write(f"from .{generated_package_name} import {subpackage.split('.')[-1]}  # noqa\n")
+    for init_path in init_paths:
+        if (init_path.parent / "__init__.py.j2").exists():
+            write_from_template(generated_package_name, init_path, main_imports, init_path.parent)
+        elif init_path.parent.exists():
+            # Write the init of the generated library with just the import
+            with open(init_path, mode="w+") as fh:
+                write_header(fh)
+                for subpackage in main_imports:
+                    fh.write(f"from .{generated_package_name} import {subpackage.split('.')[-1]}  # noqa\n")
 
 
 def write_from_template(generated_package_name: str, init_path: Path, main_imports: list[str], path: Path):
@@ -198,8 +200,15 @@ def ensure_dict_type(source: str) -> str:
 
 def ensure_message_mixin(source: str) -> str:
     new_source = source.replace("(betterproto.Message):", "(models.ProtoBunnyMessage):")
-    new_source = f"from protobunny import models as models\n\n{new_source}\n"
-    return new_source
+    lines = new_source.split('\n')
+
+    for i, line in enumerate(lines):
+        if 'import betterproto' in line:
+            # Insert after this line
+            lines.insert(i + 1, "from protobunny import models as models")
+            break
+
+    return '\n'.join(lines)
 
 
 def main() -> None:

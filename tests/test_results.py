@@ -6,32 +6,34 @@ from aio_pika import DeliveryMode
 from pytest_mock import MockerFixture
 
 import protobunny as pb
-from protobunny.backends import deserialize_result_message
-from protobunny.backends.rabbitmq.connection import SyncConnection
-
-# from protobunny.backends import configuration
-from protobunny.models import get_message_class_from_topic, get_message_class_from_type_url
+from protobunny.backends.rabbitmq.connection import Connection
+from protobunny.config import backend_configs
+from protobunny.models import (
+    deserialize_result_message,
+    get_message_class_from_topic,
+    get_message_class_from_type_url,
+)
 
 from . import tests
 
-# configuration.mode = "sync"
-# configuration.backend = "rabbitmq"
-
 
 @pytest.fixture(autouse=True)
-def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection) -> None:
-    from protobunny.backends import configuration
+def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection, test_config) -> None:
     from protobunny.backends import rabbitmq as rabbitmq_backend
 
-    configuration.mode = "sync"
-    configuration.backend = "rabbitmq"
+    test_config.mode = "sync"
+    test_config.backend = "rabbitmq"
+    test_config.backend_config = backend_configs["rabbitmq"]
+    mocker.patch.object(pb.config, "default_configuration", test_config)
+    mocker.patch.object(pb.models, "default_configuration", test_config)
+    mocker.patch.object(pb.backends, "default_configuration", test_config)
+    mocker.patch.object(pb.helpers, "default_configuration", test_config)
     pb.backend = rabbitmq_backend
-    mocker.patch.object(pb, "get_connection", rabbitmq_backend.connection.get_connection)
-    mocker.patch.object(pb.base.configuration, "backend", "rabbitmq")
-    assert configuration.messages_prefix == "acme"
-    assert not configuration.use_async
+    mocker.patch.object(pb, "connect", rabbitmq_backend.connection.connect)
+    mocker.patch.object(pb.helpers.default_configuration, "backend", "rabbitmq")
     queue = pb.get_queue(tests.TestMessage)
-    assert isinstance(queue.get_connection_sync(), SyncConnection)
+    assert isinstance(queue, rabbitmq_backend.queues.SyncQueue)
+    assert isinstance(queue.get_connection(), Connection)
 
 
 def test_serdeser_result() -> None:
@@ -72,10 +74,10 @@ def test_topics(mock_sync_rmq_connection: MagicMock) -> None:
     msg = tests.TestMessage(content="test", number=123)
     result = msg.make_result(return_value={"test": "value"})
     q = pb.get_queue(result.source)
-    assert isinstance(q.get_connection_sync(), SyncConnection)
-    assert q.get_connection_sync() == mock_sync_rmq_connection
+    assert isinstance(q.get_connection(), Connection)
+    assert q.get_connection() == mock_sync_rmq_connection
     assert q.result_topic == "acme.tests.TestMessage.result"
-    pb.publish_result_sync(result)
+    pb.publish_result(result)
     expected_payload = aio_pika.Message(
         bytes(result),
         correlation_id=None,

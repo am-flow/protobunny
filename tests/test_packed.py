@@ -1,12 +1,19 @@
 from unittest.mock import ANY
 
 import betterproto
-import numpy as np
-import numpy.testing as npt
+import pytest
 
 from . import tests
 
+is_numpy_available = True
+try:
+    import numpy as np
+    import numpy.testing as npt
+except (ModuleNotFoundError, ImportError):
+    is_numpy_available = False
 
+
+@pytest.mark.skipif(not is_numpy_available, reason="numpy is not installed")
 def test_complex_message() -> None:
     data = {
         "distance_cdf": np.array(

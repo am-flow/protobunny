@@ -5,26 +5,29 @@ import importlib
 import json
 import logging
 import typing as tp
+from abc import ABC, abstractmethod
 from io import BytesIO
 from types import ModuleType
 
 import betterproto
 from betterproto.lib.std.google.protobuf import Any
 
-if tp.TYPE_CHECKING:
-    from .backends import LoggingAsyncQueue, LoggingSyncQueue
-from .config import configuration
+from .config import default_configuration
+from .helpers import get_topic
 from .utils import ProtobunnyJsonEncoder
 
 # - types
-# ProtoBunnyMessage = tp.TypeVar("ProtoBunnyMessage", bound="MessageMixin | betterproto.Message")
 SyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Any]
 AsyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Awaitable[tp.Any]]
 ResultCallback: tp.TypeAlias = tp.Callable[["Result"], tp.Any]
-LogQueue = tp.TypeVar("LogQueue", "LoggingAsyncQueue", "LoggingSyncQueue")
 LoggerCallback: tp.TypeAlias = tp.Callable[[tp.Any, str], tp.Any]
 
 log = logging.getLogger(__name__)
+
+
+def is_task(topic: str) -> bool:
+    delimiter = default_configuration.backend_config.topic_delimiter
+    return "tasks" in topic.split(delimiter)
 
 
 class MessageMixin:
@@ -64,7 +67,7 @@ class MessageMixin:
         # Override Message.__bytes__ method
         # to support transparent serialization of dictionaries to JsonContent fields.
         # This method validates for required fields as well
-        if configuration.force_required_fields:
+        if default_configuration.force_required_fields:
             self.validate_required_fields()
         msg = self.serialize_json_content()
         with BytesIO() as stream:
@@ -80,7 +83,7 @@ class MessageMixin:
 
     def to_dict(
         self: "ProtoBunnyMessage",
-        casing: betterproto.Casing = betterproto.Casing.CAMEL,
+        casing: tp.Callable[[str, bool], str] = betterproto.Casing.CAMEL,
         include_default_values: bool = False,
     ) -> dict[str, tp.Any]:
         """Returns a JSON serializable dict representation of this object.
@@ -107,7 +110,7 @@ class MessageMixin:
 
     def to_pydict(
         self: "ProtoBunnyMessage",
-        casing: betterproto.Casing = betterproto.Casing.CAMEL,
+        casing: tp.Callable[[str, bool], str] = betterproto.Casing.CAMEL,
         include_default_values: bool = False,
     ) -> dict[str, tp.Any]:
         """Returns a dict representation of this object. Uses enum names instead of int values. Useful for logging
@@ -181,7 +184,7 @@ class MessageMixin:
         self: "ProtoBunnyMessage",
         indent: None | int | str = None,
         include_default_values: bool = False,
-        casing: betterproto.Casing = betterproto.Casing.CAMEL,
+        casing: tp.Callable[[str, bool], str] = betterproto.Casing.CAMEL,
     ) -> str:
         """Overwrite the betterproto to_json to use the custom encoder"""
         return json.dumps(
@@ -226,18 +229,18 @@ class MessageMixin:
     @functools.cached_property
     def topic(self: "ProtoBunnyMessage") -> str:
         """Build the topic name for the message."""
-        return get_topic(self).name
+        return get_topic(self)
 
     @functools.cached_property
     def result_topic(self: "ProtoBunnyMessage") -> str:
         """
         Build the result topic name for the message.
         """
-        return f"{get_topic(self).name}.result"
+        return f"{get_topic(self)}{default_configuration.backend_config.topic_delimiter}result"
 
     def make_result(
         self: "ProtoBunnyMessage",
-        return_code: "ReturnCode | None" = None,
+        return_code: "ReturnCode | int | None" = None,
         error: str = "",
         return_value: dict[str, tp.Any] | None = None,
     ) -> "Result":
@@ -358,16 +361,17 @@ def get_message_class_from_topic(topic: str) -> "type[ProtoBunnyMessage] | None 
 
     Returns: the message class
     """
-    if topic.endswith(".result"):
+    delimiter = default_configuration.backend_config.topic_delimiter
+    if topic.endswith(f"{delimiter}result"):
         message_type = Result
     else:
-        route = topic.removeprefix(f"{configuration.messages_prefix}.")
+        route = topic.removeprefix(f"{default_configuration.messages_prefix}{delimiter}")
         if route == topic:
             # Allow pb.* internal messages
-            route = topic.removeprefix("pb.")
-        codegen_module = importlib.import_module(configuration.generated_package_name)
+            route = topic.removeprefix(f"pb{delimiter}")
+        codegen_module = importlib.import_module(default_configuration.generated_package_name)
         # if route is not recognized, the message_type will be None
-        message_type = _get_submodule(codegen_module, route.split("."))
+        message_type = _get_submodule(codegen_module, route.split(delimiter))
     return message_type
 
 
@@ -381,77 +385,13 @@ def get_message_class_from_type_url(url: str) -> type["ProtoBunnyMessage"]:
     Returns: the message class
     """
     module_path, clz = url.rsplit(".", 1)
-    if not module_path.startswith(configuration.generated_package_name):
+    if not module_path.startswith(default_configuration.generated_package_name):
         raise ValueError(
-            f"Invalid type url {url}, must start with {configuration.generated_package_name}."
+            f"Invalid type url {url}, must start with {default_configuration.generated_package_name}."
         )
     module = importlib.import_module(module_path)
     message_type = getattr(module, clz)
     return message_type
-
-
-def build_routing_key(
-    pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
-) -> str:
-    """Return a routing key based on a message instance, a message class, or a module.
-    The string will be later composed with the configured message-prefix to build the exact topic name.
-
-    Examples:
-        build_routing_key(mymessaginglib.vision.control) -> "vision.control.#" routing with binding key
-        build_routing_key(mymessaginglib.vision.control.Start) -> "vision.control.Start" direct routing
-        build_routing_key(mymessaginglib.vision.control.Start()) -> "vision.control.Start" direct routing
-
-    Args:
-        pkg_or_msg: a Message instance, class or module to mymessaginglib codegen packages
-
-    Returns: a routing key based on the type of message or package
-
-    """
-    module_name = ""
-    class_name = ""
-    if isinstance(pkg_or_msg, betterproto.Message):
-        module_name = pkg_or_msg.__module__
-        class_name = pkg_or_msg.__class__.__name__
-    elif isinstance(pkg_or_msg, type(betterproto.Message)):
-        module_name = pkg_or_msg.__module__
-        class_name = pkg_or_msg.__name__
-    elif isinstance(pkg_or_msg, ModuleType):
-        module_name = pkg_or_msg.__name__
-        class_name = "#"
-    routing_key = f"{module_name}.{class_name}"
-    if not routing_key.startswith(configuration.generated_package_name):
-        raise ValueError(
-            f"Invalid topic {routing_key}, must start with {configuration.generated_package_name}."
-        )
-    # As convention, we set the topic name to the message class name,
-    # left-stripped of the root generated package name
-    # (e.g. mymessaginglib.codegen.vision.control.Start => vision.control.Start)
-    routing_key = routing_key.split(f"{configuration.generated_package_name}.", maxsplit=1)[1]
-    return routing_key
-
-
-@dataclasses.dataclass
-class Topic:
-    """A dataclass to hold get_topic() return value."""
-
-    name: str
-    is_task_queue: bool = False
-
-
-def get_topic(pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType") -> Topic:
-    """Return a Topic dataclass object based on a Message (instance or class) or a ModuleType.
-
-    It uses build_routing_key to determine the topic name.
-    Note: The topic name can be a routing key with a binding key
-
-    Args:
-        pkg_or_msg: a Message instance, a Message class or a module
-
-    Returns: Topic
-    """
-    topic_name = f"{configuration.messages_prefix}.{build_routing_key(pkg_or_msg)}"
-    is_task_queue = ".tasks." in topic_name
-    return Topic(name=topic_name, is_task_queue=is_task_queue)
 
 
 @tp.runtime_checkable
@@ -503,6 +443,146 @@ class Envelope(IncomingMessageProtocol):
         return dataclasses.asdict(self)
 
 
+class BaseQueue(ABC):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+        return self.topic == other.topic and self.shared_queue == other.shared_queue
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.topic})"
+
+    def __init__(self, topic: str):
+        """Initialize Queue.
+
+        Args:
+            topic: a Topic value object
+        """
+        delimiter = default_configuration.backend_config.topic_delimiter
+        self.topic: str = topic.replace(".", delimiter)
+        self.subscription: str | None = None
+        self.result_subscription: str | None = None
+        self.shared_queue: bool = is_task(topic)
+
+    @property
+    def result_topic(self) -> str:
+        return f"{self.topic}{default_configuration.backend_config.topic_delimiter}result"
+
+    @abstractmethod
+    def get_tag(self) -> str:
+        ...
+
+    @abstractmethod
+    def get_connection(self) -> None:
+        ...
+
+    @abstractmethod
+    def publish(self, message: "ProtoBunnyMessage") -> None:
+        ...
+
+    @abstractmethod
+    def subscribe(self, callback: "SyncCallback | LoggerCallback") -> None:
+        ...
+
+    @abstractmethod
+    def unsubscribe(self, if_unused: bool = True, if_empty: bool = True) -> None:
+        ...
+
+    @abstractmethod
+    def purge(self, **kwargs) -> None:
+        ...
+
+    @abstractmethod
+    def get_message_count(self) -> int:
+        ...
+
+    @abstractmethod
+    def get_consumer_count(self) -> int:
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def send_message(
+        topic: str, content: bytes, correlation_id: str | None = None, persistent: bool = False
+    ) -> None | tp.Awaitable[None]:
+        ...
+
+    @abstractmethod
+    def publish_result(
+        self, result: "Result", topic: str | None = None, correlation_id: str | None = None
+    ):
+        ...
+
+    @abstractmethod
+    def subscribe_results(self, callback: tp.Callable[["Result"], tp.Any]):
+        ...
+
+    @abstractmethod
+    def unsubscribe_results(self):
+        ...
+
+
+def deserialize_message(topic: str | None, body: bytes) -> "ProtoBunnyMessage | None":
+    """Deserialize the body of a serialized pika message.
+
+    Args:
+        topic: str. The topic. It's used to determine the type of message.
+        body: bytes. The serialized message
+
+    Returns:
+        A deserialized message.
+    """
+    if not topic:
+        raise ValueError("Routing key was not set. Invalid topic")
+    # remove backend namespace prefix
+    log.debug("Deserializing message: %s", topic)
+    message_type: type["ProtoBunnyMessage"] = get_message_class_from_topic(topic)
+    log.debug("Found Message type: %s", message_type)
+    return message_type().parse(body) if message_type else None
+
+
+def deserialize_result_message(body: bytes) -> "Result":
+    """Deserialize the result message.
+
+    Args:
+        body: bytes. The serialized protobunny.core.results.Result
+
+    Returns:
+        Instance of Result
+    """
+    return tp.cast(Result, Result().parse(body))
+
+
+def get_body(message: "IncomingMessageProtocol") -> str:
+    """Get the json string representation of the message body to use for the logger service.
+    If message couldn't be parsed, it returns the raw content.
+    """
+    msg: ProtoBunnyMessage | None
+    body: str | bytes
+    delimiter = default_configuration.backend_config.topic_delimiter
+    if message.routing_key and message.routing_key.endswith(f"{delimiter}result"):
+        # log result message. Need to extract the source here
+        result = deserialize_result_message(message.body)
+        # original message for which this result was generated
+        msg = result.source
+        return_code = ReturnCode(result.return_code).name
+        # stringify to json
+        source = msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
+        if result.return_code != ReturnCode.SUCCESS:
+            body = f"{return_code} - error: [{result.error}] - {source}"
+        else:
+            body = f"{return_code} - {source}"
+    else:
+        msg = deserialize_message(message.routing_key, message.body)
+
+        body = (
+            msg.to_json(casing=betterproto.Casing.SNAKE, include_default_values=True)
+            if msg is not None
+            # can't parse the message - just log the raw content
+            else message.body
+        )
+    return str(body)
+
+
 from .core.commons import JsonContent
-from .core.results import Result as Result
-from .core.results import ReturnCode as ReturnCode
+from .core.results import Result, ReturnCode
