@@ -95,11 +95,12 @@ test-py313:
 	VIRTUAL_ENV=.venv313 UV_PROJECT_ENVIRONMENT=.venv313 uv run pytest tests/ -m "not integration" -vvv -s
 
 # Releasing
-.PHONY: docs clean build-package publish-test publish-pypi convert-md
-convert-md:
-	uv run python scripts/convert_md.py
+.PHONY: docs clean build-package publish-test publish-pypi copy-md
+copy-md:
+	cp ./README.md docs/source/intro.md
+	cp ./QUICK_START.md docs/source/quick_start.md
 
-docs: convert-md
+docs: copy-md
 	uv run sphinx-build -b html docs/source docs/build/html
 
 clean:
