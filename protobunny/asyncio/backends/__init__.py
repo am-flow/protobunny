@@ -15,7 +15,7 @@ from ...models import (
     LoggerCallback,
     ProtoBunnyMessage,
     SyncCallback,
-    default_configuration,
+    config,
     deserialize_message,
     deserialize_result_message,
     get_body,
@@ -42,7 +42,6 @@ class BaseConnection(ABC):
     exchange_name: str | None
     dl_exchange: str | None
     dl_queue: str | None
-    heartbeat: int | None
     timeout: int | None
     url: str | None = None
     queues: dict[str, tp.Any] = {}
@@ -109,11 +108,11 @@ class BaseAsyncConnection(BaseConnection, ABC):
     instance_by_vhost: dict[str, Self] = {}
 
     @abstractmethod
-    async def connect(self, timeout: float = 30) -> None:
+    async def connect(self, **kwargs) -> None:
         ...
 
     @abstractmethod
-    async def disconnect(self, timeout: float = 30) -> None:
+    async def disconnect(self, **kwargs) -> None:
         ...
 
     def __init__(self, **kwargs):
@@ -141,7 +140,7 @@ class BaseAsyncConnection(BaseConnection, ABC):
         ...
 
     @classmethod
-    async def get_connection(cls, vhost: str = "/") -> Self:
+    async def get_connection(cls, vhost: str = "/", **kwargs) -> Self:
         """Get singleton instance (async)."""
         current_loop = asyncio.get_running_loop()
         async with cls._get_class_lock():
@@ -159,7 +158,7 @@ class BaseAsyncConnection(BaseConnection, ABC):
                 log.debug("Creating fresh connection for %s", vhost)
                 new_instance = cls(vhost=vhost)
                 new_instance._loop = current_loop  # Store the loop it was born in
-                await new_instance.connect()
+                await new_instance.connect(**kwargs)
                 cls.instance_by_vhost[vhost] = new_instance
                 instance = new_instance
             return instance
@@ -190,7 +189,7 @@ class BaseAsyncQueue(BaseQueue, ABC):
             callback: a callable accepting a message as only argument.
             message: the IncomingMessageProtocol object received from the queue.
         """
-        delimiter = default_configuration.backend_config.topic_delimiter
+        delimiter = config.backend_config.topic_delimiter
         if not message.routing_key:
             raise ValueError("Routing key was not set. Invalid topic")
         if message.routing_key == self.result_topic or message.routing_key.endswith(
@@ -379,10 +378,10 @@ class LoggingAsyncQueue(BaseAsyncQueue):
     """
 
     def __init__(self, prefix: str) -> None:
-        backend = default_configuration.backend_config
+        backend = config.backend_config
         delimiter = backend.topic_delimiter
         wildcard = backend.multi_wildcard_delimiter
-        prefix = prefix or default_configuration.messages_prefix
+        prefix = prefix or config.messages_prefix
         super().__init__(f"{prefix}{delimiter}{wildcard}")
 
     def get_tag(self) -> str:
@@ -442,7 +441,7 @@ def is_task(topic: str) -> bool:
 
     Returns: True if tasks is in the topic, else False
     """
-    delimiter = default_configuration.backend_config.topic_delimiter
+    delimiter = config.backend_config.topic_delimiter
     return "tasks" in topic.split(delimiter)
 
 

@@ -1,6 +1,5 @@
 import asyncio
 import time
-from types import ModuleType
 from unittest.mock import ANY, AsyncMock
 
 from aio_pika import Message
@@ -43,16 +42,15 @@ async def tear_down(event_loop):
 
 
 def incoming_message_factory(backend, body: bytes = b"Hello"):
-    backend_name = backend.__name__.split(".")[-1]
-    if backend_name == "rabbitmq":
+    if backend == "rabbitmq":
         return Message(body=body)
-    elif backend_name == "redis":
+    elif backend == "redis":
         return Envelope(body=body, correlation_id="123")
     return Envelope(body=body)
 
 
 async def assert_backend_publish(
-    backend: ModuleType,
+    backend: str,
     internal_mock: dict | redis.Redis | AsyncMock,
     mock_connection: "BaseConnection",
     backend_msg,
@@ -60,8 +58,7 @@ async def assert_backend_publish(
     count_in_queue: int = 1,
     shared_queue: bool = False,
 ):
-    backend_name = backend.__name__.split(".")[-1]
-    match backend_name:
+    match backend:
         case "rabbitmq":
             internal_mock["exchange"].publish.assert_awaited_with(
                 backend_msg, routing_key=topic, mandatory=True, immediate=False
@@ -127,15 +124,14 @@ async def assert_backend_publish(
                 )
             else:
                 internal_mock["js"].publish.assert_awaited_once_with(
-                    subject="protobunny.test.tasks.key", payload=b"Hello", headers=None
+                    subject="TASKS.protobunny.test.tasks.key", payload=b"Hello", headers=None
                 )
 
 
 async def assert_backend_setup_queue(
     backend, internal_mock, topic: str, shared: bool, mock_connection
 ) -> None:
-    backend_name = backend.__name__.split(".")[-1]
-    match backend_name:
+    match backend:
         case "rabbitmq":
             internal_mock["channel"].declare_queue.assert_called_with(
                 topic, exclusive=not shared, durable=True, auto_delete=False, arguments=ANY
@@ -175,58 +171,17 @@ async def assert_backend_setup_queue(
                 }, mock_connection.queues
         case "nats":
             internal_mock["js"].subscribe.assert_awaited_once_with(
-                subject="protobunny.mylib.tasks.TaskMessage",
-                durable="protobunny_protobunny_mylib_tasks_TaskMessage",
+                subject="TASKS.protobunny.mylib.tasks.TaskMessage",
+                queue="protobunny_mylib_tasks_TaskMessage",
+                durable="protobunny_mylib_tasks_TaskMessage",
                 cb=ANY,
                 manual_ack=True,
                 stream="PROTOBUNNY_TASKS",
             )
 
-    # if backend_name == "rabbitmq":
-    #     internal_mock["channel"].declare_queue.assert_called_with(
-    #         topic, exclusive=not shared, durable=True, auto_delete=False, arguments=ANY
-    #     )
-    # elif backend_name == "redis":
-    #     if shared:
-    #         streams = await internal_mock.xinfo_groups(f"protobunny:{topic}")
-    #         assert len(streams) == 1
-    #         assert (
-    #             streams[0]["name"].decode() == "shared_group"
-    #         ), f"Expected 'shared_group', got '{streams[0]['name']}'"
-    #     else:
-    #         assert mock_connection.queues[topic] == {"is_shared": False}
-    # elif backend_name == "nats":
-    #     assert False  # TODO
-    #
-    # elif backend_name == "python":
-    #     if not shared:
-    #         assert len(internal_mock._exclusive_queues.get(topic)) == 1
-    #     else:
-    #         assert internal_mock._shared_queues.get(topic)
-    # elif backend_name == "mosquitto":
-    #     if not shared:
-    #         assert mock_connection.queues[topic] == {
-    #             "is_shared": False,
-    #             "group_name": "",
-    #             "sub_key": f"$share/shared_group/test/{topic}",
-    #             "tag": ANY,
-    #             "topic": topic,
-    #             "topic_key": f"test/{topic}",
-    #         }
-    #     else:
-    #         assert list(mock_connection.queues.values())[0] == {
-    #             "is_shared": True,
-    #             "group_name": "shared_group",
-    #             "sub_key": f"$share/shared_group/protobunny/{topic}",
-    #             "tag": ANY,
-    #             "topic": topic,
-    #             "topic_key": f"protobunny/{topic}",
-    #         }, mock_connection.queues
-
 
 async def assert_backend_connection(backend, internal_mock):
-    backend_name = backend.__name__.split(".")[-1]
-    match backend_name:
+    match backend:
         case "rabbitmq":
             # Verify aio_pika calls
             internal_mock["connect"].assert_awaited_once()
@@ -242,32 +197,16 @@ async def assert_backend_connection(backend, internal_mock):
         case "nats":
             import nats
 
-            nats.connect.assert_awaited_once_with(
-                "nats://localhost:4222/", connect_timeout=30.0, max_reconnect_attempts=3
-            )
-            # internal_mock["client"].connect.assert_awaited_once()
-
-    # if backend_name == "rabbitmq":
-    #     # Verify aio_pika calls
-    #     internal_mock["connect"].assert_awaited_once()
-    #     assert internal_mock["channel"].set_qos.called
-    #     # Check if main and DLX exchanges were declared
-    #     assert internal_mock["channel"].declare_exchange.call_count == 2
-    # elif backend_name == "redis":
-    #     assert await internal_mock.ping()
-    # elif backend_name == "mosquitto":
-    #     internal_mock.__aenter__.assert_awaited_once()
-    # elif backend_name == "nats":
-    #     internal_mock.connect.assert_awaited_once()
-    # assert True
+            nats.connect.assert_awaited_once_with("nats://localhost:4222/")
 
 
-def get_mocked_connection(backend, redis_client, mock_aio_pika, mocker, mock_mosquitto, mock_nats):
-    backend_name = backend.__name__.split(".")[-1]
-
+def get_mocked_connection(
+    backend_module, redis_client, mock_aio_pika, mocker, mock_mosquitto, mock_nats
+):
+    backend_name = backend_module.__name__.split(".")[-1]
     match backend_name:
         case "redis":
-            real_conn_with_fake_redis = backend.connection.Connection(
+            real_conn_with_fake_redis = backend_module.connection.Connection(
                 url="redis://localhost:6379/0"
             )
             assert (
@@ -284,11 +223,11 @@ def get_mocked_connection(backend, redis_client, mock_aio_pika, mocker, mock_mos
             )
             return real_conn_with_fake_redis
         case "nats":
-            real_conn_with_fake_nats = backend.connection.Connection()
+            real_conn_with_fake_nats = backend_module.connection.Connection()
             real_conn_with_fake_nats._connection = mock_nats["client"]
             return real_conn_with_fake_nats
         case "rabbitmq":
-            real_conn_with_fake_aio_pika = backend.connection.Connection(
+            real_conn_with_fake_aio_pika = backend_module.connection.Connection(
                 url="amqp://guest:guest@localhost:5672/"
             )
             real_conn_with_fake_aio_pika._connection = mock_aio_pika["connection"]
@@ -298,48 +237,11 @@ def get_mocked_connection(backend, redis_client, mock_aio_pika, mocker, mock_mos
             real_conn_with_fake_aio_pika._queue = mock_aio_pika["queue"]
             return real_conn_with_fake_aio_pika
         case "python":
-            python_conn = backend.connection.Connection()
+            python_conn = backend_module.connection.Connection()
             python_conn.is_connected_event.set()
             return python_conn
         case "mosquitto":
-            real_conn_with_fake_aiomqtt = backend.connection.Connection()
+            real_conn_with_fake_aiomqtt = backend_module.connection.Connection()
             real_conn_with_fake_aiomqtt._connection = mock_mosquitto
             return real_conn_with_fake_aiomqtt
-
-    # if backend_name == "redis":
-    #     real_conn_with_fake_redis = backend.connection.Connection(url="redis://localhost:6379/0")
-    #     assert (
-    #         real_conn_with_fake_redis._exchange == "protobunny"
-    #     ), real_conn_with_fake_redis._exchange
-    #     real_conn_with_fake_redis._connection = redis_client
-    #
-    #     def check_connected() -> bool:
-    #         return real_conn_with_fake_redis._connection is not None
-    #
-    #     # Patch is_connected logic
-    #     mocker.patch.object(real_conn_with_fake_redis, "is_connected", side_effect=check_connected)
-    #
-    #     return real_conn_with_fake_redis
-    # elif backend_name == "rabbitmq":
-    #     real_conn_with_fake_aio_pika = backend.connection.Connection(
-    #         url="amqp://guest:guest@localhost:5672/"
-    #     )
-    #     real_conn_with_fake_aio_pika._connection = mock_aio_pika["connection"]
-    #     real_conn_with_fake_aio_pika.is_connected_event.set()
-    #     real_conn_with_fake_aio_pika._channel = mock_aio_pika["channel"]
-    #     real_conn_with_fake_aio_pika._exchange = mock_aio_pika["exchange"]
-    #     real_conn_with_fake_aio_pika._queue = mock_aio_pika["queue"]
-    #
-    #     return real_conn_with_fake_aio_pika
-    # elif backend_name == "python":
-    #     python_conn = backend.connection.Connection()
-    #     python_conn.is_connected_event.set()
-    #     return python_conn
-    # elif backend_name == "mosquitto":
-    #     real_conn_with_fake_aiomqtt = backend.connection.Connection()
-    #     real_conn_with_fake_aiomqtt._connection = mock_mosquitto
-    #     return real_conn_with_fake_aiomqtt
-    # elif backend_name == "nats":
-    #     real_conn_with_fake_nats = backend.connection.Connection()
-    #     real_conn_with_fake_nats._connection = mock_nats["client"]
-    #     return real_conn_with_fake_nats
+    return None

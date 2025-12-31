@@ -236,3 +236,31 @@ jobs:
         run: uv run python -m pytest tests/test_integration.py -k mosquitto -vvv -s
         env:
           MQTT_HOST: 127.0.0.1
+
+  integration_test_nats:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: nats:latest
+        ports:
+          - 4222:4222
+        options: >-
+          -js
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run tests
+        run: uv run python -m pytest tests/test_integration.py -k nats -vvv -s
+        env:
+          NATS_HOST: localhost
+          NATS_PORT: 6379

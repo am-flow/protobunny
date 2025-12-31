@@ -11,11 +11,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 import can_ada
 import nats
+from nats.aio.msg import Msg
 from nats.aio.subscription import Subscription
 from nats.errors import ConnectionClosedError, TimeoutError
 from nats.js.errors import BadRequestError, NoStreamResponseError
 
-from ....config import default_configuration
+from ....conf import config
 from ....exceptions import ConnectionError, PublishError, RequeueMessage
 from ....models import Envelope, IncomingMessageProtocol
 from .. import BaseAsyncConnection, is_task
@@ -92,12 +93,13 @@ class Connection(BaseAsyncConnection):
         self.heartbeat = heartbeat
         self.queues: dict[str, list[dict]] = defaultdict(list)
         self.consumers: dict[str, dict] = {}
+        # to run sync callbacks
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
-
-        self._delimiter = default_configuration.backend_config.topic_delimiter
-        self._exchange = default_configuration.backend_config.namespace
-        self._stream_name = f"{self._exchange.upper()}_TASKS"
+        self._delimiter = config.backend_config.topic_delimiter
+        self._namespace = config.backend_config.namespace
+        self._tasks_subject_prefix = "TASKS"
+        self._stream_name = f"{self._namespace.upper()}_{self._tasks_subject_prefix}"
 
     async def __aenter__(self) -> "Connection":
         await self.connect()
@@ -122,7 +124,7 @@ class Connection(BaseAsyncConnection):
         return cls._lock
 
     def build_topic_key(self, topic: str) -> str:
-        return f"{self._exchange}.{topic}"
+        return f"{self._namespace}.{topic}"
 
     @property
     def is_connected_event(self) -> asyncio.Event:
@@ -142,11 +144,10 @@ class Connection(BaseAsyncConnection):
             raise ConnectionError("Connection not initialized. Call connect() first.")
         return self._connection
 
-    async def connect(self, timeout: float = 30.0) -> "Connection":
+    async def connect(self, **kwargs) -> "Connection":
         """Establish NATS connection.
 
         Args:
-            timeout: Maximum time to wait for connection establishment (seconds)
 
         Raises:
             ConnectionError: If connection fails
@@ -157,19 +158,17 @@ class Connection(BaseAsyncConnection):
                 return self.instance_by_vhost[self.vhost]
             try:
                 log.info("Establishing NATS connection to %s", self._url.split("@")[-1])
-                self._connection = await nats.connect(
-                    self._url, connect_timeout=timeout, max_reconnect_attempts=3
-                )
+                self._connection = await nats.connect(self._url, **kwargs)
                 self.is_connected_event.set()
                 log.info("Successfully connected to NATS")
                 self.instance_by_vhost[self.vhost] = self
-                if default_configuration.use_tasks_in_nats:
+                if config.use_tasks_in_nats:
                     # Create the jetstream if not existing
                     js = self._connection.jetstream()
                     # For NATS, tasks package can only be at first level after main package library
                     # Warning: don't bury tasks messages after three levels of hierarchy
                     task_patterns = [
-                        f"{self._exchange}.*.tasks.>",
+                        f"{self._tasks_subject_prefix}{self._delimiter}>",
                     ]
                     try:
                         await js.add_stream(
@@ -244,12 +243,17 @@ class Connection(BaseAsyncConnection):
         topic_key = self.build_topic_key(topic)
         cb = functools.partial(self._nats_handler, callback)
         if shared:
-            log.debug("Subscribing shared worker to JetStream: %s", topic_key)
             js = self._connection.jetstream()
             # We use a durable name so multiple instances share the same task state
-            group_name = f"{self._exchange}_{topic_key.replace('.', '_')}"
+            group_name = topic_key.replace(".", "_")
+            log.debug(
+                "Subscribing shared worker to JetStream group %s subject %s", group_name, topic_key
+            )
             subscription = await js.subscribe(
-                subject=topic_key,
+                # the topic with prefixes
+                subject=f"{self._tasks_subject_prefix}{self._delimiter}{topic_key}",
+                # add queue parameter to flag it as a distributed queue
+                queue=group_name,
                 durable=group_name,
                 cb=cb,
                 manual_ack=True,
@@ -275,18 +279,25 @@ class Connection(BaseAsyncConnection):
             }
             return sub_tag
 
-    async def _nats_handler(self, callback, msg):
+    async def _nats_handler(self, callback, msg: Msg):
+        """Callback that handles the Msg object pushed from NATS"""
         topic = msg.subject
+        is_shared_queue = is_task(topic)
         reply = msg.reply
         body = msg.data
-        is_shared_queue = is_task(topic)
-        routing_key = msg.subject.removeprefix(f"{self._exchange}{self._delimiter}")
+        # Remove the 'TASKS.' prefix that was added to match the filtering stream group
+        if is_shared_queue:
+            topic = topic.removeprefix(f"{self._tasks_subject_prefix}{self._delimiter}")
+
+        # The routing key is the string used to match the protobuf python class fqn
+        routing_key = topic.removeprefix(f"{self._namespace}{self._delimiter}")
         envelope = Envelope(body=body, correlation_id=reply, routing_key=routing_key)
         try:
             if asyncio.iscoroutinefunction(callback):
                 await callback(envelope)
             else:
-                asyncio.run_coroutine_threadsafe(callback(envelope), self._loop)
+                # Run the callback in a thread pool to avoid blocking the event loop
+                await asyncio.get_event_loop().run_in_executor(self.executor, callback, envelope)
             if is_shared_queue:
                 await msg.ack()
         except RequeueMessage:
@@ -295,14 +306,10 @@ class Connection(BaseAsyncConnection):
             if not is_shared_queue:
                 await self._connection.publish(topic, body, reply=reply)
             else:
-                # TODO check if NATS has a requeue logic
-                js = self._connection.jetstream()
-                await js.publish(topic, body)
-                await msg.ack()
+                await msg.nak(self.requeue_delay)
         except Exception:
             log.exception("Callback failed for topic %s", topic)
-            # TODO check if NATS has a reject logic
-            await msg.ack()  # avoid retry logic for potentially poisoning messages
+            await msg.term()  # avoid retry logic for potentially poisoning messages
 
     async def unsubscribe(self, tag: str, **kwargs) -> None:
         if tag not in self.consumers:
@@ -312,7 +319,6 @@ class Connection(BaseAsyncConnection):
         del sub_info["subscription"]
         log.info("Unsubscribed from %s", sub_info["topic"])
         self.consumers.pop(tag)
-        # TODO check if we need to handle self.queues[topic] cleanup here
 
     async def publish(
         self,
@@ -322,7 +328,6 @@ class Connection(BaseAsyncConnection):
     ) -> None:
         if not self.is_connected():
             raise ConnectionError("Not connected to NATS")
-
         topic_key = self.build_topic_key(topic)
         is_shared = is_task(topic)
 
@@ -332,9 +337,17 @@ class Connection(BaseAsyncConnection):
         try:
             if is_shared:
                 # Persistent "Task" publishing via JetStream
+                stream_key = f"{self._tasks_subject_prefix}{self._delimiter}{topic_key}"
                 log.debug("Publishing persistent task to NATS JetStream: %s", topic_key)
                 js = self._connection.jetstream()
-                await js.publish(subject=topic_key, payload=message.body, headers=headers)
+                await js.publish(subject=stream_key, payload=message.body, headers=headers)
+                if config.log_task_in_nats:
+                    # The logger service doesn't use jetstream so we re-publish on a normal pubsub
+                    # (it won't be re-catched by the tasks consumer)
+                    log.debug("Publishing logging message for task to NATS Core: %s", topic_key)
+                    await self._connection.publish(
+                        subject=topic_key, payload=message.body, headers=headers
+                    )
             else:
                 # Volatile "PubSub" publishing via NATS Core
                 log.debug("Publishing broadcast to NATS Core: %s", topic_key)
@@ -352,17 +365,18 @@ class Connection(BaseAsyncConnection):
             if not self.is_connected():
                 raise ConnectionError("Not connected to NATS")
             topic_key = self.build_topic_key(topic)
+            subject = f"{self._tasks_subject_prefix}{self._delimiter}{topic_key}"
             # NATS purges messages matching a subject within the stream
             try:
                 jsm = self._connection.jsm()  # Get JetStream Management context
 
                 log.info("Purging NATS subject '%s' from stream %s", topic, self._stream_name)
-                await jsm.purge_stream(self._stream_name, subject=topic_key)
+                await jsm.purge_stream(self._stream_name, subject=subject)
 
                 if reset_groups:
                     # In NATS, we must find consumers specifically tied to this topic
                     # Protobunny convention: durable name includes the topic
-                    group_name = f"{self._exchange}_{topic_key.replace('.', '_')}"
+                    group_name = f"{topic_key.replace('.', '_')}"
                     try:
                         await jsm.delete_consumer(self._stream_name, group_name)
                         log.debug("Deleted NATS durable consumer: %s", group_name)

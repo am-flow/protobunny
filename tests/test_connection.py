@@ -10,14 +10,12 @@ from aio_pika import IncomingMessage
 import protobunny as pb_base
 from protobunny import RequeueMessage
 from protobunny import asyncio as pb
-from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
-from protobunny.asyncio.backends import nats as nats_backend_aio
-from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
 from protobunny.backends import python as python_backend
-from protobunny.config import backend_configs
+from protobunny.conf import backend_configs
 from protobunny.helpers import (
+    get_backend,
     get_queue,
 )
 from protobunny.models import Envelope, IncomingMessageProtocol
@@ -36,11 +34,11 @@ from .utils import (
 @pytest.mark.parametrize(
     "backend",
     [
-        rabbitmq_backend_aio,
-        redis_backend_aio,
-        python_backend_aio,
-        mosquitto_backend_aio,
-        nats_backend_aio,
+        "rabbitmq",
+        "redis",
+        "python",
+        "mosquitto",
+        "nats",
     ],
 )
 @pytest.mark.asyncio
@@ -48,7 +46,7 @@ class TestConnection:
     @pytest.fixture(autouse=True)
     async def mock_connections(
         self,
-        backend,
+        backend: str,
         mocker,
         mock_redis_client,
         mock_aio_pika,
@@ -56,26 +54,24 @@ class TestConnection:
         mock_nats,
         test_config,
     ) -> tp.AsyncGenerator[dict[str, AsyncMock | None], None]:
-        backend_name = backend.__name__.split(".")[-1]
-
         test_config.mode = "async"
-        test_config.backend = backend_name
+        test_config.backend = backend
         test_config.log_task_in_redis = True
-        test_config.backend_config = backend_configs[backend_name]
-        mocker.patch.object(pb_base.config, "default_configuration", test_config)
-        mocker.patch.object(pb_base.models, "default_configuration", test_config)
-        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
-        mocker.patch.object(pb.backends, "default_configuration", test_config)
-        connection_module = getattr(pb.backends, backend_name).connection
-        if hasattr(connection_module, "default_configuration"):
-            mocker.patch.object(connection_module, "default_configuration", test_config)
+        test_config.backend_config = backend_configs[backend]
+        mocker.patch.object(pb_base.conf, "config", test_config)
+        mocker.patch.object(pb_base.models, "config", test_config)
+        mocker.patch.object(pb_base.backends, "config", test_config)
+        mocker.patch.object(pb_base.helpers, "config", test_config)
+        mocker.patch.object(pb.backends, "config", test_config)
+        connection_module = getattr(pb.backends, backend).connection
+        if hasattr(connection_module, "config"):
+            mocker.patch.object(connection_module, "config", test_config)
 
-        assert pb_base.helpers.get_backend() == backend
-        assert pb.get_backend() == backend
-        assert isinstance(get_queue(tests.tasks.TaskMessage), backend.queues.AsyncQueue)
+        backend_module = get_backend()
+        assert pb.get_backend() == backend_module
+        assert isinstance(get_queue(tests.tasks.TaskMessage), backend_module.queues.AsyncQueue)
         conn_with_fake_internal_conn = get_mocked_connection(
-            backend, mock_redis_client, mock_aio_pika, mocker, mock_mosquitto, mock_nats
+            backend_module, mock_redis_client, mock_aio_pika, mocker, mock_mosquitto, mock_nats
         )
         mocker.patch(
             "protobunny.asyncio.backends.BaseAsyncQueue.get_connection",
@@ -97,8 +93,7 @@ class TestConnection:
 
     @pytest.fixture
     async def mock_internal_connection(self, mock_connections, backend):
-        backend_name = backend.__name__.split(".")[-1]
-        yield mock_connections[backend_name]
+        yield mock_connections[backend]
 
     async def test_connection_success(
         self, mock_connection: MagicMock, mock_internal_connection, backend
@@ -128,9 +123,8 @@ class TestConnection:
         conn = await mock_connection.connect()
 
         incoming = incoming_message_factory(backend)
-        backend_name = backend.__name__.split(".")[-1]
         topic = "test.tasks.key"
-        delimiter = backend_configs[backend_name].topic_delimiter
+        delimiter = backend_configs[backend].topic_delimiter
         topic = topic.replace(".", delimiter)
 
         await conn.publish(topic, incoming)
@@ -147,8 +141,7 @@ class TestConnection:
 
     async def test_publish(self, mock_connection: MagicMock, mock_internal_connection, backend):
         topic = "test.routing.key"
-        backend_name = backend.__name__.split(".")[-1]
-        delimiter = backend_configs[backend_name].topic_delimiter
+        delimiter = backend_configs[backend].topic_delimiter
         topic = topic.replace(".", delimiter)
         conn = await mock_connection.connect()
         msg = None

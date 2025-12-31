@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Empty, Queue
 
 from ... import RequeueMessage
-from ...config import default_configuration
+from ...conf import config
 from ...models import Envelope, SyncCallback, is_task
 from .. import BaseConnection
 
@@ -116,7 +116,7 @@ class BaseLocalConnection(BaseConnection, ABC):
         self.requeue_delay = requeue_delay
         self._is_connected = False
         self._subscriptions: dict[str, dict] = {}
-        self.logger_prefix = default_configuration.logger_prefix
+        self.logger_prefix = config.logger_prefix
 
     def build_topic_key(self, topic: str) -> str:
         pass
@@ -179,7 +179,7 @@ class Connection(BaseLocalConnection):
                     cls.instance_by_vhost[vhost] = instance
         return cls.instance_by_vhost[vhost]
 
-    def connect(self, timeout: float = 10.0) -> "Connection":
+    def connect(self, **kwargs) -> "Connection":
         with self.lock:
             self.is_connected_event.set()
             return self

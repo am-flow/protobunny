@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import aiomqtt
 import can_ada
 
-from ....config import default_configuration
+from ....conf import config
 from ....exceptions import ConnectionError, PublishError, RequeueMessage
 from ....models import Envelope, IncomingMessageProtocol
 from .. import BaseAsyncConnection
@@ -66,8 +66,8 @@ class Connection(BaseAsyncConnection):
 
         self._connection: aiomqtt.Client | None = None
         self._instance_lock: asyncio.Lock | None = None
-        self._delimiter = default_configuration.backend_config.topic_delimiter  # e.g. "/"
-        self._exchange = default_configuration.backend_config.namespace  # used as root prefix
+        self._delimiter = config.backend_config.topic_delimiter  # e.g. "/"
+        self._exchange = config.backend_config.namespace  # used as root prefix
 
     @property
     def is_connected_event(self) -> asyncio.Event:
@@ -86,7 +86,7 @@ class Connection(BaseAsyncConnection):
         """Joins project prefix with topic using the configured delimiter."""
         return f"{self._exchange}{self._delimiter}{topic}"
 
-    async def connect(self, timeout: float = 30.0) -> "Connection":
+    async def connect(self, **kwargs) -> "Connection":
         async with self.lock:
             if self.is_connected():
                 return self
@@ -98,7 +98,7 @@ class Connection(BaseAsyncConnection):
                     port=self.port,
                     username=self.username,
                     password=self.password,
-                    timeout=timeout,
+                    **kwargs,
                 )
                 # We enter the context manager to establish the connection
                 await self._connection.__aenter__()

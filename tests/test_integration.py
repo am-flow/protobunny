@@ -1,3 +1,5 @@
+import asyncio
+import importlib
 import logging
 import typing as tp
 
@@ -6,19 +8,10 @@ import betterproto
 import pytest
 from pytest_mock import MockerFixture
 
-import protobunny as pb_sync
+import protobunny as pb_base
 from protobunny import asyncio as pb
-from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
-from protobunny.asyncio.backends import nats as nats_backend_aio
-from protobunny.asyncio.backends import python as python_backend_aio
-from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
-from protobunny.asyncio.backends import redis as redis_backend_aio
-from protobunny.backends import mosquitto as mosquitto_backend
-from protobunny.backends import nats as nats_backend
-from protobunny.backends import python as python_backend
-from protobunny.backends import rabbitmq as rabbitmq_backend
-from protobunny.backends import redis as redis_backend
-from protobunny.config import Config, backend_configs
+from protobunny import get_backend
+from protobunny.conf import Config, backend_configs
 from protobunny.models import ProtoBunnyMessage
 
 from . import tests
@@ -89,11 +82,11 @@ def log_callback(message: aio_pika.IncomingMessage, body: str) -> str:
 @pytest.mark.parametrize(
     "backend",
     [
-        rabbitmq_backend_aio,
-        redis_backend_aio,
-        python_backend_aio,
-        mosquitto_backend_aio,
-        nats_backend_aio,
+        "rabbitmq",
+        "redis",
+        "python",
+        "mosquitto",
+        "nats",
     ],
 )
 class TestIntegration:
@@ -104,39 +97,40 @@ class TestIntegration:
 
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
-    # @pytest.fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     async def setup_test_env(
-        self, mocker: MockerFixture, test_config: Config, backend
+        self, mocker: MockerFixture, test_config: Config, backend: str
     ) -> tp.AsyncGenerator[None, None]:
-        backend_name = backend.__name__.split(".")[-1]
         test_config.mode = "async"
-        test_config.backend = backend_name
+        test_config.backend = backend
         test_config.log_task_in_redis = True
-        test_config.backend_config = backend_configs[backend_name]
+        test_config.backend_config = backend_configs[backend]
         self.topic_delimiter = test_config.backend_config.topic_delimiter
-
         # Patch global configuration for all modules that use it
-        mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
-        mocker.patch.object(pb.backends, "default_configuration", test_config)
-        mocker.patch.object(pb, "default_configuration", test_config)
-        if hasattr(backend.connection, "default_configuration"):
-            mocker.patch.object(backend.connection, "default_configuration", test_config)
-        if hasattr(backend.queues, "default_configuration"):
-            mocker.patch.object(backend.queues, "default_configuration", test_config)
+        mocker.patch.object(pb_base.conf, "config", test_config)
+        mocker.patch.object(pb_base.models, "config", test_config)
+        mocker.patch.object(pb_base.helpers, "config", test_config)
+        mocker.patch.object(pb.backends, "config", test_config)
+        mocker.patch.object(pb, "config", test_config)
+        backend_module = get_backend()
+        assert backend_module.__name__.split(".")[-1] == backend
 
-        pb.backend = backend
-        mocker.patch.object(pb, "get_backend", return_value=backend)
+        if hasattr(backend_module.connection, "config"):
+            mocker.patch.object(backend_module.connection, "config", test_config)
+        if hasattr(backend_module.queues, "config"):
+            mocker.patch.object(backend_module.queues, "config", test_config)
+
+        pb.backend = backend_module
+        mocker.patch.object(pb, "get_backend", return_value=backend_module)
         # Assert the patching is working for setting the backend
         connection = await pb.connect()
-        assert isinstance(connection, backend.connection.Connection)
+        assert isinstance(connection, backend_module.connection.Connection)
         queue = pb.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage".replace(
             ".", test_config.backend_config.topic_delimiter
         )
-        assert isinstance(queue, backend.queues.AsyncQueue)
-        assert isinstance(await queue.get_connection(), backend.connection.Connection)
+        assert isinstance(queue, backend_module.queues.AsyncQueue)
+        assert isinstance(await queue.get_connection(), backend_module.connection.Connection)
         # start without pending subscriptions
         await pb.unsubscribe_all(if_unused=False, if_empty=False)
         yield
@@ -149,9 +143,9 @@ class TestIntegration:
             "task": None,
         }
         await pb.disconnect()
-        backend.connection.Connection.instance_by_vhost.clear()
+        backend_module.connection.Connection.instance_by_vhost.clear()
 
-    # @pytest.mark.flaky(max_runs=3)
+    @pytest.mark.flaky(max_runs=3)
     async def test_publish(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -164,7 +158,7 @@ class TestIntegration:
         assert received["message"].number == self.msg.number
         assert received["message"].content == "test"
 
-    # @pytest.mark.flaky(max_runs=3)
+    @pytest.mark.flaky(max_runs=3)
     async def test_to_dict(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -183,7 +177,7 @@ class TestIntegration:
             )
             == '{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
         )
-        await pb.subscribe(tests.tasks.TaskMessage, callback)
+        await pb.subscribe(tests.tasks.TaskMessage, callback_task)
         msg = tests.tasks.TaskMessage(
             content="test",
             bbox=[1, 2, 3, 4],
@@ -191,10 +185,11 @@ class TestIntegration:
         await pb.publish(msg)
 
         async def predicate() -> bool:
-            return received["message"] == msg
+            await asyncio.sleep(0)
+            return received["task"] == msg
 
         assert await async_wait(predicate, timeout=1, sleep=0.1)
-        assert received["message"].to_dict(
+        assert received["task"].to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
         ) == {
             "content": "test",
@@ -202,8 +197,8 @@ class TestIntegration:
             "weights": [],
             "options": None,
         }
-        # to_pydict uses enum names and don't stringyfies int64
-        assert received["message"].to_pydict(
+        # to_pydict uses enum names and don't stringifies int64
+        assert received["task"].to_pydict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
         ) == {
             "content": "test",
@@ -214,8 +209,7 @@ class TestIntegration:
 
     @pytest.mark.flaky(max_runs=3)
     async def test_count_messages(self, backend) -> None:
-        backend_name = backend.__name__.split(".")[-1]
-        if backend_name == "mosquitto":
+        if backend == "mosquitto":
             pytest.skip("mosquitto backend doesn't support message counts")
         task_queue = await pb.subscribe(tests.tasks.TaskMessage, callback)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
@@ -229,7 +223,7 @@ class TestIntegration:
 
         assert await async_wait(
             predicate
-        ), f"Messages were not in the queue: {await task_queue.get_message_count()}"
+        ), f"Message count should be 0: {await task_queue.get_message_count()}"
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
         await pb.unsubscribe(tests.tasks.TaskMessage, if_unused=False, if_empty=False)
@@ -456,9 +450,7 @@ class TestIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend, nats_backend]
-)
+@pytest.mark.parametrize("backend", ["rabbitmq", "redis", "python", "mosquitto", "nats"])
 class TestIntegrationSync:
     """Integration tests (to run with the backend server up)"""
 
@@ -466,44 +458,48 @@ class TestIntegrationSync:
 
     @pytest.fixture(autouse=True)
     def setup_test_env(
-        self, mocker: MockerFixture, test_config: Config, backend
+        self, mocker: MockerFixture, test_config: Config, backend: str
     ) -> tp.Generator[None, None, None]:
-        backend_name = backend.__name__.split(".")[-1]
         test_config.mode = "sync"
-        test_config.backend = backend_name
+        test_config.backend = backend
         test_config.log_task_in_redis = True
-        test_config.backend_config = backend_configs[backend_name]
+        test_config.backend_config = backend_configs[backend]
         self.topic_delimiter = test_config.backend_config.topic_delimiter
         # Patch global configuration for all modules that use it
-        mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
-        mocker.patch.object(pb.backends.redis.connection, "default_configuration", test_config)
-        if hasattr(backend.connection, "default_configuration"):
-            mocker.patch.object(backend.connection, "default_configuration", test_config)
-        if hasattr(backend.queues, "default_configuration"):
-            mocker.patch.object(backend.queues, "default_configuration", test_config)
+        mocker.patch.object(pb_base.conf, "config", test_config)
+        mocker.patch.object(pb_base.models, "config", test_config)
+        mocker.patch.object(pb_base.backends, "config", test_config)
+        mocker.patch.object(pb.backends, "config", test_config)
+        mocker.patch.object(pb_base.helpers, "config", test_config)
 
-        pb_sync.backend = backend
-        # mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb_sync.helpers, "get_backend", return_value=backend)
-        # mocker.patch.object(pb_sync, "connect", backend.connection.connect)
-        # mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
-        mocker.patch.object(pb_sync, "get_backend", return_value=backend)
+        backend_module = get_backend()
+        assert backend_module.__name__.split(".")[-1] == backend
+        async_backend_module = importlib.import_module(f"protobunny.asyncio.backends.{backend}")
+        if hasattr(async_backend_module.connection, "config"):
+            # The sync connection is often implemented as a wrapper of the relative async module. Patch the config of the async module as well
+            mocker.patch.object(async_backend_module.connection, "config", test_config)
+        if hasattr(backend_module.connection, "config"):
+            mocker.patch.object(backend_module.connection, "config", test_config)
+        if hasattr(backend_module.queues, "config"):
+            mocker.patch.object(backend_module.queues, "config", test_config)
+
+        mocker.patch.object(pb_base.helpers, "get_backend", return_value=backend_module)
+        mocker.patch.object(pb_base, "get_backend", return_value=backend_module)
 
         # Assert the patching is working for setting the backend
-        connection = pb_sync.connect()
-        assert isinstance(connection, backend.connection.Connection)
-        queue = pb_sync.get_queue(self.msg)
+        connection = pb_base.connect()
+        assert isinstance(connection, backend_module.connection.Connection)
+        queue = pb_base.get_queue(self.msg)
         assert queue.topic == "acme.tests.TestMessage".replace(
             ".", test_config.backend_config.topic_delimiter
         )
-        assert isinstance(queue, backend.queues.SyncQueue)
-        assert isinstance(queue.get_connection(), backend.connection.Connection)
+        assert isinstance(queue, backend_module.queues.SyncQueue)
+        assert isinstance(queue.get_connection(), backend_module.connection.Connection)
+        # Setup
         # start without pending subscriptions
-        pb_sync.unsubscribe_all(if_unused=False, if_empty=False)
+        pb_base.unsubscribe_all(if_unused=False, if_empty=False)
         yield
+        # Teardown
         # reset the variables holding the messages received
         global received
         received = {
@@ -513,22 +509,22 @@ class TestIntegrationSync:
             "task": None,
         }
         connection.disconnect()
-        backend.connection.Connection.instance_by_vhost.clear()
+        backend_module.connection.Connection.instance_by_vhost.clear()
 
     @pytest.mark.flaky(max_runs=3)
     def test_publish(self, backend) -> None:
         global received
-        pb_sync.subscribe(tests.TestMessage, callback_sync)
-        pb_sync.publish(self.msg)
+        pb_base.subscribe(tests.TestMessage, callback_sync)
+        pb_base.publish(self.msg)
         assert sync_wait(lambda: received["message"] is not None)
         assert received["message"].number == self.msg.number
 
     @pytest.mark.flaky(max_runs=3)
     def test_to_dict(self, backend) -> None:
         global received
-        pb_sync.subscribe(tests.TestMessage, callback_sync)
-        pb_sync.subscribe(tests.tasks.TaskMessage, callback_task_sync)
-        pb_sync.publish(self.msg)
+        pb_base.subscribe(tests.TestMessage, callback_sync)
+        pb_base.subscribe(tests.tasks.TaskMessage, callback_task_sync)
+        pb_base.publish(self.msg)
         assert sync_wait(lambda: received["message"] == self.msg)
         assert received["message"].to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
@@ -544,8 +540,8 @@ class TestIntegrationSync:
             content="test",
             bbox=[1, 2, 3, 4],
         )
-        pb_sync.publish(msg)
-        assert sync_wait(lambda: received["task"] == msg)
+        pb_base.publish(msg)
+        assert sync_wait(lambda: received["task"] is not None)
         assert received["task"].to_dict(
             casing=betterproto.Casing.SNAKE, include_default_values=True
         ) == {
@@ -566,32 +562,31 @@ class TestIntegrationSync:
 
     @pytest.mark.flaky(max_runs=3)
     def test_count_messages(self, backend) -> None:
-        backend_name = backend.__name__.split(".")[-1]
-        if backend_name == "mosquitto":
+        if backend == "mosquitto":
             pytest.skip("mosquitto backend doesn't support message counts")
         # Subscribe to a tasks topic (shared queue)
-        task_queue = pb_sync.subscribe(tests.tasks.TaskMessage, callback_task_sync)
+        task_queue = pb_base.subscribe(tests.tasks.TaskMessage, callback_task_sync)
         msg = tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4])
-        connection = pb_sync.connect()
+        connection = pb_base.connect()
         # remove past messages
         connection.purge(task_queue.topic, reset_groups=True)
         # we unsubscribe so the published messages
         # won't be consumed and stay in the queue
         task_queue.unsubscribe()
         assert sync_wait(lambda: 0 == task_queue.get_consumer_count())
-        pb_sync.publish(msg)
-        pb_sync.publish(msg)
-        pb_sync.publish(msg)
+        pb_base.publish(msg)
+        pb_base.publish(msg)
+        pb_base.publish(msg)
         # and we can count them
         assert sync_wait(lambda: 3 == task_queue.get_message_count())
 
     @pytest.mark.flaky(max_runs=3)
     def test_logger_body(self, backend) -> None:
-        pb_sync.subscribe_logger(log_callback)
+        pb_base.subscribe_logger(log_callback)
         topic = "acme.tests.TestMessage".replace(".", self.topic_delimiter)
         topic_result = "acme.tests.TestMessage.result".replace(".", self.topic_delimiter)
 
-        pb_sync.publish(self.msg)
+        pb_base.publish(self.msg)
         assert sync_wait(lambda: isinstance(received["log"], str))
         assert (
             received["log"]
@@ -599,7 +594,7 @@ class TestIntegrationSync:
         )
         received["log"] = None
         result = self.msg.make_result()
-        pb_sync.publish_result(result)
+        pb_base.publish_result(result)
         assert sync_wait(lambda: isinstance(received["log"], str))
         assert (
             received["log"]
@@ -609,7 +604,7 @@ class TestIntegrationSync:
             return_code=pb.results.ReturnCode.FAILURE, return_value={"test": "value"}
         )
         received["log"] = None
-        pb_sync.publish_result(result)
+        pb_base.publish_result(result)
         assert sync_wait(lambda: isinstance(received["log"], str))
         assert (
             received["log"]
@@ -627,8 +622,8 @@ class TestIntegrationSync:
             nonlocal log_msg
             log_msg = log_callback(message, body)
 
-        pb_sync.subscribe_logger(callback_log)
-        pb_sync.publish(tests.TestMessage(number=63, content="test"))
+        pb_base.subscribe_logger(callback_log)
+        pb_base.publish(tests.TestMessage(number=63, content="test"))
 
         def predicate() -> bool:
             return log_msg is not None
@@ -643,7 +638,7 @@ class TestIntegrationSync:
         ), log_msg
         # Ensure that uint64/int64 values are not converted to strings in the LoggerQueue callbacks
         log_msg = None
-        pb_sync.publish(
+        pb_base.publish(
             tests.tasks.TaskMessage(
                 content="test", bbox=[1, 2, 3, 4], weights=[1.0, 2.0, -100, -20]
             )
@@ -658,22 +653,22 @@ class TestIntegrationSync:
     @pytest.mark.flaky(max_runs=3)
     def test_unsubscribe(self, backend) -> None:
         global received
-        pb_sync.subscribe(tests.TestMessage, callback_sync)
-        pb_sync.publish(self.msg)
+        pb_base.subscribe(tests.TestMessage, callback_sync)
+        pb_base.publish(self.msg)
         assert sync_wait(lambda: received["message"] is not None)
         assert received["message"] == self.msg
         received["message"] = None
-        pb_sync.unsubscribe(tests.TestMessage, if_unused=False, if_empty=False)
-        pb_sync.publish(self.msg)
+        pb_base.unsubscribe(tests.TestMessage, if_unused=False, if_empty=False)
+        pb_base.publish(self.msg)
         assert received["message"] is None
 
         # unsubscribe from a package-level topic
-        pb_sync.subscribe(tests, callback_sync)
-        pb_sync.publish(tests.TestMessage(number=63, content="test"))
+        pb_base.subscribe(tests, callback_sync)
+        pb_base.publish(tests.TestMessage(number=63, content="test"))
         assert sync_wait(lambda: received["message"] is not None)
         received["message"] = None
-        pb_sync.unsubscribe(tests, if_unused=False, if_empty=False)
-        pb_sync.publish(self.msg)
+        pb_base.unsubscribe(tests, if_unused=False, if_empty=False)
+        pb_base.publish(self.msg)
         assert received["message"] is None
 
         # subscribe/unsubscribe two callbacks for two topics
@@ -683,15 +678,15 @@ class TestIntegrationSync:
             nonlocal received2
             received2 = m
 
-        pb_sync.subscribe(tests.TestMessage, callback_sync)
-        pb_sync.subscribe(tests, callback_2)
-        pb_sync.publish(self.msg)  # this will reach callback_2 as well
+        pb_base.subscribe(tests.TestMessage, callback_sync)
+        pb_base.subscribe(tests, callback_2)
+        pb_base.publish(self.msg)  # this will reach callback_2 as well
         assert sync_wait(lambda: received["message"] and received2)
         assert received["message"] == received2 == self.msg
-        pb_sync.unsubscribe_all()
+        pb_base.unsubscribe_all()
         received["message"] = None
         received2 = None
-        pb_sync.publish(self.msg)
+        pb_base.publish(self.msg)
         assert received["message"] is None
         assert received2 is None
 
@@ -708,18 +703,18 @@ class TestIntegrationSync:
             nonlocal received_result
             received_result = m
 
-        pb_sync.unsubscribe_all()
-        pb_sync.subscribe(tests.TestMessage, callback_2)
+        pb_base.unsubscribe_all()
+        pb_base.subscribe(tests.TestMessage, callback_2)
         # subscribe to the result topic
-        pb_sync.subscribe_results(tests.TestMessage, callback_results_2)
+        pb_base.subscribe_results(tests.TestMessage, callback_results_2)
         msg = tests.TestMessage(number=63, content="test")
-        pb_sync.publish(msg)
+        pb_base.publish(msg)
         assert sync_wait(lambda: received_result is not None)
         assert received_result.source == msg
         assert received_result.return_code == pb.results.ReturnCode.FAILURE
-        pb_sync.unsubscribe_results(tests.TestMessage)
+        pb_base.unsubscribe_results(tests.TestMessage)
         received_result = None
-        pb_sync.publish(msg)
+        pb_base.publish(msg)
         assert received_result is None
 
     @pytest.mark.flaky(max_runs=3)
@@ -740,25 +735,25 @@ class TestIntegrationSync:
             nonlocal received_result
             received_result = m
 
-        pb_sync.unsubscribe_all()
-        q1 = pb_sync.subscribe(tests.TestMessage, callback_1)
-        q2 = pb_sync.subscribe(tests.tasks.TaskMessage, callback_2)
+        pb_base.unsubscribe_all()
+        q1 = pb_base.subscribe(tests.TestMessage, callback_1)
+        q2 = pb_base.subscribe(tests.tasks.TaskMessage, callback_2)
         assert q1.topic == "acme.tests.TestMessage".replace(".", self.topic_delimiter)
         assert q2.topic == "acme.tests.tasks.TaskMessage".replace(".", self.topic_delimiter)
         assert q1.subscription is not None
         assert q2.subscription is not None
         # subscribe to a result topic
-        pb_sync.subscribe_results(tests.TestMessage, callback_results_2)
-        pb_sync.publish(tests.TestMessage(number=2, content="test"))
-        pb_sync.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb_base.subscribe_results(tests.TestMessage, callback_results_2)
+        pb_base.publish(tests.TestMessage(number=2, content="test"))
+        pb_base.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
         assert sync_wait(lambda: received_message is not None)
         assert sync_wait(lambda: received_result is not None)
         assert received_result.source == tests.TestMessage(number=2, content="test")
 
-        pb_sync.unsubscribe_all()
+        pb_base.unsubscribe_all()
         received_result = None
         received_message = None
-        pb_sync.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
-        pb_sync.publish(tests.TestMessage(number=2, content="test"))
+        pb_base.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
+        pb_base.publish(tests.TestMessage(number=2, content="test"))
         assert received_message is None
         assert received_result is None

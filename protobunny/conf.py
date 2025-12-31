@@ -72,6 +72,7 @@ class Config:
     backend_config: BackEndConfig = rabbitmq_backend_config
     log_task_in_redis: bool = False
     use_tasks_in_nats: bool = True  # needed to create the namespaced group stream on connect
+    log_task_in_nats: bool = False
 
     available_backends = ("rabbitmq", "python", "redis", "mosquitto", "nats")
 
@@ -198,4 +199,4 @@ def get_project_version() -> str:
 
 
 VERSION = get_project_version()
-default_configuration = load_config()
+config = load_config()

@@ -379,7 +379,6 @@ import asyncio
 import logging
 import sys
 
-
 import protobunny as pb
 from protobunny import asyncio as pb_asyncio
 
@@ -391,12 +390,11 @@ pb.config_lib()
 
 import mymessagelib as ml
 
-
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s %(levelname)s] %(name)s - %(message)s"
 )
 log = logging.getLogger(__name__)
-conf = pb.default_configuration
+conf = pb.config
 
 
 class TestLibAsync:
@@ -418,7 +416,6 @@ class TestLibAsync:
     async def on_message_mymessage(self, message: ml.main.MyMessage) -> None:
         log.info("Got main message: %s", message)
 
-
     def run_forever(self):
         asyncio.run(self.main())
 
@@ -426,7 +423,6 @@ class TestLibAsync:
         log.info(f"LOG {incoming.routing_key}: {body}")
 
     async def main(self):
-
         await pb_asyncio.subscribe_logger(self.log_callback)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker1)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker2)

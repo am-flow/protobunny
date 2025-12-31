@@ -40,7 +40,7 @@ from types import FrameType
 
 import protobunny as pb_sync
 from protobunny import asyncio as pb
-from protobunny.config import load_config
+from protobunny.conf import load_config
 from protobunny.models import IncomingMessageProtocol, LoggerCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

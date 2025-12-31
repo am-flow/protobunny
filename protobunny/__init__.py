@@ -20,7 +20,7 @@ __all__ = [
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
     "ROOT_GENERATED_PACKAGE_NAME",
-    "default_configuration",
+    "config",
     "RequeueMessage",
     "ConnectionError",
     "reset_connection",
@@ -41,15 +41,15 @@ from importlib.metadata import version
 from types import FrameType, ModuleType
 
 from .backends import BaseSyncConnection, BaseSyncQueue, LoggingSyncQueue
-from .config import (  # noqa
+from .conf import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
-    default_configuration,
+    config,
 )
 from .exceptions import ConnectionError, RequeueMessage
 from .helpers import get_backend, get_queue
-from .registry import default_registry
+from .registry import registry
 
 if tp.TYPE_CHECKING:
     from .core.results import Result
@@ -133,19 +133,19 @@ def subscribe(
     """
     register_key = str(pkg_or_msg)
 
-    with default_registry.sync_lock:
+    with registry.sync_lock:
         queue = get_queue(pkg_or_msg)
         if queue.shared_queue:
             # It's a task. Handle multiple subscriptions
             # queue = get_queue(pkg_or_msg)
             queue.subscribe(callback)
-            default_registry.register_task(register_key, queue)
+            registry.register_task(register_key, queue)
         else:
             # exclusive queue
-            queue = default_registry.get_subscription(register_key) or queue
+            queue = registry.get_subscription(register_key) or queue
             queue.subscribe(callback)
             # register subscription to unsubscribe later
-            default_registry.register_subscription(register_key, queue)
+            registry.register_subscription(register_key, queue)
     return queue
 
 
@@ -162,8 +162,8 @@ def subscribe_results(
     queue = get_queue(pkg)
     queue.subscribe_results(callback)
     # register subscription to unsubscribe later
-    with default_registry.sync_lock:
-        default_registry.register_results(pkg, queue)
+    with registry.sync_lock:
+        registry.register_results(pkg, queue)
     return queue
 
 
@@ -174,27 +174,27 @@ def unsubscribe(
 ) -> None:
     """Remove a subscription for a message/package"""
     module_name = pkg.__module__ if hasattr(pkg, "__module__") else pkg.__name__
-    registry_key = default_registry.get_key(pkg)
+    registry_key = registry.get_key(pkg)
 
-    with default_registry.sync_lock:
+    with registry.sync_lock:
         if is_module_tasks(module_name):
-            queues = default_registry.get_tasks(registry_key)
+            queues = registry.get_tasks(registry_key)
             for queue in queues:
                 queue.unsubscribe()
-            default_registry.unregister_tasks(registry_key)
+            registry.unregister_tasks(registry_key)
         else:
-            queue = default_registry.get_subscription(registry_key)
+            queue = registry.get_subscription(registry_key)
             if queue:
                 queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-                default_registry.unregister_subscription(registry_key)
+                registry.unregister_subscription(registry_key)
 
 
 def unsubscribe_results(
     pkg: "type[ProtoBunnyMessage] | ModuleType",
 ) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    with default_registry.sync_lock:
-        queue = default_registry.unregister_results(pkg)
+    with registry.sync_lock:
+        queue = registry.unregister_results(pkg)
         if queue:
             queue.unsubscribe_results()
 
@@ -206,19 +206,19 @@ def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
     This clears standard subscriptions, result subscriptions, and task
     subscriptions, effectively stopping all message consumption for this process.
     """
-    with default_registry.sync_lock:
-        queues = default_registry.get_all_subscriptions()
+    with registry.sync_lock:
+        queues = registry.get_all_subscriptions()
         for q in queues:
             q.unsubscribe(if_unused=False, if_empty=False)
-        default_registry.unregister_all_subscriptions()
-        queues = default_registry.get_all_results()
+        registry.unregister_all_subscriptions()
+        queues = registry.get_all_results()
         for q in queues:
             q.unsubscribe_results()
-        default_registry.unregister_all_results()
-        queues = default_registry.get_all_tasks(flat=True)
+        registry.unregister_all_results()
+        queues = registry.get_all_tasks(flat=True)
         for q in queues:
             q.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-        default_registry.unregister_all_tasks()
+        registry.unregister_all_tasks()
 
 
 def get_message_count(
@@ -277,7 +277,7 @@ def run_forever() -> None:
 
 def config_lib() -> None:
     """Add the generated package root to the sys.path."""
-    lib_root = default_configuration.generated_package_root
+    lib_root = config.generated_package_root
     if lib_root and lib_root not in sys.path:
         sys.path.append(lib_root)
 

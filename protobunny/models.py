@@ -12,7 +12,7 @@ from types import ModuleType
 import betterproto
 from betterproto.lib.std.google.protobuf import Any
 
-from .config import default_configuration
+from .conf import config
 from .helpers import get_topic
 from .utils import ProtobunnyJsonEncoder
 
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 
 def is_task(topic: str) -> bool:
-    delimiter = default_configuration.backend_config.topic_delimiter
+    delimiter = config.backend_config.topic_delimiter
     return "tasks" in topic.split(delimiter)
 
 
@@ -67,7 +67,7 @@ class MessageMixin:
         # Override Message.__bytes__ method
         # to support transparent serialization of dictionaries to JsonContent fields.
         # This method validates for required fields as well
-        if default_configuration.force_required_fields:
+        if config.force_required_fields:
             self.validate_required_fields()
         msg = self.serialize_json_content()
         with BytesIO() as stream:
@@ -236,7 +236,7 @@ class MessageMixin:
         """
         Build the result topic name for the message.
         """
-        return f"{get_topic(self)}{default_configuration.backend_config.topic_delimiter}result"
+        return f"{get_topic(self)}{config.backend_config.topic_delimiter}result"
 
     def make_result(
         self: "ProtoBunnyMessage",
@@ -362,16 +362,16 @@ def get_message_class_from_topic(topic: str) -> "type[ProtoBunnyMessage] | None 
 
     Returns: the message class for the topic or None if the topic is not recognized
     """
-    delimiter = default_configuration.backend_config.topic_delimiter
+    delimiter = config.backend_config.topic_delimiter
     if topic.endswith(f"{delimiter}result"):
         message_type = Result
     else:
-        route = topic.removeprefix(f"{default_configuration.messages_prefix}{delimiter}")
+        route = topic.removeprefix(f"{config.messages_prefix}{delimiter}")
         if route == topic:  # the prefix is not present in the topic
             # Try if it's a protobunny class
             # to allow pb.* internal messages like pb.results.Result
             route = topic.removeprefix(f"pb{delimiter}")
-        codegen_module = importlib.import_module(default_configuration.generated_package_name)
+        codegen_module = importlib.import_module(config.generated_package_name)
         # if route is not recognized at this point, the message_type will be None
         message_type = _get_submodule(codegen_module, route.split(delimiter))
     return message_type
@@ -387,9 +387,9 @@ def get_message_class_from_type_url(url: str) -> type["ProtoBunnyMessage"]:
     Returns: the message class
     """
     module_path, clz = url.rsplit(".", 1)
-    if not module_path.startswith(default_configuration.generated_package_name):
+    if not module_path.startswith(config.generated_package_name):
         raise ValueError(
-            f"Invalid type url {url}, must start with {default_configuration.generated_package_name}."
+            f"Invalid type url {url}, must start with {config.generated_package_name}."
         )
     module = importlib.import_module(module_path)
     message_type = getattr(module, clz)
@@ -460,7 +460,7 @@ class BaseQueue(ABC):
         Args:
             topic: a Topic value object
         """
-        delimiter = default_configuration.backend_config.topic_delimiter
+        delimiter = config.backend_config.topic_delimiter
         self.topic: str = topic.replace(".", delimiter)
         self.subscription: str | None = None
         self.result_subscription: str | None = None
@@ -468,7 +468,7 @@ class BaseQueue(ABC):
 
     @property
     def result_topic(self) -> str:
-        return f"{self.topic}{default_configuration.backend_config.topic_delimiter}result"
+        return f"{self.topic}{config.backend_config.topic_delimiter}result"
 
     @abstractmethod
     def get_tag(self) -> str:
@@ -561,7 +561,7 @@ def get_body(message: "IncomingMessageProtocol") -> str:
     """
     msg: ProtoBunnyMessage | None
     body: str | bytes
-    delimiter = default_configuration.backend_config.topic_delimiter
+    delimiter = config.backend_config.topic_delimiter
     if message.routing_key and message.routing_key.endswith(f"{delimiter}result"):
         # log result message. Need to extract the source here
         result = deserialize_result_message(message.body)

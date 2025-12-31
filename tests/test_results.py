@@ -7,7 +7,7 @@ from pytest_mock import MockerFixture
 
 import protobunny as pb
 from protobunny.backends.rabbitmq.connection import Connection
-from protobunny.config import backend_configs
+from protobunny.conf import backend_configs
 from protobunny.models import (
     deserialize_result_message,
     get_message_class_from_topic,
@@ -24,12 +24,12 @@ def setup_connections(mocker: MockerFixture, mock_sync_rmq_connection, test_conf
     test_config.mode = "sync"
     test_config.backend = "rabbitmq"
     test_config.backend_config = backend_configs["rabbitmq"]
-    mocker.patch.object(pb.config, "default_configuration", test_config)
-    mocker.patch.object(pb.models, "default_configuration", test_config)
-    mocker.patch.object(pb.backends, "default_configuration", test_config)
-    mocker.patch.object(pb.helpers, "default_configuration", test_config)
+    mocker.patch.object(pb.conf, "config", test_config)
+    mocker.patch.object(pb.models, "config", test_config)
+    mocker.patch.object(pb.backends, "config", test_config)
+    mocker.patch.object(pb.helpers, "config", test_config)
     pb.backend = rabbitmq_backend
-    mocker.patch.object(pb.helpers.default_configuration, "backend", "rabbitmq")
+    mocker.patch.object(pb.helpers.config, "backend", "rabbitmq")
     queue = pb.get_queue(tests.TestMessage)
     assert isinstance(queue, rabbitmq_backend.queues.SyncQueue)
     assert isinstance(queue.get_connection(), Connection)

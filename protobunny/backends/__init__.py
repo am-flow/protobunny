@@ -14,7 +14,7 @@ from ..models import (
     LoggerCallback,
     ProtoBunnyMessage,
     SyncCallback,
-    default_configuration,
+    config,
     deserialize_message,
     deserialize_result_message,
     get_body,
@@ -67,7 +67,7 @@ class BaseConnection(ABC):
         ...
 
     @abstractmethod
-    def connect(self, timeout: float = 30) -> None | tp.Awaitable[None]:
+    def connect(self, **kwargs) -> None | tp.Awaitable[None]:
         ...
 
     @abstractmethod
@@ -133,6 +133,7 @@ class BaseSyncConnection(BaseConnection, ABC):
         self.vhost = self._async_conn.vhost
         self._started = False
         self.instance_by_vhost = {}
+        self._timeout_coro = 10
 
     def get_async_connection(self, **kwargs) -> "BaseAsyncConnection":
         if hasattr(self, "_async_conn"):
@@ -370,7 +371,7 @@ class BaseSyncConnection(BaseConnection, ABC):
         self.disconnect()
         return False
 
-    def connect(self, timeout: float = 10.0) -> None:
+    def connect(self, **kwargs) -> None:
         """Establish Sync connection.
 
         Args:
@@ -380,7 +381,7 @@ class BaseSyncConnection(BaseConnection, ABC):
             ConnectionError: If connection fails
             TimeoutError: If connection times out
         """
-        self._run_coro(self._async_conn.connect(timeout), timeout=timeout)
+        self._run_coro(self._async_conn.connect(), timeout=self._timeout_coro)
         self.__class__.instance_by_vhost[self.vhost] = self
 
     def disconnect(self, timeout: float = 10.0) -> None:
@@ -452,7 +453,7 @@ class BaseSyncQueue(BaseQueue, ABC):
         """
         if not message.routing_key:
             raise ValueError("Routing key was not set. Invalid topic")
-        delimiter = default_configuration.backend_config.topic_delimiter
+        delimiter = config.backend_config.topic_delimiter
         if message.routing_key == self.result_topic or message.routing_key.endswith(
             f"{delimiter}result"
         ):
@@ -610,10 +611,10 @@ class LoggingSyncQueue(BaseSyncQueue):
         raise NotImplementedError()
 
     def __init__(self, prefix: str) -> None:
-        backend = default_configuration.backend_config
+        backend = config.backend_config
         delimiter = backend.topic_delimiter
         wildcard = backend.multi_wildcard_delimiter
-        prefix = prefix or default_configuration.messages_prefix
+        prefix = prefix or config.messages_prefix
         super().__init__(f"{prefix}{delimiter}{wildcard}")
 
     @property
@@ -661,7 +662,7 @@ class LoggingSyncQueue(BaseSyncQueue):
 
 
 def is_task(topic: str) -> bool:
-    delimiter = default_configuration.backend_config.topic_delimiter
+    delimiter = config.backend_config.topic_delimiter
     return "tasks" in topic.split(delimiter)
 
 

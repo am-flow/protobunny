@@ -27,7 +27,7 @@ __all__ = [
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
     "ROOT_GENERATED_PACKAGE_NAME",
-    "default_configuration",
+    "config",
     "RequeueMessage",
     "ConnectionError",
     "reset_connection",
@@ -50,14 +50,14 @@ import typing as tp
 from importlib.metadata import version
 
 #######################################################
-from ..config import (  # noqa
+from ..conf import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
-    default_configuration,
+    config,
 )
 from ..exceptions import ConnectionError, RequeueMessage
-from ..registry import default_registry
+from ..registry import registry
 
 if tp.TYPE_CHECKING:
     from types import ModuleType
@@ -153,18 +153,18 @@ async def subscribe(
     # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
     registry_key = str(pkg)
-    async with default_registry.lock:
+    async with registry.lock:
         if is_module_tasks(module_name):
             # It's a task. Handle multiple in-process subscriptions
             queue = get_queue(pkg)
             await queue.subscribe(callback)
-            default_registry.register_task(registry_key, queue)
+            registry.register_task(registry_key, queue)
         else:
             # exclusive queue
-            queue = default_registry.get_subscription(registry_key) or get_queue(pkg)
+            queue = registry.get_subscription(registry_key) or get_queue(pkg)
             # queue already exists, but not subscribed yet (otherwise raise ValueError)
             await queue.subscribe(callback)
-            default_registry.register_subscription(registry_key, queue)
+            registry.register_subscription(registry_key, queue)
         return queue
 
 
@@ -177,29 +177,29 @@ async def unsubscribe(
 
     # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
-    registry_key = default_registry.get_key(pkg)
-    async with default_registry.lock:
+    registry_key = registry.get_key(pkg)
+    async with registry.lock:
         if is_module_tasks(module_name):
-            queues = default_registry.get_tasks(registry_key)
+            queues = registry.get_tasks(registry_key)
             for q in queues:
                 await q.unsubscribe(if_unused=if_unused)
-            default_registry.unregister_tasks(registry_key)
+            registry.unregister_tasks(registry_key)
         else:
-            queue = default_registry.get_subscription(registry_key)
+            queue = registry.get_subscription(registry_key)
             if queue:
                 await queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-            default_registry.unregister_subscription(registry_key)
+            registry.unregister_subscription(registry_key)
 
 
 async def unsubscribe_results(
     pkg: "type[ProtoBunnyMessage] | ModuleType",
 ) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    async with default_registry.lock:
-        queue = default_registry.get_results(pkg)
+    async with registry.lock:
+        queue = registry.get_results(pkg)
         if queue:
             await queue.unsubscribe_results()
-        default_registry.unregister_results(pkg)
+        registry.unregister_results(pkg)
 
 
 async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
@@ -209,19 +209,19 @@ async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None
     This clears standard subscriptions, result subscriptions, and task
     subscriptions, effectively stopping all message consumption for this process.
     """
-    async with default_registry.lock:
+    async with registry.lock:
         queues = itertools.chain(
-            default_registry.get_all_subscriptions(),
-            default_registry.get_all_tasks(flat=True),
+            registry.get_all_subscriptions(),
+            registry.get_all_tasks(flat=True),
         )
         for queue in queues:
             await queue.unsubscribe(if_unused=False, if_empty=False)
-        default_registry.unregister_all_subscriptions()
-        default_registry.unregister_all_tasks()
-        queues = default_registry.get_all_results()
+        registry.unregister_all_subscriptions()
+        registry.unregister_all_tasks()
+        queues = registry.get_all_results()
         for queue in queues:
             await queue.unsubscribe_results()
-        default_registry.unregister_all_results()
+        registry.unregister_all_results()
 
 
 async def subscribe_results(
@@ -237,8 +237,8 @@ async def subscribe_results(
     queue = get_queue(pkg)
     await queue.subscribe_results(callback)
     # register subscription to unsubscribe later
-    async with default_registry.lock:
-        default_registry.register_results(pkg, queue)
+    async with registry.lock:
+        registry.register_results(pkg, queue)
     return queue
 
 

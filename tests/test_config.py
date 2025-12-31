@@ -2,7 +2,7 @@ from unittest import mock
 
 import pytest
 
-from protobunny.config import load_config
+from protobunny.conf import load_config
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +48,7 @@ force-required-fields = yes
     (tmp_path / "protobunny.ini").write_text(ini_content)
 
     # Ensure pyproject doesn't interfere
-    with mock.patch("protobunny.config.get_config_from_pyproject", return_value={}):
+    with mock.patch("protobunny.conf.get_config_from_pyproject", return_value={}):
         config = load_config()
         assert config.backend == "python"
         assert config.mode == "async"
@@ -69,7 +69,7 @@ def test_config_precedence(tmp_path, monkeypatch):
     # Mock pyproject to provide a base
     mock_pyproject = {"backend": "rabbitmq", "messages_prefix": "py_pref", "project-name": "test"}
 
-    with mock.patch("protobunny.config.get_config_from_pyproject", return_value=mock_pyproject):
+    with mock.patch("protobunny.conf.get_config_from_pyproject", return_value=mock_pyproject):
         config = load_config()
 
         # Overridden by ENV

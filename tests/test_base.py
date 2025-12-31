@@ -23,11 +23,11 @@ from . import tests
 def setup_config(mocker, test_config) -> None:
     test_config.mode = "async"
     test_config.backend = "python"
-    mocker.patch.object(pb_sync.config, "default_configuration", test_config)
-    mocker.patch.object(pb_sync.models, "default_configuration", test_config)
-    mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
-    mocker.patch.object(pb.backends, "default_configuration", test_config)
-    mocker.patch.object(python_backend.connection, "default_configuration", test_config)
+    mocker.patch.object(pb_sync.conf, "config", test_config)
+    mocker.patch.object(pb_sync.models, "config", test_config)
+    mocker.patch.object(pb_sync.helpers, "config", test_config)
+    mocker.patch.object(pb.backends, "config", test_config)
+    mocker.patch.object(python_backend.connection, "config", test_config)
 
 
 def test_json_serializer() -> None:

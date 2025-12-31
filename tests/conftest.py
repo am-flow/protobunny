@@ -22,8 +22,8 @@ from protobunny.backends.redis import connection as redis_connection
 
 
 @pytest_asyncio.fixture
-def test_config() -> protobunny.config.Config:
-    conf = protobunny.config.Config(
+def test_config() -> protobunny.conf.Config:
+    conf = protobunny.conf.Config(
         messages_directory="tests/proto",
         messages_prefix="acme",
         generated_package_name="tests",
@@ -34,6 +34,7 @@ def test_config() -> protobunny.config.Config:
         backend="rabbitmq",
         log_task_in_redis=True,
         use_tasks_in_nats=True,
+        log_task_in_nats=True,
     )
     return conf
 
@@ -117,20 +118,11 @@ async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedi
 
 @pytest.fixture
 async def mock_nats(mocker):
-    # with patch("nats.NATS") as mock_nats_client: #, patch("nats.connect"):
-    # 1. Create the top-level Mock Client
     mock_nc = AsyncMock(spec=nats.aio.client.Client)
-
-    # 2. Mock the JetStream Context (.jetstream())
     mock_js = AsyncMock()
     mock_nc.jetstream.return_value = mock_js
-
-    # 3. Mock the Management API (.jsm())
     mock_jsm = AsyncMock()
     mock_nc.jsm.return_value = mock_jsm
-
-    # 4. PATCH: Intercept the nats.connect call
-    # Replace 'your_module.nats.connect' with the path where you import nats
     mocker.patch("nats.connect", return_value=mock_nc)
     yield {
         "client": mock_nc,

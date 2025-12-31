@@ -20,7 +20,7 @@ from protobunny.backends import nats as nats_backend
 from protobunny.backends import python as python_backend
 from protobunny.backends import rabbitmq as rabbitmq_backend
 from protobunny.backends import redis as redis_backend
-from protobunny.config import backend_configs
+from protobunny.conf import backend_configs
 from protobunny.helpers import (
     get_queue,
 )
@@ -59,16 +59,16 @@ class TestQueue:
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
 
-        mocker.patch.object(pb_base.config, "default_configuration", test_config)
-        mocker.patch.object(pb_base.models, "default_configuration", test_config)
-        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
-        mocker.patch.object(pb.backends, "default_configuration", test_config)
+        mocker.patch.object(pb_base.conf, "config", test_config)
+        mocker.patch.object(pb_base.models, "config", test_config)
+        mocker.patch.object(pb_base.backends, "config", test_config)
+        mocker.patch.object(pb_base.helpers, "config", test_config)
+        mocker.patch.object(pb.backends, "config", test_config)
 
-        if hasattr(backend.connection, "default_configuration"):
-            mocker.patch.object(backend.connection, "default_configuration", test_config)
-        if hasattr(backend.queues, "default_configuration"):
-            mocker.patch.object(backend.queues, "default_configuration", test_config)
+        if hasattr(backend.connection, "config"):
+            mocker.patch.object(backend.connection, "config", test_config)
+        if hasattr(backend.queues, "config"):
+            mocker.patch.object(backend.queues, "config", test_config)
 
         pb.backend = backend
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
@@ -263,16 +263,16 @@ class TestSyncQueue:
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
 
-        mocker.patch.object(pb_base.config, "default_configuration", test_config)
-        mocker.patch.object(pb_base.models, "default_configuration", test_config)
-        mocker.patch.object(pb_base.backends, "default_configuration", test_config)
-        mocker.patch.object(pb_base.helpers, "default_configuration", test_config)
-        mocker.patch.object(pb.backends.redis.connection, "default_configuration", test_config)
+        mocker.patch.object(pb_base.conf, "config", test_config)
+        mocker.patch.object(pb_base.models, "config", test_config)
+        mocker.patch.object(pb_base.backends, "config", test_config)
+        mocker.patch.object(pb_base.helpers, "config", test_config)
+        mocker.patch.object(pb.backends.redis.connection, "config", test_config)
 
-        if hasattr(backend.connection, "default_configuration"):
-            mocker.patch.object(backend.connection, "default_configuration", test_config)
-        if hasattr(backend.queues, "default_configuration"):
-            mocker.patch.object(backend.queues, "default_configuration", test_config)
+        if hasattr(backend.connection, "config"):
+            mocker.patch.object(backend.connection, "config", test_config)
+        if hasattr(backend.queues, "config"):
+            mocker.patch.object(backend.queues, "config", test_config)
 
         pb_base.backend = backend
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)

@@ -64,7 +64,7 @@ if config_error:
     sys.exit(config_error)
 
 
-from .config import load_config
+from .conf import load_config
 from .logger import log_callback, start_logger, start_logger_sync
 
 

@@ -36,9 +36,7 @@ dependencies = [
 rabbitmq = ["aio-pika>=7.1.0"]
 redis = ["redis<8"]
 numpy = ["numpy>=1.26"]
-mosquitto = [
-  "aiomqtt>=2.4.0"
-]
+mosquitto = ["aiomqtt>=2.4.0"]
 nats = ["nats-py>=2.12.0"]
 
 [project.scripts]
@@ -97,6 +95,7 @@ force-required-fields = true
 backend = "redis"
 mode = "async"
 log-task-in-redis = true
+log-task-in-nats = true
 
 [tool.pytest.ini_options]
 addopts = "--junitxml=pytest_report.xml --cov=. --cov-report=term --cov-report=xml --cov-report html --no-success-flaky-report"

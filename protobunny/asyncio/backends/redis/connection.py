@@ -13,7 +13,7 @@ import can_ada
 import redis.asyncio as redis
 from redis import RedisError, ResponseError
 
-from ....config import default_configuration
+from ....conf import config
 from ....exceptions import ConnectionError, PublishError, RequeueMessage
 from ....models import Envelope, IncomingMessageProtocol
 from .. import BaseAsyncConnection, is_task
@@ -41,7 +41,7 @@ class Connection(BaseAsyncConnection):
         worker_threads: int = 2,
         prefetch_count: int = 1,
         requeue_delay: int = 3,
-        heartbeat: int = 1200,
+        **kwargs,
     ):
         """Initialize Redis connection.
 
@@ -51,7 +51,7 @@ class Connection(BaseAsyncConnection):
             host: Redis host
             port: Redis port
             url: Redis URL. It will override username, password, host and port
-            vhost: Redis virtual host (it's used as db number string)
+            vhost: Redis virtual host (it's used as db number string if db not present)
             db: Redis database number
             worker_threads: number of concurrent callback workers to use
             prefetch_count: how many messages to prefetch from the queue
@@ -93,17 +93,16 @@ class Connection(BaseAsyncConnection):
         self._connection: redis.Redis | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
-        self.heartbeat = heartbeat
         self.queues: dict[str, dict] = {}
         self.consumers: dict[str, dict[str, tp.Any]] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
 
-        self._delimiter = default_configuration.backend_config.topic_delimiter
-        self._exchange = default_configuration.backend_config.namespace
+        self._delimiter = config.backend_config.topic_delimiter
+        self._exchange = config.backend_config.namespace
 
-    async def __aenter__(self) -> "Connection":
-        await self.connect()
+    async def __aenter__(self, **kwargs) -> "Connection":
+        await self.connect(**kwargs)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -145,11 +144,10 @@ class Connection(BaseAsyncConnection):
             raise ConnectionError("Connection not initialized. Call connect() first.")
         return self._connection
 
-    async def connect(self, timeout: float = 30.0) -> "Connection":
+    async def connect(self, **kwargs) -> "Connection":
         """Establish Redis connection.
 
         Args:
-            timeout: Maximum time to wait for connection establishment (seconds)
 
         Raises:
             ConnectionError: If connection fails
@@ -161,23 +159,23 @@ class Connection(BaseAsyncConnection):
             try:
                 # Parsing URL for logging (removing credentials)
                 log.info("Establishing Redis connection to %s", self._url.split("@")[-1])
-
+                # protobunny sends raw bytes with protobuf serialized payloads
+                kwargs.pop("decode_responses", None)
                 # Using from_url handles connection pooling automatically
                 self._connection = redis.from_url(
                     self._url,
                     decode_responses=False,
-                    socket_connect_timeout=timeout,
-                    health_check_interval=self.heartbeat,
+                    **kwargs,
                 )
 
-                await asyncio.wait_for(self._connection.ping(), timeout=timeout)
+                await asyncio.wait_for(self._connection.ping(), timeout=30)
                 self.is_connected_event.set()
                 log.info("Successfully connected to Redis")
                 self.instance_by_vhost[self.vhost] = self
                 return self
 
             except asyncio.TimeoutError:
-                log.error("Redis connection timeout after %.1f seconds", timeout)
+                log.error("Redis connection timeout after %.1f seconds", 30)
                 self.is_connected_event.clear()
                 self._connection = None
                 raise
@@ -492,7 +490,7 @@ class Connection(BaseAsyncConnection):
                 "topic": topic,  # add the topic here to implement topic exchange patterns
             }
             await self._connection.xadd(name=topic_key, fields=payload, maxlen=1000)
-            if default_configuration.log_task_in_redis:
+            if config.log_task_in_redis:
                 # Tasks messages go to streams but the logger do a simple pubsub psubscription to <prefix>.*
                 # Send the message to the same topic with redis.publish so it appears there
                 # Note: this should be used carefully (e.g. only for debugging)

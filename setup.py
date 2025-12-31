@@ -13,7 +13,7 @@ from setuptools.command.install import install
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "protobunny")))
 import typing as tp
 
-from config import (
+from conf import (
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     PROJECT_NAME,

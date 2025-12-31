@@ -7,7 +7,7 @@ from abc import ABC
 from collections import defaultdict
 from queue import Empty, Queue
 
-from ....config import default_configuration
+from ....conf import config
 from ....models import AsyncCallback, Envelope
 from ... import RequeueMessage
 from .. import BaseConnection, is_task
@@ -125,7 +125,7 @@ class BaseLocalConnection(BaseConnection, ABC):
         self.requeue_delay = requeue_delay
         self._is_connected = False
         self._subscriptions: dict[str, dict] = {}
-        self.logger_prefix = default_configuration.logger_prefix
+        self.logger_prefix = config.logger_prefix
 
 
 class Connection(BaseLocalConnection):
