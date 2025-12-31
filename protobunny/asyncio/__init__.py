@@ -86,10 +86,12 @@ log = logging.getLogger(PACKAGE_NAME)
 ############################
 
 
-async def connect() -> "BaseAsyncConnection":
+async def connect(**kwargs) -> "BaseAsyncConnection":
     """Get the singleton async connection."""
     connection_module = get_backend().connection
-    conn = await connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    conn = await connection_module.Connection.get_connection(
+        vhost=connection_module.VHOST, **kwargs
+    )
     return conn
 
 
@@ -160,11 +162,11 @@ async def subscribe(
             await queue.subscribe(callback)
             registry.register_task(registry_key, queue)
         else:
-            # exclusive queue
+            # exclusive queue, cannot register more than one callback
             queue = registry.get_subscription(registry_key) or get_queue(pkg)
-            # queue already exists, but not subscribed yet (otherwise raise ValueError)
-            await queue.subscribe(callback)
-            registry.register_subscription(registry_key, queue)
+            if not queue.subscription:
+                await queue.subscribe(callback)
+                registry.register_subscription(registry_key, queue)
         return queue
 
 
@@ -175,7 +177,6 @@ async def unsubscribe(
 ) -> None:
     """Remove a subscription for a message/package"""
 
-    # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
     registry_key = registry.get_key(pkg)
     async with registry.lock:
@@ -211,11 +212,10 @@ async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None
     """
     async with registry.lock:
         queues = itertools.chain(
-            registry.get_all_subscriptions(),
-            registry.get_all_tasks(flat=True),
+            registry.get_all_subscriptions(), registry.get_all_tasks(flat=True)
         )
         for queue in queues:
-            await queue.unsubscribe(if_unused=False, if_empty=False)
+            await queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
         registry.unregister_all_subscriptions()
         registry.unregister_all_tasks()
         queues = registry.get_all_results()
@@ -247,6 +247,14 @@ async def get_message_count(
 ) -> int | None:
     q = get_queue(msg_type)
     count = await q.get_message_count()
+    return count
+
+
+async def get_consumer_count(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q = get_queue(msg_type)
+    count = await q.get_consumer_count()
     return count
 
 
@@ -288,15 +296,15 @@ async def _run_forever(main: tp.Callable[..., tp.Awaitable[None]]) -> None:
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        # Note: add_signal_handler requires a callback, so we use a lambda
+
         def _handler(s: int) -> asyncio.Task[None]:
             return asyncio.create_task(shutdown(s))
 
         loop.add_signal_handler(sig, _handler, sig)
 
-    log.info("Started. Press Ctrl+C to exit.")
-    # Wait here forever (non-blocking) until shutdown() is called
+    log.info("Protobunny started")
     await main()
+    # Wait here forever (non-blocking) until shutdown() is called
     await stop_event.wait()
 
 

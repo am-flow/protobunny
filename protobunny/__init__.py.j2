@@ -69,8 +69,10 @@ log = logging.getLogger(PACKAGE_NAME)
 ############################
 
 
-def connect(**kwargs) -> "BaseSyncConnection":
-    """Get the singleton async connection."""
+def connect(**kwargs: tp.Any) -> "BaseSyncConnection":
+    """Connect teh backend and get the singleton async connection.
+    You can pass the specific keyword arguments that you would pass to the `connect` function of the configured backend.
+    """
     connection_module = get_backend().connection
     conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST, **kwargs)
     return conn
@@ -82,11 +84,12 @@ def disconnect() -> None:
     conn.disconnect()
 
 
-def reset_connection() -> "BaseSyncConnection":
+def reset_connection(**kwargs: tp.Any) -> "BaseSyncConnection":
     """Reset the singleton connection."""
-    connection = connect()
-    connection.disconnect()
-    return connect()
+    connection_module = get_backend().connection
+    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    conn.disconnect()
+    return conn.connect(**kwargs)
 
 
 def publish(message: "ProtoBunnyMessage") -> None:
@@ -223,6 +226,14 @@ def get_message_count(
 ) -> int | None:
     q = get_queue(msg_type)
     count = q.get_message_count()
+    return count
+
+
+def get_consumer_count(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q = get_queue(msg_type)
+    count = q.get_consumer_count()
     return count
 
 

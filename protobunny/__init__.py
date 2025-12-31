@@ -70,10 +70,12 @@ log = logging.getLogger(PACKAGE_NAME)
 ############################
 
 
-def connect() -> "BaseSyncConnection":
-    """Get the singleton async connection."""
+def connect(**kwargs: tp.Any) -> "BaseSyncConnection":
+    """Connect teh backend and get the singleton async connection.
+    You can pass the specific keyword arguments that you would pass to the `connect` function of the configured backend.
+    """
     connection_module = get_backend().connection
-    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST, **kwargs)
     return conn
 
 
@@ -83,11 +85,12 @@ def disconnect() -> None:
     conn.disconnect()
 
 
-def reset_connection() -> "BaseSyncConnection":
+def reset_connection(**kwargs: tp.Any) -> "BaseSyncConnection":
     """Reset the singleton connection."""
-    connection = connect()
-    connection.disconnect()
-    return connect()
+    connection_module = get_backend().connection
+    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    conn.disconnect()
+    return conn.connect(**kwargs)
 
 
 def publish(message: "ProtoBunnyMessage") -> None:
@@ -137,14 +140,12 @@ def subscribe(
         queue = get_queue(pkg_or_msg)
         if queue.shared_queue:
             # It's a task. Handle multiple subscriptions
-            # queue = get_queue(pkg_or_msg)
             queue.subscribe(callback)
             registry.register_task(register_key, queue)
         else:
             # exclusive queue
             queue = registry.get_subscription(register_key) or queue
             queue.subscribe(callback)
-            # register subscription to unsubscribe later
             registry.register_subscription(register_key, queue)
     return queue
 
@@ -226,6 +227,14 @@ def get_message_count(
 ) -> int | None:
     q = get_queue(msg_type)
     count = q.get_message_count()
+    return count
+
+
+def get_consumer_count(
+    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+) -> int | None:
+    q = get_queue(msg_type)
+    count = q.get_consumer_count()
     return count
 
 

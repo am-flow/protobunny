@@ -367,7 +367,7 @@ class TestIntegration:
 
         assert await async_wait(predicate, timeout=2, sleep=0.1)
         assert received["message"] == received2 == self.msg
-        await pb.unsubscribe_all()
+        await pb.unsubscribe_all(if_empty=False, if_unused=False)
         received["message"] = None
         received2 = None
         await pb.publish(self.msg)
@@ -422,7 +422,7 @@ class TestIntegration:
             nonlocal received_result
             received_result = m
 
-        await pb.unsubscribe_all()
+        await pb.unsubscribe_all(if_unused=False, if_empty=False)
         q1 = await pb.subscribe(tests.TestMessage, callback_1)
         q2 = await pb.subscribe(tests.tasks.TaskMessage, callback_2)
         assert q1.topic == "acme.tests.TestMessage".replace(".", self.topic_delimiter)
@@ -440,7 +440,7 @@ class TestIntegration:
         assert await async_wait(predicate, timeout=2, sleep=0.2)
         assert received_result.source == tests.TestMessage(number=2, content="test")
 
-        await pb.unsubscribe_all()
+        await pb.unsubscribe_all(if_empty=False, if_unused=False)
         received_result = None
         received_message = None
         await pb.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
@@ -455,6 +455,9 @@ class TestIntegrationSync:
     """Integration tests (to run with the backend server up)"""
 
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
+    expected_json = (
+        '{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+    )
 
     @pytest.fixture(autouse=True)
     def setup_test_env(
@@ -533,7 +536,7 @@ class TestIntegrationSync:
             received["message"].to_json(
                 casing=betterproto.Casing.SNAKE, include_default_values=True
             )
-            == '{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}'
+            == self.expected_json
         )
 
         msg = tests.tasks.TaskMessage(
@@ -588,28 +591,19 @@ class TestIntegrationSync:
 
         pb_base.publish(self.msg)
         assert sync_wait(lambda: isinstance(received["log"], str))
-        assert (
-            received["log"]
-            == f'{topic}: {{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}}'
-        )
+        assert received["log"] == f"{topic}: {self.expected_json}"
         received["log"] = None
         result = self.msg.make_result()
         pb_base.publish_result(result)
         assert sync_wait(lambda: isinstance(received["log"], str))
-        assert (
-            received["log"]
-            == f'{topic_result}: SUCCESS - {{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}}'
-        )
+        assert received["log"] == f"{topic_result}: SUCCESS - {self.expected_json}"
         result = self.msg.make_result(
             return_code=pb.results.ReturnCode.FAILURE, return_value={"test": "value"}
         )
         received["log"] = None
         pb_base.publish_result(result)
         assert sync_wait(lambda: isinstance(received["log"], str))
-        assert (
-            received["log"]
-            == f'{topic_result}: FAILURE - error: [] - {{"content": "test", "number": 123, "detail": null, "options": null, "color": "GREEN"}}'
-        )
+        assert received["log"] == f"{topic_result}: FAILURE - error: [] - {self.expected_json}"
 
     @pytest.mark.flaky(max_runs=3)
     def test_logger_int64(self, backend) -> None:
