@@ -239,28 +239,62 @@ jobs:
 
   integration_test_nats:
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: nats:latest
-        ports:
-          - 4222:4222
-        options: >-
-          -js
     steps:
       - uses: actions/checkout@v6
+      - name: Run NATS server
+        run: |
+          docker run -d -p 4222:4222 --name nats nats:2-alpine \
+          nats --config /etc/nats/nats-server.conf -js
+
+      - name: Log NATS container
+        run: |
+         sleep 3
+         echo "=== Container logs ==="
+         docker logs nats
+         echo "=== Config file ==="
+         docker exec nats cat /etc/nats/nats-server.conf
+         echo "=== Processes ==="
+         docker exec nats ps aux
+         echo "=== Network ==="
+         docker exec nats netstat -tlnp || docker exec nats ss -tlnp
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+
       - name: Set up Python 3.12
         run: uv python install 3.12
+
       - name: Create virtual environment
         run: uv venv --python 3.12
+
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Smoke test NATS
+        run: |
+          # Wait for the port to be open
+          timeout 30s sh -c 'until nc -z localhost 4222; do sleep 1; done'
+
+          uv run python -c "
+          import nats
+          import sys
+          import asyncio
+
+          async def smoke_test():
+              try:
+                  nats.connect()
+                  print('NATS connected Successfully')
+                  sys.exit(0)
+              except Exception as e:
+                  print(f'Failed to connect: {e}')
+                  sys.exit(1)
+
+          asyncio.run(smoke_test())
+          "
       - name: Run tests
         run: uv run python -m pytest tests/test_integration.py -k nats -vvv -s
         env:
           NATS_HOST: localhost
-          NATS_PORT: 6379

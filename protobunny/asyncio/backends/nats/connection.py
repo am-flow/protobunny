@@ -181,7 +181,7 @@ class Connection(BaseAsyncConnection):
                 return self
 
             except asyncio.TimeoutError as e:
-                log.error("NATS connection timeout after %.1f seconds", timeout)
+                log.error("NATS connection timeout")
                 self.is_connected_event.clear()
                 self._connection = None
                 raise ConnectionError(f"Failed to connect to NATS: {e}") from e
