@@ -34,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: |
           if [ "${{ matrix.python-version }}" == "3.13" ]; then
-            # Sync everything EXCEPT the 'numpy' extra
-            uv sync --extra rabbitmq --extra redis --dev --extra mosquitto
+            # Sync everything EXCEPT the 'numpy' extra that currently has problems on github
+            uv sync --extra rabbitmq --extra redis --dev --extra mosquitto --extra nats
           else
             # Install everything for older versions
             uv sync --all-extras
@@ -243,8 +243,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Run NATS server
         run: |
-          docker run -d -p 4222:4222 --name nats nats:2-alpine \
-          nats --config /etc/nats/nats-server.conf -js
+          docker run -d -p 4222:4222 --name nats nats:2-alpine -js
 
       - name: Log NATS container
         run: |
