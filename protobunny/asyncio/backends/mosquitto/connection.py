@@ -20,24 +20,6 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("MOSQUITTO_VHOST", "/")
 
 
-async def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = await Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-async def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
-
-
 class Connection(BaseAsyncConnection):
     """Async Mosquitto Connection wrapper using aiomqtt."""
 

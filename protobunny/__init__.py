@@ -1,15 +1,8 @@
 """
-A module providing support for messaging and communication using RabbitMQ as the backend.
+A module providing support for messaging and communication using the configured broker as the backend.
 
 This module includes functionality for publishing, subscribing, and managing message queues,
-as well as dynamically managing imports and configurations for RabbitMQ-based communication
-logics. It enables both synchronous and asynchronous operations, while also supporting
-connection resetting and management.
-
-Modules and functionality are primarily imported from the core RabbitMQ backend, dynamically
-generated package-specific configurations, and other base utilities. Exports are adjusted
-as per the backend configuration.
-
+as well as dynamically managing imports and configurations for the backend.
 """
 
 __all__ = [
@@ -47,7 +40,7 @@ import typing as tp
 from importlib.metadata import version
 from types import FrameType, ModuleType
 
-from .backends import BaseSyncQueue, LoggingSyncQueue
+from .backends import BaseSyncConnection, BaseSyncQueue, LoggingSyncQueue
 from .config import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
@@ -67,31 +60,34 @@ if tp.TYPE_CHECKING:
         SyncCallback,
     )
 
+__version__ = version(PACKAGE_NAME)
+
+log = logging.getLogger(PACKAGE_NAME)
+
 
 ############################
 # -- Sync top-level methods
 ############################
 
 
-def reset_connection():
-    backend = get_backend()
-    return backend.connection.reset_connection()
+def connect() -> "BaseSyncConnection":
+    """Get the singleton async connection."""
+    connection_module = get_backend().connection
+    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    return conn
 
 
-def connect():
-    backend = get_backend()
-    return backend.connection.connect()
+def disconnect() -> None:
+    connection_module = get_backend().connection
+    conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    conn.disconnect()
 
 
-def disconnect():
-    backend = get_backend()
-    return backend.connection.disconnect()
-
-
-__version__ = version(PACKAGE_NAME)
-
-
-log = logging.getLogger(PACKAGE_NAME)
+def reset_connection() -> "BaseSyncConnection":
+    """Reset the singleton connection."""
+    connection = connect()
+    connection.disconnect()
+    return connect()
 
 
 def publish(message: "ProtoBunnyMessage") -> None:
@@ -274,9 +270,9 @@ def run_forever() -> None:
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
-    log.info("Protobunny Started. Press Ctrl+C to exit.")
+    log.info("Protobunny Started.")
     signal.pause()
-    log.info("Protobunny Stopped. Press Ctrl+C to exit.")
+    log.info("Protobunny Stopped.")
 
 
 def config_lib() -> None:

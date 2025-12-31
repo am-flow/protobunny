@@ -21,7 +21,7 @@ You can also add it manually to pyproject.toml dependencies:
 
 ```toml
 dependencies = [
-  "protobunny[rabbitmq, numpy]>=0.1.0",
+  "protobunny[rabbitmq, numpy]>=0.1.2a2",
   # your other dependencies ...
 ]
 ```
@@ -182,6 +182,7 @@ def worker2(task: mml.main.tasks.TaskMessage) -> None:
 
 pb.subscribe(mml.main.tasks.TaskMessage, worker1)
 pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+
 pb.publish(mml.main.tasks.TaskMessage(content="test1"))
 pb.publish(mml.main.tasks.TaskMessage(content="test2"))
 pb.publish(mml.main.tasks.TaskMessage(content="test3"))
@@ -293,10 +294,14 @@ if conn.is_connected():
     conn.close()
 ```
 
-If you set the `generated-package-root` folder option, you might need to add the path to your `sys.path`.
+If you set the `generated-package-root` folder option, you might need to add that path to your `sys.path`.
 You can do it conveniently by calling `config_lib` on top of your module, before importing the library:
+
 ```python
-pb.config_lib() 
+import protobunny as pb
+pb.config_lib()
+# now you can import the library from the generated package root
+import mymessagelib as mml
 ```
 
 ## Complete example
@@ -310,7 +315,7 @@ version = "0.1.0"
 description = "Project to test protobunny"
 requires-python = ">=3.10"
 dependencies = [
-    "protobunny[rabbitmq,redis,numpy,mosquitto] >=0.1.2a1",
+    "protobunny[rabbitmq,redis,numpy,mosquitto]>=0.1.2a1",
 ]
 
 [tool.protobunny]

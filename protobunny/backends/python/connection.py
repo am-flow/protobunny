@@ -118,6 +118,9 @@ class BaseLocalConnection(BaseConnection, ABC):
         self._subscriptions: dict[str, dict] = {}
         self.logger_prefix = default_configuration.logger_prefix
 
+    def build_topic_key(self, topic: str) -> str:
+        pass
+
 
 class Connection(BaseLocalConnection):
     """Synchronous local connection using threads."""
@@ -280,19 +283,3 @@ class Connection(BaseLocalConnection):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
         return False
-
-
-# Convenience functions
-def connect() -> Connection:
-    return Connection.get_connection(vhost=VHOST)
-
-
-def reset_connection() -> Connection:
-    connection = connect()
-    connection.disconnect()
-    return connect()
-
-
-def disconnect() -> None:
-    connection = connect()
-    connection.disconnect()

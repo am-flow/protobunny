@@ -1,6 +1,3 @@
-import asyncio
-import signal
-
 """
 A module providing support for messaging and communication using RabbitMQ as the backend.
 
@@ -14,6 +11,7 @@ generated package-specific configurations, and other base utilities. Exports are
 as per the backend configuration.
 
 """
+
 __all__ = [
     "get_message_count",
     "get_queue",
@@ -36,14 +34,17 @@ __all__ = [
     "connect",
     "disconnect",
     "run_forever",
+    "config_lib",
     # from .core
     "commons",
     "results",
 ]
 
+import asyncio
 import inspect
 import itertools
 import logging
+import signal
 import textwrap
 import typing as tp
 from importlib.metadata import version
@@ -70,31 +71,39 @@ if tp.TYPE_CHECKING:
     )
 
 
+from .. import config_lib as config_lib
 from ..helpers import get_backend, get_queue
-from .backends import BaseAsyncQueue, LoggingAsyncQueue
+from .backends import BaseAsyncConnection, BaseAsyncQueue, LoggingAsyncQueue
 
 __version__ = version(PACKAGE_NAME)
+
+
+log = logging.getLogger(PACKAGE_NAME)
+
 
 ############################
 # -- Async top-level methods
 ############################
 
-log = logging.getLogger(PACKAGE_NAME)
+
+async def connect() -> "BaseAsyncConnection":
+    """Get the singleton async connection."""
+    connection_module = get_backend().connection
+    conn = await connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    return conn
 
 
-async def reset_connection():
-    backend = get_backend()
-    return await backend.connection.reset_connection()
+async def disconnect() -> None:
+    connection_module = get_backend().connection
+    conn = await connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    await conn.disconnect()
 
 
-async def connect():
-    backend = get_backend()
-    return await backend.connection.connect()
-
-
-async def disconnect():
-    backend = get_backend()
-    return await backend.connection.disconnect()
+async def reset_connection() -> "BaseAsyncConnection":
+    """Reset the singleton connection."""
+    connection = await connect()
+    await connection.disconnect()
+    return await connect()
 
 
 async def publish(message: "ProtoBunnyMessage") -> None:
@@ -297,3 +306,5 @@ from ..core import (  # noqa
     commons,
     results,
 )
+
+#######################################################

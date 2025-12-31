@@ -5,8 +5,9 @@ import threading
 import typing as tp
 from abc import ABC, abstractmethod
 
+import protobunny as pb
+
 from ..exceptions import RequeueMessage
-from ..helpers import get_backend
 from ..models import (
     BaseQueue,
     IncomingMessageProtocol,
@@ -95,6 +96,10 @@ class BaseConnection(ABC):
     def setup_queue(self, topic: str, shared: bool) -> tp.Any | tp.Awaitable[tp.Any]:
         ...
 
+    @abstractmethod
+    def build_topic_key(self, topic: str) -> str:
+        ...
+
 
 class BaseAsyncConnection(BaseConnection, ABC):
     instance_by_vhost: dict[str, "BaseAsyncConnection"]
@@ -133,6 +138,9 @@ class BaseSyncConnection(BaseConnection, ABC):
         if hasattr(self, "_async_conn"):
             return self._async_conn
         return self.async_class(**kwargs)
+
+    def build_topic_key(self, topic: str) -> str:
+        pass
 
     def _run_loop(self) -> None:
         """Run the event loop in a dedicated thread."""
@@ -404,8 +412,7 @@ class BaseSyncConnection(BaseConnection, ABC):
 
 class BaseSyncQueue(BaseQueue, ABC):
     def get_connection(self) -> BaseConnection:
-        backend = get_backend()
-        return backend.connection.connect()
+        return pb.connect()
 
     def publish(self, message: "ProtoBunnyMessage") -> None:
         """Publish a message to the queue.
@@ -429,7 +436,7 @@ class BaseSyncQueue(BaseQueue, ABC):
             correlation_id:
         """
         result_topic = topic or self.result_topic
-        log.info("Publishing result to: %s", result_topic)
+        log.debug("Publishing result to: %s", result_topic)
         self.send_message(
             result_topic, bytes(result), correlation_id=correlation_id, persistent=False
         )
@@ -453,10 +460,12 @@ class BaseSyncQueue(BaseQueue, ABC):
             # In case the subscription has .# as binding key,
             # this method catches also results message for all the topics in that namespace.
             return
-        # msg: "ProtoBunnyMessage" = deserialize_message(message.routing_key, message.body)
+
         try:
             callback(deserialize_message(message.routing_key, message.body))
         except RequeueMessage:
+            # The callback raised a RequeueMessage exception
+            # a result message will be published by the specific Connection implementation
             raise
         except Exception as exc:  # pylint: disable=W0703
             log.exception("Could not process message: %s", str(message.body))

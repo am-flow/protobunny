@@ -9,6 +9,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+import can_ada
 import redis.asyncio as redis
 from redis import RedisError, ResponseError
 
@@ -20,24 +21,6 @@ from .. import BaseAsyncConnection, is_task
 log = logging.getLogger(__name__)
 
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
-
-
-async def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = await Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-async def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
 
 
 class Connection(BaseAsyncConnection):
@@ -98,8 +81,13 @@ class Connection(BaseAsyncConnection):
                 url = f"redis://{username}:{password}@{host}:{port}/{vhost}?protocol=3"
             elif password:
                 url = f"redis://:{password}@{host}:{port}/{vhost}?protocol=3"
+            elif username:
+                url = f"redis://{username}@{host}:{port}/{vhost}?protocol=3"
             else:
                 url = f"redis://{host}:{port}/{vhost}?protocol=3"
+        else:
+            parsed = can_ada.parse(url)
+            url = f"redis://{parsed.username}:{parsed.password}@{parsed.host}{parsed.pathname}{parsed.search}"
 
         self._url = url
         self._connection: redis.Redis | None = None
@@ -138,57 +126,6 @@ class Connection(BaseAsyncConnection):
 
     def build_topic_key(self, topic: str) -> str:
         return f"{self._exchange}:{topic}"
-
-    async def disconnect(self, timeout: float = 10.0) -> None:
-        """Close Redis connection and cleanup resources.
-
-        Args:
-            timeout: Maximum time to wait for cleanup (seconds)
-        """
-        async with self.lock:
-            if not self.is_connected():
-                log.debug("Already disconnected from Redis")
-                return
-
-            try:
-                log.info("Closing Redis connection")
-
-                # In Redis, consumers are local asyncio Tasks.
-                # We cancel them here. Note: Redis doesn't have "exclusive queues"
-                # that auto-delete, so we just clear our local registry.
-                for tag, consumer in self.consumers.items():
-                    task = consumer["task"]
-                    try:
-                        task.cancel()
-                        # We give the task a moment to wrap up if needed
-                        await asyncio.sleep(0)  # force context switching
-                        await asyncio.wait([task], timeout=2.0)
-                    except Exception as e:
-                        log.warning("Error stopping Redis consumer %s: %s", tag, e)
-
-                # Shutdown Thread Executor (if used for sync callbacks)
-                self.executor.shutdown(wait=False, cancel_futures=True)
-
-                # Close the Redis Connection Pool
-                if self._connection:
-                    # aclose() closes the connection pool and all underlying connections
-                    await asyncio.wait_for(self._connection.aclose(), timeout=timeout)
-
-            except asyncio.TimeoutError:
-                log.warning("Redis connection close timeout after %.1f seconds", timeout)
-            except Exception:
-                log.exception("Error during Redis disconnect")
-            finally:
-                # Reset state
-                self._connection = None
-                self._exchange = None  # (Stream name/prefix)
-                self.queues.clear()  # (Local queue metadata)
-                self.consumers.clear()
-                self.is_connected_event.clear()
-
-                # 5. Remove from registry
-                Connection.instance_by_vhost.pop(self.vhost, None)
-                log.info("Redis connection closed")
 
     @property
     def is_connected_event(self) -> asyncio.Event:
@@ -252,6 +189,54 @@ class Connection(BaseAsyncConnection):
                 self._connection = None
                 log.exception("Failed to establish Redis connection")
                 raise ConnectionError(f"Failed to connect to Redis: {e}") from e
+
+    async def disconnect(self, timeout: float = 10.0) -> None:
+        """Close Redis connection and cleanup resources.
+
+        Args:
+            timeout: Maximum time to wait for cleanup (seconds)
+        """
+        async with self.lock:
+            if not self.is_connected():
+                log.debug("Already disconnected from Redis")
+                return
+
+            try:
+                log.info("Closing Redis connection")
+                # In Redis, consumers are local asyncio Tasks.
+                # We cancel them here. Note: Redis doesn't have "exclusive queues"
+                # that auto-delete, so we just clear our local registry.
+                for tag, consumer in self.consumers.items():
+                    task = consumer["task"]
+                    try:
+                        task.cancel()
+                        # We give the task a moment to wrap up if needed
+                        await asyncio.sleep(0)  # force context switching
+                        await asyncio.wait([task], timeout=2.0)
+                    except Exception as e:
+                        log.warning("Error stopping Redis consumer %s: %s", tag, e)
+
+                # Shutdown Thread Executor (if used for sync callbacks)
+                self.executor.shutdown(wait=False, cancel_futures=True)
+
+                # Close the Redis Connection Pool
+                if self._connection:
+                    # aclose() closes the connection pool and all underlying connections
+                    await asyncio.wait_for(self._connection.aclose(), timeout=timeout)
+
+            except asyncio.TimeoutError:
+                log.warning("Redis connection close timeout after %.1f seconds", timeout)
+            except Exception:
+                log.exception("Error during Redis disconnect")
+            finally:
+                # Reset state
+                self._connection = None
+                self.queues.clear()  # (Local queue metadata)
+                self.consumers.clear()
+                self.is_connected_event.clear()
+                # Remove from registry
+                Connection.instance_by_vhost.pop(self.vhost, None)
+                log.info("Redis connection closed")
 
     async def subscribe(self, topic: str, callback: tp.Callable, shared: bool = False) -> str:
         """Subscribe to Redis.
@@ -511,7 +496,7 @@ class Connection(BaseAsyncConnection):
                 # Tasks messages go to streams but the logger do a simple pubsub psubscription to <prefix>.*
                 # Send the message to the same topic with redis.publish so it appears there
                 # Note: this should be used carefully (e.g. only for debugging)
-                # as it doubles the network calls for publishing tasks
+                # as it doubles the network calls when publishing tasks
                 log.debug("Publishing message to topic: %s for logger", topic_key)
                 await self._connection.publish(topic_key, message.body)
         else:
@@ -523,7 +508,7 @@ class Connection(BaseAsyncConnection):
     async def _on_message_task(
         self, stream_key: str, group_name: str, msg_id: str, payload: dict, callback: tp.Callable
     ):
-        """Wraps the user callback to simulate RabbitMQ behavior."""
+        """Wraps the user callback."""
         # Response is not decoded because we use bytes. But the keys will be bytes as well
         normalized_payload = {
             k.decode() if isinstance(k, bytes) else k: v for k, v in payload.items()
@@ -556,12 +541,12 @@ class Connection(BaseAsyncConnection):
             await asyncio.sleep(self.requeue_delay)
             await self._connection.xadd(name=stream_key, fields=payload)
             await self._connection.xack(stream_key, group_name, msg_id)
-        except Exception as e:
+        except Exception:
             log.exception("Callback failed for message %s", msg_id)
-            raise PublishError(f"Failed to publish message to topic {topic}: {e}") from e
             # Avoid poisoning messages
             # Note: In Redis, if you don't XACK, the message stays in the
             # Pending Entry List (PEL) for retry logic.
+            await self._connection.xack(stream_key, group_name, msg_id)
 
     async def unsubscribe(self, tag: str, if_unused: bool = True, if_empty: bool = True) -> None:
         task_to_cancel = None

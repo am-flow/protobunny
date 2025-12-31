@@ -6,7 +6,7 @@ Note: The project is in early development.
 
 Protobunny is the open-source evolution of [AM-Flow](https://am-flow.com)'s internal messaging library. 
 While the original was purpose-built for RabbitMQ, this version has been completely re-engineered to provide a unified, 
-type-safe interface for any message broker, including Redis and MQTT.
+type-safe interface for several message brokers, including Redis and MQTT.
 
 It simplifies messaging for asynchronous tasks by providing:
 
@@ -21,10 +21,10 @@ It simplifies messaging for asynchronous tasks by providing:
 * Transparently serialize "JSON-like" payload fields (numpy-friendly)
 
 
-## Requirements
+## Minimal requirements
 
 - Python >= 3.10, < 3.14
-- Backend message broker (e.g. RabbitMQ)
+
 
 ## Project scope
 
@@ -39,40 +39,44 @@ Protobunny is designed for teams who use messaging to coordinate work between mi
 - Optional validation of required fields
 - Builtin logging service
 
+## Why Protobunny?
+
+While there are many messaging libraries for Python, Protobunny is built specifically for teams that treat **Protobuf as the single source of truth**.
+
+* **Type-Safe by Design**: Built natively for `protobuf/betterproto`.
+* **Semantic Routing**: Zero-config infrastructure. Protobunny uses your Protobuf package structure to decide if a message should be broadcast (Pub/Sub) or queued (Producer/Consumer).
+* **Backend Agnostic**: Write your logic once. Switch between Redis, RabbitMQ, Mosquitto, or Local Queues by changing a single variable in configuration.
+* **Sync & Async**: Support for both modern `asyncio` and traditional synchronous workloads.
+* **Battle-Tested**: Derived from internal libraries used in production systems at AM-Flow.
 ---
+
+### Feature Comparison with some existing libraries
+
+| Feature                | **Protobunny**           | **FastStream**          | **Celery**              |
+|:-----------------------|:-------------------------|:------------------------|:------------------------|
+| **Multi-Backend**      | ✅ Yes                    | ✅ Yes                   | ⚠️ (Tasks only)         |
+| **Typed Protobufs**    | ✅ Native (Betterproto)   | ⚠️ Manual/Pydantic      | ❌ No                    |
+| **Sync + Async**       | ✅ Yes                    | ✅ Yes                   | ❌ Sync focus            |
+| **Pattern Routing**    | ✅ Auto (`tasks` pkg)     | ❌ Manual Config         | ✅ Fixed                 |
+| **Framework Agnostic** | ✅ Yes                    | ⚠️ FastAPI-like focus   | ❌ Heavyweight           |
+
 
 ## Usage
 
-See the [Quick example on GitHub](https://github.com/am-flow/protobunny/blob/main/QUICK_START.md) for installation and quick start guide.
+See the [Quick example on GitHub](https://github.com/am-flow/protobunny/blob/main/QUICK_START.md) or on the [docs site](https://am-flow.github.io/protobunny/quickstart.html).
 
-Full docs are available at [https://am-flow.github.io/protobunny/](https://am-flow.github.io/protobunny/).
+Documentation home page: [https://am-flow.github.io/protobunny/](https://am-flow.github.io/protobunny/).
 
 ---
+### Roadmap
 
-## Development
-
-### Run tests
-```bash
-make test
-```
-
-### Integration tests (RabbitMQ required)
-
-Integration tests expect RabbitMQ to be running (for example via Docker Compose in this repo):
-```bash
-docker compose up -d
-make integration-test
-```
----
-
-### Future work
-
-- Support grcp
-- Support for RabbitMQ certificates (through `pika`)
-- More backends:
-  - NATS
-  - Kafka
-  - Cloud providers (AWS SQS/SNS)
+- [x] **Core Support**: Redis, RabbitMQ, Mosquitto.
+- [x] **Semantic Patterns**: Automatic `tasks` package routing.
+- [x] **Arbistrary dictionary parsing**: Transparently parse JSON-like fields as dictionaries/lists by using protobunny JsonContent type.
+- [x] **Result workflow**: Subscribe to results topics and receive protobunny `Result` messages produced by your callbacks.
+- [ ] **Cloud-Native**: NATS (Core & JetStream) integration.
+- [ ] **Cloud Providers**: AWS (SQS/SNS) and GCP Pub/Sub.
+- [ ] **More backends**: Kafka support.
 
 ---
 

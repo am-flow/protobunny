@@ -1,4 +1,3 @@
-import gc
 import logging
 import typing as tp
 
@@ -10,10 +9,12 @@ from pytest_mock import MockerFixture
 import protobunny as pb_sync
 from protobunny import asyncio as pb
 from protobunny.asyncio.backends import mosquitto as mosquitto_backend_aio
+from protobunny.asyncio.backends import nats as nats_backend_aio
 from protobunny.asyncio.backends import python as python_backend_aio
 from protobunny.asyncio.backends import rabbitmq as rabbitmq_backend_aio
 from protobunny.asyncio.backends import redis as redis_backend_aio
 from protobunny.backends import mosquitto as mosquitto_backend
+from protobunny.backends import nats as nats_backend
 from protobunny.backends import python as python_backend
 from protobunny.backends import rabbitmq as rabbitmq_backend
 from protobunny.backends import redis as redis_backend
@@ -86,14 +87,24 @@ def log_callback(message: aio_pika.IncomingMessage, body: str) -> str:
 
 @pytest.mark.integration
 @pytest.mark.parametrize(
-    "backend", [rabbitmq_backend_aio, redis_backend_aio, python_backend_aio, mosquitto_backend_aio]
+    "backend",
+    [
+        rabbitmq_backend_aio,
+        redis_backend_aio,
+        python_backend_aio,
+        mosquitto_backend_aio,
+        nats_backend_aio,
+    ],
 )
 class TestIntegration:
-    """Integration tests (to run with RabbitMQ up)"""
+    """Integration tests (to run with all the backends up)
+
+    For a specific backend, run python -m pytest tests/test_integration.py -k redis
+    """
 
     msg = tests.TestMessage(content="test", number=123, color=tests.Color.GREEN)
 
-    @pytest.fixture(autouse=True)
+    # @pytest.fixture(autouse=True)
     async def setup_test_env(
         self, mocker: MockerFixture, test_config: Config, backend
     ) -> tp.AsyncGenerator[None, None]:
@@ -103,12 +114,11 @@ class TestIntegration:
         test_config.log_task_in_redis = True
         test_config.backend_config = backend_configs[backend_name]
         self.topic_delimiter = test_config.backend_config.topic_delimiter
+
         # Patch global configuration for all modules that use it
         mocker.patch.object(pb_sync.config, "default_configuration", test_config)
         mocker.patch.object(pb_sync.models, "default_configuration", test_config)
         mocker.patch.object(pb_sync.helpers, "default_configuration", test_config)
-
-        # patch the asyncio modules
         mocker.patch.object(pb.backends, "default_configuration", test_config)
         mocker.patch.object(pb, "default_configuration", test_config)
         if hasattr(backend.connection, "default_configuration"):
@@ -117,11 +127,7 @@ class TestIntegration:
             mocker.patch.object(backend.queues, "default_configuration", test_config)
 
         pb.backend = backend
-        mocker.patch("protobunny.asyncio.backends.get_backend", return_value=backend)
-        mocker.patch.object(pb, "connect", backend.connection.connect)
-        mocker.patch.object(pb, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb, "get_backend", return_value=backend)
-
         # Assert the patching is working for setting the backend
         connection = await pb.connect()
         assert isinstance(connection, backend.connection.Connection)
@@ -142,11 +148,10 @@ class TestIntegration:
             "result": None,
             "task": None,
         }
-        await connection.disconnect()
+        await pb.disconnect()
         backend.connection.Connection.instance_by_vhost.clear()
-        gc.collect()
 
-    @pytest.mark.flaky(max_runs=3)
+    # @pytest.mark.flaky(max_runs=3)
     async def test_publish(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -159,7 +164,7 @@ class TestIntegration:
         assert received["message"].number == self.msg.number
         assert received["message"].content == "test"
 
-    @pytest.mark.flaky(max_runs=3)
+    # @pytest.mark.flaky(max_runs=3)
     async def test_to_dict(self, backend) -> None:
         global received
         await pb.subscribe(self.msg.__class__, callback)
@@ -452,7 +457,7 @@ class TestIntegration:
 
 @pytest.mark.integration
 @pytest.mark.parametrize(
-    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend]
+    "backend", [rabbitmq_backend, redis_backend, python_backend, mosquitto_backend, nats_backend]
 )
 class TestIntegrationSync:
     """Integration tests (to run with the backend server up)"""
@@ -483,8 +488,8 @@ class TestIntegrationSync:
         pb_sync.backend = backend
         # mocker.patch("protobunny.helpers.get_backend", return_value=backend)
         mocker.patch.object(pb_sync.helpers, "get_backend", return_value=backend)
-        mocker.patch.object(pb_sync, "connect", backend.connection.connect)
-        mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
+        # mocker.patch.object(pb_sync, "connect", backend.connection.connect)
+        # mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb_sync, "get_backend", return_value=backend)
 
         # Assert the patching is working for setting the backend

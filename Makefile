@@ -36,7 +36,11 @@ t:
 	PYTHONASYNCIODEBUG=1 PYTHONBREAKPOINT=ipdb.set_trace uv run pytest ${t} -s -vvvv --durations=0
 
 integration-test:
-	uv run pytest tests/ -m "integration" ${t}
+	uv run pytest tests/ -m "integration" -k rabbitmq ${t}
+	uv run pytest tests/ -m "integration" -k redis ${t}
+	uv run pytest tests/ -m "integration" -k python ${t}
+	uv run pytest tests/ -m "integration" -k mosquitto ${t}
+	uv run pytest tests/ -m "integration" -k nats ${t}  # run ./nats-server -js -sd nats_storage
 
 integration-test-py310:
 	source .venv310/bin/activate

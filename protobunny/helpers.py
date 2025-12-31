@@ -90,10 +90,10 @@ def get_queue(
 @functools.lru_cache(maxsize=100)
 def _build_routing_key(module: str, cls_name: str) -> str:
     # Build the routing key from the module and class name
-    backend = default_configuration.backend_config
+    config = default_configuration
+    backend = config.backend_config
     delimiter = backend.topic_delimiter
     routing_key = f"{module}.{cls_name}"
-    config = default_configuration
     if not routing_key.startswith(config.generated_package_name):
         raise ValueError(
             f"Invalid topic {routing_key}, must start with {config.generated_package_name}."
@@ -113,7 +113,7 @@ def build_routing_key(
     """Returns a routing key based on a message instance, a message class, or a module.
     The string will be later composed with the configured message-prefix to build the exact topic name.
 
-    This is the main logic that builds keys strings for topics/streaming, adding wildcards when needed
+    This is the main logic that builds keys strings for topics/streaming, adding wildcards when needed.
 
     Examples:
         build_routing_key(mymessaginglib.vision.control) -> "vision.control.#" routing with binding key

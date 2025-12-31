@@ -357,20 +357,22 @@ def get_message_class_from_topic(topic: str) -> "type[ProtoBunnyMessage] | None 
     """Return the message class from a topic with lazy import of the user library
 
     Args:
-        topic: the RabbitMQ topic that represents the message queue
+        topic: the topic that represents the message queue, mapped to the message class
+            example for redis mylib:tasks:TaskMessage -> mylib.tasks.TaskMessage class
 
-    Returns: the message class
+    Returns: the message class for the topic or None if the topic is not recognized
     """
     delimiter = default_configuration.backend_config.topic_delimiter
     if topic.endswith(f"{delimiter}result"):
         message_type = Result
     else:
         route = topic.removeprefix(f"{default_configuration.messages_prefix}{delimiter}")
-        if route == topic:
-            # Allow pb.* internal messages
+        if route == topic:  # the prefix is not present in the topic
+            # Try if it's a protobunny class
+            # to allow pb.* internal messages like pb.results.Result
             route = topic.removeprefix(f"pb{delimiter}")
         codegen_module = importlib.import_module(default_configuration.generated_package_name)
-        # if route is not recognized, the message_type will be None
+        # if route is not recognized at this point, the message_type will be None
         message_type = _get_submodule(codegen_module, route.split(delimiter))
     return message_type
 

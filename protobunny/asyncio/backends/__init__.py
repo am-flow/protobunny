@@ -4,8 +4,9 @@ import logging
 import typing as tp
 from abc import ABC, abstractmethod
 
+from protobunny import asyncio as pb
+
 from ...exceptions import RequeueMessage
-from ...helpers import get_backend
 from ...models import (
     AsyncCallback,
     BaseQueue,
@@ -99,7 +100,7 @@ class BaseConnection(ABC):
         ...
 
     @abstractmethod
-    def setup_queue(self, topic: str, shared: bool) -> tp.Any | tp.Awaitable[tp.Any]:
+    def setup_queue(self, topic: str, shared: bool, **kwargs) -> tp.Any | tp.Awaitable[tp.Any]:
         ...
 
 
@@ -170,8 +171,7 @@ class BaseAsyncConnection(BaseConnection, ABC):
 
 class BaseAsyncQueue(BaseQueue, ABC):
     async def get_connection(self) -> "BaseAsyncConnection":
-        backend = get_backend()
-        return await backend.connection.connect()
+        return await pb.connect()
 
     async def publish(self, message: ProtoBunnyMessage) -> None:
         """Publish a message to the queue.
@@ -344,12 +344,11 @@ class BaseAsyncQueue(BaseQueue, ABC):
         Returns:
 
         """
-        backend = get_backend()
         message = Envelope(
             body=body,
             correlation_id=correlation_id or b"",
         )
-        conn = await backend.connection.connect()
+        conn = await pb.connect()
         await conn.publish(topic, message)
 
 
@@ -434,6 +433,15 @@ class LoggingAsyncQueue(BaseAsyncQueue):
 
 
 def is_task(topic: str) -> bool:
+    """
+    Use the backend configured delimiter to check if `tasks` is in it
+
+    Args:
+        topic: the topic to check
+
+
+    Returns: True if tasks is in the topic, else False
+    """
     delimiter = default_configuration.backend_config.topic_delimiter
     return "tasks" in topic.split(delimiter)
 

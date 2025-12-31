@@ -56,8 +56,6 @@ class TestTasks:
 
         pb.backend = backend
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb, "connect", backend.connection.connect)
-        mocker.patch.object(pb, "disconnect", backend.connection.disconnect)
         mocker.patch.object(pb, "get_backend", return_value=backend)
 
         # Assert the patching is working for setting the backend
@@ -151,8 +149,6 @@ class TestTasksSync:
         pb_sync.backend = backend
         mocker.patch("protobunny.backends.get_backend", return_value=backend)
         mocker.patch("protobunny.helpers.get_backend", return_value=backend)
-        mocker.patch.object(pb_sync, "connect", backend.connection.connect)
-        mocker.patch.object(pb_sync, "disconnect", backend.connection.disconnect)
 
         # Assert the patching is working for setting the backend
         connection = pb_sync.connect()
@@ -184,12 +180,10 @@ class TestTasksSync:
             return self.received.get("task_2") is not None
 
         def callback_task_1(msg: "ProtoBunnyMessage") -> None:
-            log.debug("SYNC CALLBACK TASK 1 %s", msg)
             time.sleep(0.1)
             self.received["task_1"] = msg
 
         def callback_task_2(msg: "ProtoBunnyMessage") -> None:
-            log.debug("SYNC CALLBACK TASK 2 %s", msg)
             time.sleep(0.1)
             self.received["task_2"] = msg
 

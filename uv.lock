@@ -1030,6 +1030,12 @@ wheels = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/c5/2564d917503fe8d68fe630c74bf6b678fbc15c01b58f2565894761010f57/nats_py-2.12.0.tar.gz", hash = "sha256:2981ca4b63b8266c855573fa7871b1be741f1889fd429ee657e5ffc0971a38a1", size = 119821, upload-time = "2025-10-31T05:27:31.247Z" }
+
+[[package]]
 name = "numpy"
 version = "1.26.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1268,14 +1274,13 @@ wheels = [
 
 [[package]]
 name = "protobunny"
-version = "0.1.2a1"
+version = "0.1.2a2"
 source = { editable = "." }
 dependencies = [
     { name = "betterproto", extra = ["compiler"] },
     { name = "can-ada" },
     { name = "click" },
     { name = "grpcio-tools" },
-    { name = "pytest-env" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
@@ -1283,6 +1288,9 @@ dependencies = [
 [package.optional-dependencies]
 mosquitto = [
     { name = "aiomqtt" },
+]
+nats = [
+    { name = "nats-py" },
 ]
 numpy = [
     { name = "numpy" },
@@ -1304,6 +1312,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "pytest-env" },
     { name = "pytest-mock" },
     { name = "ruff" },
     { name = "toml-sort" },
@@ -1329,13 +1338,13 @@ requires-dist = [
     { name = "can-ada", specifier = ">=2.0.0" },
     { name = "click", specifier = ">=8.2.1" },
     { name = "grpcio-tools", specifier = ">=1.62.0,<2" },
+    { name = "nats-py", marker = "extra == 'nats'", specifier = ">=2.12.0" },
     { name = "numpy", marker = "extra == 'numpy'", specifier = ">=1.26" },
-    { name = "pytest-env", specifier = ">=1.1.3" },
     { name = "redis", marker = "extra == 'redis'", specifier = "<8" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
-provides-extras = ["rabbitmq", "redis", "numpy", "mosquitto"]
+provides-extras = ["rabbitmq", "redis", "numpy", "mosquitto", "nats"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1347,6 +1356,7 @@ dev = [
     { name = "pytest", specifier = ">=7.2.2,<8" },
     { name = "pytest-asyncio", specifier = ">=0.23.7,<0.24" },
     { name = "pytest-cov", specifier = ">=4.0.0,<5" },
+    { name = "pytest-env", specifier = ">=1.1.3" },
     { name = "pytest-mock", specifier = ">=3.14.0,<4" },
     { name = "ruff", specifier = ">=0.1.14,<0.2" },
     { name = "toml-sort", specifier = ">=0.24.3" },

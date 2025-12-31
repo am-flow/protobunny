@@ -16,25 +16,6 @@ from ...exceptions import ConnectionError, PublishError, RequeueMessage
 from ...models import Envelope, IncomingMessageProtocol
 from .. import BaseConnection
 
-
-def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = connect()
-    connection.disconnect()
-    return connect()
-
-
-def disconnect() -> None:
-    connection = connect()
-    connection.disconnect()
-
-
 log = logging.getLogger(__name__)
 
 VHOST = os.environ.get("MOSQUITTO_VHOST", "/")

@@ -327,19 +327,3 @@ class Connection(BaseLocalConnection):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.disconnect()
-
-
-# Convenience functions
-async def connect() -> Connection:
-    return await Connection.get_connection(vhost=VHOST)
-
-
-async def reset_connection() -> Connection:
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
