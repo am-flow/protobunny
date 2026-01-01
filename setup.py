@@ -98,7 +98,7 @@ setup(
         "install": GenerateProtoCommand,
     },
     python_requires=">=3.10,<3.14",
-    description="Protobuf messages and python mqtt messaging toolkit",
+    description="A type-safe, sync/async Python messaging library.",
     entry_points={
         "console_scripts": [
             "protobunny=protobunny.wrapper:main",

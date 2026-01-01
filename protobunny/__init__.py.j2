@@ -70,8 +70,18 @@ log = logging.getLogger(PACKAGE_NAME)
 
 
 def connect(**kwargs: tp.Any) -> "BaseSyncConnection":
-    """Connect teh backend and get the singleton async connection.
-    You can pass the specific keyword arguments that you would pass to the `connect` function of the configured backend.
+    """Establishes a connection to the configured messaging broker.
+
+    This method initializes and returns a singleton connection. Subsequent calls
+    return the existing connection instance unless it has been explicitly
+    disconnected.
+
+    Args:
+        **kwargs: Backend-specific connection arguments (e.g., host, port,
+            credentials, or protocol-specific tuning parameters).
+
+    Returns:
+        BaseSyncConnection: The active connection singleton.
     """
     connection_module = get_backend().connection
     conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST, **kwargs)
@@ -79,13 +89,18 @@ def connect(**kwargs: tp.Any) -> "BaseSyncConnection":
 
 
 def disconnect() -> None:
+    """Closes the active connection to the broker.
+
+    Gracefully terminates heartbeats and background networking tasks. Safe to
+    call if no connection is active.
+    """
     connection_module = get_backend().connection
     conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
     conn.disconnect()
 
 
 def reset_connection(**kwargs: tp.Any) -> "BaseSyncConnection":
-    """Reset the singleton connection."""
+    """Resets the singleton connection and returns it."""
     connection_module = get_backend().connection
     conn = connection_module.Connection.get_connection(vhost=connection_module.VHOST)
     conn.disconnect()
@@ -93,13 +108,15 @@ def reset_connection(**kwargs: tp.Any) -> "BaseSyncConnection":
 
 
 def publish(message: "PBM") -> None:
-    """Synchronously publish a message to its corresponding queue.
+    """Publishes a Protobuf message to its corresponding topic.
 
-    This method automatically determines the correct topic based on the
-    protobuf message type.
+    The destination topic is automatically derived from the message class and
+    package structure. Messages within a '.tasks' package are automatically
+    treated as persistent tasks requiring reliable delivery and queuing logic
+    across all supported backends.
 
     Args:
-        message: The Protobuf message instance to be published.
+        message: An instance of a class derived from ProtoBunnyMessage.
     """
     queue = get_queue(message)
     queue.publish(message)
@@ -108,13 +125,13 @@ def publish(message: "PBM") -> None:
 def publish_result(
     result: "Result", topic: str | None = None, correlation_id: str | None = None
 ) -> None:
-    """Publish the result message to the result topic of the source message
+    """Publishes a processing result to be consumed by results subscribers (See subscribe_results).
 
     Args:
-        result: a Result instance.
-        topic: The topic to send the message to.
-            Default to the source message result topic (e.g. "pb.vision.ExtractFeature.result")
-        correlation_id:
+        result: The Result object containing the response payload and source message from which the Result was generated.
+        topic: Optional override for the result topic. Defaults to the
+            automatically generated '.result' topic associated with the source message.
+        correlation_id: Optional ID used to link this result to a specific request.
     """
     queue = get_queue(result.source)
     queue.publish_result(result, topic, correlation_id)
@@ -124,14 +141,19 @@ def subscribe(
     pkg_or_msg: "type[PBM] | ModuleType",
     callback: "SyncCallback",
 ) -> "BaseSyncQueue":
-    """Subscribe a callback function to the topic.
+    """Registers a callback to consume messages from a specific topic or package.
+
+    If a message class is provided, subscribes to that specific topic. If a
+    module is provided, subscribes to all message types defined within that module.
+    For shared tasks (identified by the '.tasks' convention), Protobunny
+    automatically manages shared consumer groups and load balancing.
 
     Args:
-        pkg_or_msg: The topic to subscribe to as message class or module.
-        callback: The callback function that consumes the received message.
+        pkg_or_msg: The message class (type[PBM]) or module to subscribe to.
+        callback: The function to execute when a message is received.
 
     Returns:
-        The Queue object. You can access the subscription via its `subscription` attribute.
+        BaseSyncQueue: The queue object managing the active subscription.
     """
     register_key = str(pkg_or_msg)
 
@@ -153,11 +175,17 @@ def subscribe_results(
     pkg: "type[PBM] | ModuleType",
     callback: "SyncCallback",
 ) -> "BaseSyncQueue":
-    """Subscribe a callback function to the result topic.
+    """Subscribes to result topics for a specific message type or package.
+
+    Used by services that need to listen for completion signals or data
+    returned by workers processing specific message types.
 
     Args:
-        pkg:
-        callback:
+        pkg: The message class or module whose results should be monitored.
+        callback: The function to execute when a result message is received.
+
+    Returns:
+        BaseSyncQueue: The queue object managing the result subscription.
     """
     queue = get_queue(pkg)
     queue.subscribe_results(callback)
@@ -172,7 +200,13 @@ def unsubscribe(
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
-    """Remove a subscription for a message/package"""
+    """Cancels an active subscription for a specific message type or package.
+
+    Args:
+        pkg: The message class or module to unsubscribe from.
+        if_unused: If True, only unsubscribes if no other callbacks are attached.
+        if_empty: If True, only unsubscribes if the buffer is empty.
+    """
     module_name = pkg.__module__ if hasattr(pkg, "__module__") else pkg.__name__
     registry_key = registry.get_key(pkg)
 
@@ -192,7 +226,11 @@ def unsubscribe(
 def unsubscribe_results(
     pkg: "type[PBM] | ModuleType",
 ) -> None:
-    """Remove all in-process subscriptions for a message/package result topic"""
+    """Remove all in-process subscriptions for a message results topic
+
+    Args:
+        pkg: The message class or module to unsubscribe from its results topic.
+    """
     with registry.sync_lock:
         queue = registry.unregister_results(pkg)
         if queue:
@@ -200,11 +238,14 @@ def unsubscribe_results(
 
 
 def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
-    """
-    Remove all active in-process subscriptions.
+    """Stops all message consumption by canceling every in-process subscription.
 
-    This clears standard subscriptions, result subscriptions, and task
-    subscriptions, effectively stopping all message consumption for this process.
+    Clears standard subscriptions, result listeners, and task workers. Typically
+    invoked during graceful application shutdown.
+
+    Args:
+        if_unused: Policy for evaluating unused standard queues.
+        if_empty: Policy for evaluating empty standard queues.
     """
     with registry.sync_lock:
         queues = registry.get_all_subscriptions()
@@ -222,16 +263,34 @@ def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
 
 
 def get_message_count(
-    msg_type: "PBM | type[PBM] | ModuleType",
+    msg_type: "PBM | type[PBM]",
 ) -> int | None:
+    """Retrieves the current number of pending messages in a queue.
+
+    Args:
+        msg_type: The message instance or class
+
+    Returns:
+        int | None: The count of messages waiting to be processed, or None
+            if the backend does not support count retrieval for this queue type.
+    """
     q = get_queue(msg_type)
     count = q.get_message_count()
     return count
 
 
 def get_consumer_count(
-    msg_type: "PBM | type[PBM] | ModuleType",
+    msg_type: "PBM | type[PBM]",
 ) -> int | None:
+    """Retrieves the number of active consumers currently attached to a shared (aka tasks) queue.
+
+    Args:
+        msg_type: The message instance or class representing the queue.
+
+    Returns:
+        int | None: The number of active subscribers/workers, or None if
+            unsupported by the current backend.
+    """
     q = get_queue(msg_type)
     count = q.get_consumer_count()
     return count
@@ -262,6 +321,20 @@ def _prepare_logger_queue(
 def subscribe_logger(
     log_callback: "LoggerCallback | None" = None, prefix: str | None = None
 ) -> "LoggingSyncQueue":
+    """Subscribes a specialized logging callback to monitor message traffic.
+
+    This creates a logging-specific queue that captures and logs metadata
+    for messages matching the optional prefix.
+
+    Args:
+        log_callback: A custom function to handle log messages. Defaults
+            to `default_log_callback` (logs routing key, cid, and content).
+        prefix: An optional subject/topic prefix to filter which messages
+            are logged.
+
+    Returns:
+        LoggingSyncQueue: The specialized queue object for logging.
+    """
     resolved_callback = log_callback or default_log_callback
     queue, cb = LoggingSyncQueue(prefix), resolved_callback
     queue.subscribe(cb)
@@ -269,7 +342,12 @@ def subscribe_logger(
 
 
 def run_forever() -> None:
+    """Blocks the main thread to maintain active message consumption.
 
+    Installs signal handlers for SIGINT and SIGTERM to trigger an orderly
+    shutdown, ensuring all subscriptions are canceled and the connection
+    is closed before the process exits.
+    """
     def shutdown(signum: int, _: FrameType | None) -> None:
         log.info("Shutting down protobunny connections %s", signal.Signals(signum).name)
         unsubscribe_all()

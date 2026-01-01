@@ -1274,7 +1274,7 @@ wheels = [
 
 [[package]]
 name = "protobunny"
-version = "0.1.2a2"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "betterproto", extra = ["compiler"] },

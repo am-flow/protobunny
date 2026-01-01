@@ -9,7 +9,7 @@ For a full example, using FastAPI, Redis, and protobunny, see [this repo](https:
 ## Setup
 
 ### pyproject.toml
-Add `protobunny` to your `pyproject.toml` dependencies:
+Add `protobunny` to your `pyproject.toml` dependencies (add the backend you need as extra dependency):
 
 ```shell
 uv add protobunny[rabbitmq, numpy]
@@ -325,7 +325,7 @@ messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib"
 generated-package-root = "codegen"
-backend = "rabbitmq"
+backend = "rabbitmq"  # configure here the backend (choose between rabbitmq, redis, mosquitto, nats, python)
 mode = "async"
 ```
 
@@ -376,21 +376,18 @@ You should find the generated classes under `codegen/mymessagelib`.
 ### Python code to test the library
 
 ```python
-
 import asyncio
 import logging
-import sys
+import time
 
 import protobunny as pb
 from protobunny import asyncio as pb_asyncio
-
-# sys.path.append(pb.default_configuration.generated_package_root)
-# this is needed when the python classes for your lib are generated in a subfolder 
-# that is not in the namespace and it must not be treated as a package
-# It's just a sys.path.append("./codegen")
-pb.config_lib()
+# # sys.path.append(pb.default_configuration.generated_package_root)
+# sys.path.append("./codegen")
+pb.config_lib()  # this is needed when the python classes for your lib are generated in a subfolder
 
 import mymessagelib as ml
+
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s %(levelname)s] %(name)s - %(message)s"
@@ -411,12 +408,15 @@ class TestLibAsync:
 
     async def worker1(self, task: ml.main.tasks.TaskMessage) -> None:
         log.info("1- Working on: %s", task)
+        await asyncio.sleep(0.1)
 
     async def worker2(self, task: ml.main.tasks.TaskMessage) -> None:
         log.info("2- Working on: %s", task)
+        await asyncio.sleep(0.1)
 
     async def on_message_mymessage(self, message: ml.main.MyMessage) -> None:
         log.info("Got main message: %s", message)
+
 
     def run_forever(self):
         asyncio.run(self.main())
@@ -425,6 +425,7 @@ class TestLibAsync:
         log.info(f"LOG {incoming.routing_key}: {body}")
 
     async def main(self):
+
         await pb_asyncio.subscribe_logger(self.log_callback)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker1)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker2)
@@ -454,9 +455,11 @@ class TestLib:
 
     def worker1(self, task: ml.main.tasks.TaskMessage) -> None:
         log.info("1- Working on: %s", task)
+        time.sleep(0.1)
 
     def worker2(self, task: ml.main.tasks.TaskMessage) -> None:
         log.info("2- Working on: %s", task)
+        time.sleep(0.1)
 
     def log_callback(self, incoming, body) -> None:
         log.info(f"LOG {incoming.routing_key}: {body}")
@@ -478,7 +481,8 @@ class TestLib:
 
 
 if __name__ == "__main__":
-    if conf.use_async:
+    config = pb.config
+    if config.use_async:
         log.info("Using async")
         testlib = TestLibAsync()
         pb_asyncio.run_forever(testlib.main)

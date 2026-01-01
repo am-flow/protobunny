@@ -8,14 +8,14 @@ Protobunny tool
 Generate betterproto classes and automatically includes the path to the custom proto types
 and add the ProtoBunny mixin for the configured package (i.e. ``generated-package-name``).
 
-See protobunny generate --help for more options.
+See ``protobunny generate --help`` for more options.
 
 
 .. code-block:: shell
 
     protobunny log
 
-Start a logger in console. See protobunny log --help for more options.
+Start a logger in console. See ``protobunny log --help`` for more options.
 
 
 Full configuration for pyproject.toml

@@ -1,12 +1,16 @@
 API Reference
 =============
 
-Core Package
-------------
+Core Package Async
+------------------
+
+  .. automodule:: protobunny.asyncio
+       :members:
+
+Core Package Sync
+-----------------
 
   .. automodule:: protobunny
-       :members:
-  .. automodule:: protobunny.asyncio
        :members:
        :no-index:
 
@@ -45,6 +49,17 @@ Redis aio backend
   .. automodule:: protobunny.asyncio.backends.redis.connection
        :members:
   .. automodule:: protobunny.asyncio.backends.redis.queues
+       :members:
+       :no-index:
+
+
+NATS aio backend
+-----------------
+  .. automodule:: protobunny.asyncio.backends.nats
+       :members:
+  .. automodule:: protobunny.asyncio.backends.nats.connection
+       :members:
+  .. automodule:: protobunny.asyncio.backends.nats.queues
        :members:
        :no-index:
 
@@ -91,6 +106,17 @@ Redis backend
        :members:
        :no-index:
 
+NATS backend
+----------------
+  .. automodule:: protobunny.backends.nats
+       :members:
+  .. automodule:: protobunny.backends.nats.connection
+       :members:
+  .. automodule:: protobunny.backends.nats.queues
+       :members:
+       :no-index:
+
+
 Python backend
 ----------------
   .. automodule:: protobunny.backends.python
@@ -113,4 +139,3 @@ protobunny utility
 ------------------
     .. automodule:: protobunny.wrapper
        :members:
-       :undoc-members:
