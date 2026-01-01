@@ -1,0 +1,871 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Concepts" href="concepts.html"><link rel="prev" title="Protobunny" href="intro.html">
+        <link rel="prefetch" href="_static/logo.png" as="image">
+
+    <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
+        <title>Quick start guide - v0.1.2</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #f8ba26;
+  --color-brand-content: #f8ba26;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #f8ba26;
+  --color-brand-content: #f8ba26;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #f8ba26;
+  --color-brand-content: #f8ba26;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     <em>Important</em> protobunny is in alpha! 
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">v0.1.2</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">v0.1.2</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Protobunny</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Quick start guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recipes.html">Recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/quick_start.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="quick-start-guide">
+<h1>Quick start guide<a class="headerlink" href="#quick-start-guide" title="Link to this heading">¶</a></h1>
+<p>This examples are for sync mode.
+For async mode, import protobunny with <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">protobunny</span> <span class="pre">import</span> <span class="pre">asyncio</span> <span class="pre">as</span> <span class="pre">pb</span></code>.</p>
+<p>For a full example, using FastAPI, Redis, and protobunny, see <a class="reference external" href="https://github.com/domeniconappo/fastapi-protobunny-example.git">this repo</a>.</p>
+<section id="setup">
+<h2>Setup<a class="headerlink" href="#setup" title="Link to this heading">¶</a></h2>
+<section id="pyproject-toml">
+<h3>pyproject.toml<a class="headerlink" href="#pyproject-toml" title="Link to this heading">¶</a></h3>
+<p>Add <code class="docutils literal notranslate"><span class="pre">protobunny</span></code> to your <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> dependencies (add the backend you need as extra dependency):</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>add<span class="w"> </span>protobunny<span class="o">[</span>rabbitmq,<span class="w"> </span>numpy<span class="o">]</span>
+<span class="c1"># or</span>
+poetry<span class="w"> </span>add<span class="w"> </span>protobunny
+</pre></div>
+</div>
+<p>You can also add it manually to pyproject.toml dependencies:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">  </span><span class="s2">&quot;protobunny[rabbitmq, numpy]&gt;=0.1.2a2&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="c1"># your other dependencies ...</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>Configure the library in pyproject.toml:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.protobunny]</span>
+<span class="n">messages-directory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;messages&quot;</span>
+<span class="n">messages-prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;acme&quot;</span>
+<span class="n">generated-package-name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mymessagelib.codegen&quot;</span>
+<span class="n">mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;async&quot;</span><span class="w">  </span><span class="c1"># or &quot;sync&quot;</span>
+<span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rabbitmq&quot;</span><span class="w">  </span><span class="c1">#  available backends are [&#39;rabbitmq&#39;, &#39;redis&#39;, &#39;mosquitto&#39;, &#39;python&#39;]</span>
+</pre></div>
+</div>
+</section>
+<section id="install-the-library-with-uv-poetry-or-pip">
+<h3>Install the library with <code class="docutils literal notranslate"><span class="pre">uv</span></code>, <code class="docutils literal notranslate"><span class="pre">poetry</span></code> or <code class="docutils literal notranslate"><span class="pre">pip</span></code><a class="headerlink" href="#install-the-library-with-uv-poetry-or-pip" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>lock<span class="w"> </span>--prerelease<span class="o">=</span>allow<span class="w">  </span><span class="c1"># or poetry lock</span>
+uv<span class="w"> </span>sync<span class="w">  </span><span class="c1"># or poetry sync/install</span>
+</pre></div>
+</div>
+</section>
+<section id="backend-connection">
+<h3>Backend connection<a class="headerlink" href="#backend-connection" title="Link to this heading">¶</a></h3>
+<p>Protobunny connects to the broker (e.g. <code class="docutils literal notranslate"><span class="pre">RabbitMQ</span></code>) by reading environment variables (<code class="docutils literal notranslate"><span class="pre">RABBITMQ_URL</span></code>).</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># export these variables</span>
+
+<span class="nv">RABBITMQ_HOST</span><span class="o">=</span>localhost<span class="w"> </span>
+<span class="nv">RABBITMQ_PORT</span><span class="o">=</span><span class="m">5672</span><span class="w"> </span>
+<span class="nv">RABBITMQ_USER</span><span class="o">=</span>guest<span class="w"> </span>
+<span class="nv">RABBITMQ_PASS</span><span class="o">=</span>guest<span class="w"> </span>
+<span class="nv">RABBITMQ_VHOST</span><span class="o">=</span>/test
+</pre></div>
+</div>
+<p>For other backends, replace <code class="docutils literal notranslate"><span class="pre">RABBITMQ_</span></code> prefix with the backend name uppercase (e.g. <code class="docutils literal notranslate"><span class="pre">REDIS_HOST</span></code>).
+If you are using the <code class="docutils literal notranslate"><span class="pre">python</span></code> backend, you don’t need to set any environment variables.</p>
+<p>Available backends are:</p>
+<ul class="simple">
+<li><p>RabbitMQ</p></li>
+<li><p>Redis</p></li>
+<li><p>Mosquitto</p></li>
+<li><p>Python for local testing (in-process)</p></li>
+<li><p>For docker-compose or pipelines yaml:</p></li>
+</ul>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">env</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">RABBITMQ_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">localhost</span>
+<span class="w">  </span><span class="nt">RABBITMQ_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5672</span>
+<span class="w">  </span><span class="nt">RABBITMQ_USER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">guest</span>
+<span class="w">  </span><span class="nt">RABBITMQ_PASS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">guest</span>
+<span class="w">  </span><span class="nt">RABBITMQ_VHOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/test</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="quick-example">
+<h2>Quick example<a class="headerlink" href="#quick-example" title="Link to this heading">¶</a></h2>
+<section id="create-a-folder-in-your-project-with-your-protobuf-messages">
+<h3>Create a folder in your project with your protobuf messages<a class="headerlink" href="#create-a-folder-in-your-project-with-your-protobuf-messages" title="Link to this heading">¶</a></h3>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>messages
+mkdir<span class="w"> </span>messages/acme
+mkdir<span class="w"> </span>messages/acme/tests
+<span class="c1"># etc.</span>
+</pre></div>
+</div>
+<p>A message that uses JSON-like fields can look like this:</p>
+<div class="highlight-protobuf notranslate"><div class="highlight"><pre><span></span><span class="cm">/*test.proto*/</span>
+<span class="k">syntax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;proto3&quot;</span><span class="p">;</span>
+<span class="k">import</span><span class="w"> </span><span class="s">&quot;protobunny/commons.proto&quot;</span><span class="p">;</span>
+
+<span class="kn">package</span><span class="w"> </span><span class="nn">acme</span><span class="o">.</span><span class="n">tests</span><span class="p">;</span>
+
+<span class="kd">message</span><span class="w"> </span><span class="nc">TestMessage</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="na">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">int64</span><span class="w"> </span><span class="na">number</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
+<span class="w">  </span><span class="n">commons.JsonContent</span><span class="w"> </span><span class="na">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">25</span><span class="p">;</span>
+<span class="w">  </span><span class="cm">/* Field with JSON-like content */</span>
+<span class="w">  </span><span class="k">optional</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="na">detail</span><span class="o">=</span><span class="mi">30</span><span class="p">;</span>
+<span class="w">  </span><span class="cm">/* Optional field */</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="generate-your-message-library-with-protobunny">
+<h3>Generate your message library with <code class="docutils literal notranslate"><span class="pre">protobunny</span></code><a class="headerlink" href="#generate-your-message-library-with-protobunny" title="Link to this heading">¶</a></h3>
+<p>The library comes with a <code class="docutils literal notranslate"><span class="pre">protoc</span></code> wrapper that generates Python code from your protobuf messages
+and executes a postcompilation step to manipulate the generated code.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>protobunny<span class="w"> </span>generate
+</pre></div>
+</div>
+<p>In <code class="docutils literal notranslate"><span class="pre">mymessagelib/codegen</span></code> you should see the generated message classes, mirroring the <code class="docutils literal notranslate"><span class="pre">package</span></code> declaration in your protobuf files.</p>
+<p>If you need to generate the classes in another package (e.g. for tests), you can pass the <code class="docutils literal notranslate"><span class="pre">--python_betterproto_out</span></code> option:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>protobunny<span class="w"> </span>generate<span class="w"> </span>-I<span class="w"> </span>messages<span class="w"> </span>--python_betterproto_out<span class="o">=</span>tests<span class="w"> </span>tests/**/*.proto<span class="w"> </span>tests/*.proto
+</pre></div>
+</div>
+<p>The following examples are for sync mode and can run from the python shell.
+To use the async mode, import protobunny with <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">protobunny</span> <span class="pre">import</span> <span class="pre">asyncio</span> <span class="pre">as</span> <span class="pre">pb</span></code>.</p>
+</section>
+<section id="subscribe-to-a-message">
+<h3>Subscribe to a message<a class="headerlink" href="#subscribe-to-a-message" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">on_message</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Got:&quot;</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+<span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="n">on_message</span><span class="p">)</span>
+<span class="c1"># Prints </span>
+<span class="c1"># &#39;Got: TestMessage(content=&quot;hello&quot;, number=1, data={&quot;test&quot;: &quot;test&quot;}, detail=None)&#39; </span>
+<span class="c1"># when a message is received</span>
+</pre></div>
+</div>
+</section>
+<section id="publish-a-message">
+<h3>Publish a message<a class="headerlink" href="#publish-a-message" title="Link to this heading">¶</a></h3>
+<p>The following code can run in another process or thread and publishes a message to the topic <code class="docutils literal notranslate"><span class="pre">acme.test.TestMessage</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+<span class="n">msg</span> <span class="o">=</span>  <span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;hello&quot;</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test&quot;</span><span class="p">:</span> <span class="s2">&quot;test&quot;</span><span class="p">})</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="task-style-queues">
+<h2>Task-style queues<a class="headerlink" href="#task-style-queues" title="Link to this heading">¶</a></h2>
+<p>All messages that are under a protobuffer <code class="docutils literal notranslate"><span class="pre">tasks</span></code> package are treated as shared queues.</p>
+<div class="highlight-protobuf notranslate"><div class="highlight"><pre><span></span><span class="cm">/*</span>
+<span class="cm">This .proto file contains protobuf message definitions for testing tasks</span>
+<span class="cm">*/</span>
+<span class="k">syntax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;proto3&quot;</span><span class="p">;</span>
+<span class="k">import</span><span class="w"> </span><span class="s">&quot;protobunny/commons.proto&quot;</span><span class="p">;</span>
+
+<span class="c1">// Define the tasks package</span>
+<span class="kn">package</span><span class="w"> </span><span class="nn">tests</span><span class="o">.</span><span class="n">tasks</span><span class="p">;</span>
+
+
+<span class="kd">message</span><span class="w"> </span><span class="nc">TaskMessage</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="na">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<span class="w">  </span><span class="k">repeated</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="na">weights</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="p">[</span><span class="k">packed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="p">];</span>
+<span class="w">  </span><span class="k">repeated</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="na">bbox</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">40</span><span class="w"> </span><span class="p">[</span><span class="k">packed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="p">];</span>
+<span class="w">  </span><span class="k">optional</span><span class="w"> </span><span class="n">commons.JsonContent</span><span class="w"> </span><span class="na">options</span><span class="o">=</span><span class="mi">50</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If a message is treated as a “task queue” message by the library conventions,
+<code class="docutils literal notranslate"><span class="pre">subscribe</span></code> will use a <strong>shared queue</strong> (multiple workers consuming messages from one queue).
+The load is distributed among workers (competing consumers).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">worker1</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1- Working on:&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">worker2</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2- Working on:&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TasqkMessage</span><span class="p">,</span> <span class="n">worker1</span><span class="p">)</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">,</span> <span class="n">worker2</span><span class="p">)</span>
+
+<span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test1&quot;</span><span class="p">))</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test2&quot;</span><span class="p">))</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test3&quot;</span><span class="p">))</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">protobunny.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProtoBunnyMessage</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(),</span> <span class="n">ProtoBunnyMessage</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>You can also introspect/manage an underlying shared queue:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+
+<span class="n">queue</span> <span class="o">=</span> <span class="n">pb</span><span class="o">.</span><span class="n">get_queue</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span>
+
+<span class="c1"># Only shared queues can be purged and counted</span>
+<span class="n">count</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">get_message_count</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Queued:&quot;</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+<span class="n">queue</span><span class="o">.</span><span class="n">purge</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="results-workflow">
+<h2>Results workflow<a class="headerlink" href="#results-workflow" title="Link to this heading">¶</a></h2>
+<section id="create-and-publish-a-result">
+<h3>Create and publish a result<a class="headerlink" href="#create-and-publish-a-result" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+
+<span class="n">source</span> <span class="o">=</span> <span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;hello&quot;</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># create a result message from the source message</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">make_result</span><span class="p">(</span><span class="n">return_value</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+<span class="c1"># publish the result</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">publish_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="subscribe-to-results-for-a-message-type">
+<h3>Subscribe to results for a message type<a class="headerlink" href="#subscribe-to-results-for-a-message-type" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">on_result</span><span class="p">(</span><span class="n">res</span><span class="p">:</span> <span class="n">pb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">Result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Result for:&quot;</span><span class="p">,</span> <span class="n">res</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Return code:&quot;</span><span class="p">,</span> <span class="n">res</span><span class="o">.</span><span class="n">return_code</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Return value:&quot;</span><span class="p">,</span> <span class="n">res</span><span class="o">.</span><span class="n">return_value</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Error:&quot;</span><span class="p">,</span> <span class="n">res</span><span class="o">.</span><span class="n">error</span><span class="p">)</span>
+
+<span class="n">pb</span><span class="o">.</span><span class="n">subscribe_results</span><span class="p">(</span><span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="n">on_result</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="json-like-content-fields">
+<h2>JSON-like content fields<a class="headerlink" href="#json-like-content-fields" title="Link to this heading">¶</a></h2>
+<p>Protobuf supports maps and lists as message fields.
+Maps can’t have arbitrary structures: the values of a map must be of the same type.</p>
+<p>Protobunny adds a layer over protobuf to carry arbitrary structured payloads (dicts/lists),
+by supporting transparent conversion so you can work with normal Python structures:</p>
+<ul class="simple">
+<li><p>Serialize: dictionaries/lists are encoded into the message field</p></li>
+<li><p>Deserialize: those fields come back as Python structures</p></li>
+</ul>
+<p>This is particularly useful for metrics, metadata, and structured return values in results.</p>
+<p>Example:
+The TaskMessage above has a <code class="docutils literal notranslate"><span class="pre">options</span></code> field that can carry arbitrary JSON-like payload.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+
+<span class="n">msg</span> <span class="o">=</span> <span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test1&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test&quot;</span><span class="p">:</span><span class="s2">&quot;Test&quot;</span><span class="p">,</span> <span class="s2">&quot;number_list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]})</span>
+<span class="n">serialized</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">serialized</span><span class="p">)</span>
+<span class="n">deserialized</span> <span class="o">=</span> <span class="n">mml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TaskMessage</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">serialized</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">deserialized</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">deserialized</span><span class="o">.</span><span class="n">options</span> <span class="o">==</span> <span class="p">{</span><span class="s2">&quot;test&quot;</span><span class="p">:</span><span class="s2">&quot;Test&quot;</span><span class="p">,</span> <span class="s2">&quot;number_list&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]}</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="logging-debugging">
+<h2>Logging / debugging<a class="headerlink" href="#logging-debugging" title="Link to this heading">¶</a></h2>
+<p>Protobunny includes a convenience subscription for logging message traffic by subscribing to a broad wildcard topic and printing JSON payloads:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">log_callback</span><span class="p">(</span><span class="n">_incoming_message</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+
+<span class="n">pb</span><span class="o">.</span><span class="n">subscribe_logger</span><span class="p">(</span><span class="n">log_callback</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can start a logger worker with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>protobunny<span class="w"> </span>log
+</pre></div>
+</div>
+<hr class="docutils" />
+<p>If you need explicit connection lifecycle control, you can access the shared connection object:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+
+<span class="n">conn</span> <span class="o">=</span> <span class="n">pb</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">conn</span><span class="o">.</span><span class="n">is_connected</span><span class="p">():</span>
+    <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If you set the <code class="docutils literal notranslate"><span class="pre">generated-package-root</span></code> folder option, you might need to add that path to your <code class="docutils literal notranslate"><span class="pre">sys.path</span></code>.
+You can do it conveniently by calling <code class="docutils literal notranslate"><span class="pre">config_lib</span></code> on top of your module, before importing the library:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">config_lib</span><span class="p">()</span>
+<span class="c1"># now you can import the library from the generated package root</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mml</span>
+</pre></div>
+</div>
+</section>
+<section id="complete-example">
+<h2>Complete example<a class="headerlink" href="#complete-example" title="Link to this heading">¶</a></h2>
+<section id="config">
+<h3>Config<a class="headerlink" href="#config" title="Link to this heading">¶</a></h3>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[project]</span>
+<span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;test-project&quot;</span>
+<span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+<span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Project to test protobunny&quot;</span>
+<span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10&quot;</span>
+<span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;protobunny[rabbitmq,redis,numpy,mosquitto]&gt;=0.1.2a1&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="k">[tool.protobunny]</span>
+<span class="n">messages-directory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;messages&quot;</span>
+<span class="n">messages-prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;acme&quot;</span>
+<span class="n">generated-package-name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mymessagelib&quot;</span>
+<span class="n">generated-package-root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;codegen&quot;</span>
+<span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rabbitmq&quot;</span><span class="w">  </span><span class="c1"># configure here the backend (choose between rabbitmq, redis, mosquitto, nats, python)</span>
+<span class="n">mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;async&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="protobuf-messages">
+<h3>Protobuf Messages<a class="headerlink" href="#protobuf-messages" title="Link to this heading">¶</a></h3>
+<div class="highlight-protobuf notranslate"><div class="highlight"><pre><span></span><span class="cm">/* messages/my_message.proto */</span>
+
+<span class="k">syntax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;proto3&quot;</span><span class="p">;</span>
+
+<span class="kn">package</span><span class="w"> </span><span class="nn">main</span><span class="p">;</span>
+
+
+<span class="kd">message</span><span class="w"> </span><span class="nc">MyMessage</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="na">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">int64</span><span class="w"> </span><span class="na">number</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
+<span class="w">  </span><span class="k">optional</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="na">detail</span><span class="o">=</span><span class="mi">30</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-protobuf notranslate"><div class="highlight"><pre><span></span><span class="cm">/* messages/tasks.proto */</span>
+<span class="k">syntax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;proto3&quot;</span><span class="p">;</span>
+<span class="k">import</span><span class="w"> </span><span class="s">&quot;protobunny/commons.proto&quot;</span><span class="p">;</span>
+
+<span class="c1">// Define the tasks package</span>
+<span class="kn">package</span><span class="w"> </span><span class="nn">main</span><span class="o">.</span><span class="n">tasks</span><span class="p">;</span>
+
+
+<span class="kd">message</span><span class="w"> </span><span class="nc">TaskMessage</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="na">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<span class="w">  </span><span class="k">repeated</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="na">weights</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="p">[</span><span class="k">packed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="p">];</span>
+<span class="w">  </span><span class="k">repeated</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="na">bbox</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">40</span><span class="w"> </span><span class="p">[</span><span class="k">packed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="p">];</span>
+<span class="w">  </span><span class="k">optional</span><span class="w"> </span><span class="n">commons.JsonContent</span><span class="w"> </span><span class="na">options</span><span class="o">=</span><span class="mi">50</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="generate-betterproto-classes-decorated-with-protobunny-mixins">
+<h3>Generate betterproto classes decorated with protobunny mixins<a class="headerlink" href="#generate-betterproto-classes-decorated-with-protobunny-mixins" title="Link to this heading">¶</a></h3>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>protobunny<span class="w"> </span>generate
+</pre></div>
+</div>
+<p>You should find the generated classes under <code class="docutils literal notranslate"><span class="pre">codegen/mymessagelib</span></code>.</p>
+</section>
+<section id="python-code-to-test-the-library">
+<h3>Python code to test the library<a class="headerlink" href="#python-code-to-test-the-library" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pb</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">protobunny</span><span class="w"> </span><span class="kn">import</span> <span class="n">asyncio</span> <span class="k">as</span> <span class="n">pb_asyncio</span>
+<span class="c1"># # sys.path.append(pb.default_configuration.generated_package_root)</span>
+<span class="c1"># sys.path.append(&quot;./codegen&quot;)</span>
+<span class="n">pb</span><span class="o">.</span><span class="n">config_lib</span><span class="p">()</span>  <span class="c1"># this is needed when the python classes for your lib are generated in a subfolder</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">mymessagelib</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ml</span>
+
+
+<span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span>
+    <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;[</span><span class="si">%(asctime)s</span><span class="s2"> </span><span class="si">%(levelname)s</span><span class="s2">] </span><span class="si">%(name)s</span><span class="s2"> - </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
+<span class="p">)</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">conf</span> <span class="o">=</span> <span class="n">pb</span><span class="o">.</span><span class="n">config</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestLibAsync</span><span class="p">:</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">make_result</span><span class="p">()</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_message_results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">pb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">Result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got result: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Source: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">worker1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;1- Working on: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">worker2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;2- Working on: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_message_mymessage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">MyMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got main message: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_forever</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">main</span><span class="p">())</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">incoming</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOG </span><span class="si">{</span><span class="n">incoming</span><span class="o">.</span><span class="n">routing_key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">body</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe_logger</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_callback</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker1</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker2</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_message</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe_results</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_message_results</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">MyMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_message_mymessage</span><span class="p">)</span>
+
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">MyMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">))</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">(</span><span class="n">number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test&quot;</span><span class="p">:</span> <span class="mi">123</span><span class="p">}))</span>
+
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test1&quot;</span><span class="p">))</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test2&quot;</span><span class="p">))</span>
+        <span class="k">await</span> <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test3&quot;</span><span class="p">))</span>
+
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;TEST LIB started. Press Ctrl+C to exit.&quot;</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestLib</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">make_result</span><span class="p">()</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_message_results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">pb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">Result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Got result: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Source: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">worker1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;1- Working on: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">worker2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;2- Working on: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">incoming</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOG </span><span class="si">{</span><span class="n">incoming</span><span class="o">.</span><span class="n">routing_key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">body</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe_logger</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_callback</span><span class="p">)</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker1</span><span class="p">)</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker2</span><span class="p">)</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_message</span><span class="p">)</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe_results</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_message_results</span><span class="p">)</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">MyMessage</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">MyMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">))</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">tests</span><span class="o">.</span><span class="n">TestMessage</span><span class="p">(</span><span class="n">number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test&quot;</span><span class="p">:</span> <span class="mi">123</span><span class="p">}))</span>
+
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test1&quot;</span><span class="p">))</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test2&quot;</span><span class="p">))</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">tasks</span><span class="o">.</span><span class="n">TaskMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;test3&quot;</span><span class="p">))</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">pb</span><span class="o">.</span><span class="n">config</span>
+    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">use_async</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using async&quot;</span><span class="p">)</span>
+        <span class="n">testlib</span> <span class="o">=</span> <span class="n">TestLibAsync</span><span class="p">()</span>
+        <span class="n">pb_asyncio</span><span class="o">.</span><span class="n">run_forever</span><span class="p">(</span><span class="n">testlib</span><span class="o">.</span><span class="n">main</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using sync&quot;</span><span class="p">)</span>
+        <span class="n">testlib</span> <span class="o">=</span> <span class="n">TestLib</span><span class="p">()</span>
+        <span class="n">testlib</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+        <span class="n">pb</span><span class="o">.</span><span class="n">run_forever</span><span class="p">()</span>
+
+</pre></div>
+</div>
+</section>
+<section id="run-the-test-ensure-the-configured-backend-is-running-and-the-extra-dependencies-are-installed">
+<h3>Run the test (ensure the configured backend is running and the extra dependencies are installed)<a class="headerlink" href="#run-the-test-ensure-the-configured-backend-is-running-and-the-extra-dependencies-are-installed" title="Link to this heading">¶</a></h3>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>test_lib.py<span class="w"> </span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>[2025-12-30 01:05:23,702 INFO] __main__ - Using async
+[2025-12-30 01:05:23,702 INFO] protobunny - Started. Press Ctrl+C to exit.
+[2025-12-30 01:05:23,742 INFO] protobunny.asyncio.backends.rabbitmq.connection - Establishing RabbitMQ connection to 127.0.0.1:5672/%2F
+[2025-12-30 01:05:23,768 INFO] protobunny.asyncio.backends.rabbitmq.connection - Successfully connected to RabbitMQ
+[2025-12-30 01:05:23,772 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.#&#39; (queue=amq_37755497ba5d47ca95956d0bef5f6ae9, shared=False)
+[2025-12-30 01:05:23,775 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.main.tasks.TaskMessage&#39; (queue=acme.main.tasks.TaskMessage, shared=True)
+[2025-12-30 01:05:23,776 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.main.tasks.TaskMessage&#39; (queue=acme.main.tasks.TaskMessage, shared=True)
+[2025-12-30 01:05:23,780 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.tests.TestMessage&#39; (queue=amq_1cf4275aecd643d6ad711c7bbf6de31d, shared=False)
+[2025-12-30 01:05:23,784 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.tests.TestMessage.result&#39; (queue=amq_a014606e624348a894965c36e2c7fd26, shared=False)
+[2025-12-30 01:05:23,787 INFO] protobunny.asyncio.backends.rabbitmq.connection - Subscribing to topic &#39;acme.main.MyMessage&#39; (queue=amq_0791c366494348b0be55ff095fc3e71c, shared=False)
+[2025-12-30 01:05:23,789 INFO] __main__ - Got main message: MyMessage(content=&#39;test&#39;, detail=None)
+[2025-12-30 01:05:23,789 INFO] __main__ - LOG acme.main.MyMessage: {&quot;content&quot;: &quot;test&quot;, &quot;number&quot;: 0, &quot;detail&quot;: null}
+[2025-12-30 01:05:23,791 INFO] __main__ - Got: TestMessage(content=&#39;test&#39;, number=1, data={&#39;test&#39;: 123}, detail=None)
+[2025-12-30 01:05:23,791 INFO] protobunny.asyncio.backends - Publishing result to: acme.tests.TestMessage.result
+[2025-12-30 01:05:23,792 INFO] __main__ - LOG acme.tests.TestMessage: {&quot;content&quot;: &quot;test&quot;, &quot;number&quot;: 1, &quot;data&quot;: {&quot;test&quot;: 123}, &quot;detail&quot;: null}
+[2025-12-30 01:05:23,793 INFO] __main__ - LOG acme.main.tasks.TaskMessage: {&quot;content&quot;: &quot;test1&quot;, &quot;weights&quot;: [], &quot;bbox&quot;: [], &quot;options&quot;: null}
+[2025-12-30 01:05:23,793 INFO] __main__ - 1- Working on: TaskMessage(content=&#39;test1&#39;, options=None)
+[2025-12-30 01:05:23,793 INFO] __main__ - Got result: Result(source_message=Any(type_url=&#39;mymessagelib.tests.TestMessage&#39;, value=b&#39;R\x04test\xa0\x01\x01\xca\x01\x0f\n\r{&quot;test&quot;: 123}&#39;), return_code=ReturnCode.SUCCESS, error=&#39;&#39;, return_value=None)
+[2025-12-30 01:05:23,794 INFO] __main__ - Source: TestMessage(content=&#39;test&#39;, number=1, data={&#39;test&#39;: 123}, detail=None)
+[2025-12-30 01:05:23,795 INFO] __main__ - LOG acme.tests.TestMessage.result: SUCCESS - {&quot;content&quot;: &quot;test&quot;, &quot;number&quot;: 1, &quot;data&quot;: {&quot;test&quot;: 123}, &quot;detail&quot;: null}
+[2025-12-30 01:05:23,795 INFO] __main__ - 2- Working on: TaskMessage(content=&#39;test2&#39;, options=None)
+[2025-12-30 01:05:23,795 INFO] __main__ - LOG acme.main.tasks.TaskMessage: {&quot;content&quot;: &quot;test2&quot;, &quot;weights&quot;: [], &quot;bbox&quot;: [], &quot;options&quot;: null}
+[2025-12-30 01:05:23,796 INFO] __main__ - 1- Working on: TaskMessage(content=&#39;test3&#39;, options=None)
+[2025-12-30 01:05:23,796 INFO] __main__ - LOG acme.main.tasks.TaskMessage: {&quot;content&quot;: &quot;test3&quot;, &quot;weights&quot;: [], &quot;bbox&quot;: [], &quot;options&quot;: null}
+[2025-12-30 01:05:23,796 INFO] __main__ - TEST LIB started. Press Ctrl+C to exit.
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="concepts.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Concepts</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="intro.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Protobunny</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, AM-Flow
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/am-flow/protobunny" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Quick start guide</a><ul>
+<li><a class="reference internal" href="#setup">Setup</a><ul>
+<li><a class="reference internal" href="#pyproject-toml">pyproject.toml</a></li>
+<li><a class="reference internal" href="#install-the-library-with-uv-poetry-or-pip">Install the library with <code class="docutils literal notranslate"><span class="pre">uv</span></code>, <code class="docutils literal notranslate"><span class="pre">poetry</span></code> or <code class="docutils literal notranslate"><span class="pre">pip</span></code></a></li>
+<li><a class="reference internal" href="#backend-connection">Backend connection</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#quick-example">Quick example</a><ul>
+<li><a class="reference internal" href="#create-a-folder-in-your-project-with-your-protobuf-messages">Create a folder in your project with your protobuf messages</a></li>
+<li><a class="reference internal" href="#generate-your-message-library-with-protobunny">Generate your message library with <code class="docutils literal notranslate"><span class="pre">protobunny</span></code></a></li>
+<li><a class="reference internal" href="#subscribe-to-a-message">Subscribe to a message</a></li>
+<li><a class="reference internal" href="#publish-a-message">Publish a message</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#task-style-queues">Task-style queues</a></li>
+<li><a class="reference internal" href="#results-workflow">Results workflow</a><ul>
+<li><a class="reference internal" href="#create-and-publish-a-result">Create and publish a result</a></li>
+<li><a class="reference internal" href="#subscribe-to-results-for-a-message-type">Subscribe to results for a message type</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#json-like-content-fields">JSON-like content fields</a></li>
+<li><a class="reference internal" href="#logging-debugging">Logging / debugging</a></li>
+<li><a class="reference internal" href="#complete-example">Complete example</a><ul>
+<li><a class="reference internal" href="#config">Config</a></li>
+<li><a class="reference internal" href="#protobuf-messages">Protobuf Messages</a></li>
+<li><a class="reference internal" href="#generate-betterproto-classes-decorated-with-protobunny-mixins">Generate betterproto classes decorated with protobunny mixins</a></li>
+<li><a class="reference internal" href="#python-code-to-test-the-library">Python code to test the library</a></li>
+<li><a class="reference internal" href="#run-the-test-ensure-the-configured-backend-is-running-and-the-extra-dependencies-are-installed">Run the test (ensure the configured backend is running and the extra dependencies are installed)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=92734c54"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
