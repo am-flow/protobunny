@@ -10,7 +10,6 @@ import protobunny as pb_sync
 from protobunny import asyncio as pb
 from protobunny import get_backend
 from protobunny.conf import Config, backend_configs
-from protobunny.models import ProtoBunnyMessage
 
 from . import tests
 from .utils import async_wait, sync_wait
@@ -78,12 +77,12 @@ class TestTasks:
         async def predicate_2() -> bool:
             return self.received.get("task_2") is not None
 
-        async def callback_task_1(msg: "ProtoBunnyMessage") -> None:
+        async def callback_task_1(msg: tests.tasks.TaskMessage) -> None:
             log.debug("CALLBACK TASK 1 %s", msg)
             await asyncio.sleep(0.1)  # simulate some work
             self.received["task_1"] = msg
 
-        async def callback_task_2(msg: "ProtoBunnyMessage") -> None:
+        async def callback_task_2(msg: tests.tasks.TaskMessage) -> None:
             log.debug("CALLBACK TASK 2 %s", msg)
             await asyncio.sleep(0.1)  # simulate some work
             self.received["task_2"] = msg
@@ -177,11 +176,11 @@ class TestTasksSync:
         def predicate_2() -> bool:
             return self.received.get("task_2") is not None
 
-        def callback_task_1(msg: "ProtoBunnyMessage") -> None:
+        def callback_task_1(msg: tests.tasks.TaskMessage) -> None:
             time.sleep(0.1)
             self.received["task_1"] = msg
 
-        def callback_task_2(msg: "ProtoBunnyMessage") -> None:
+        def callback_task_2(msg: tests.tasks.TaskMessage) -> None:
             time.sleep(0.1)
             self.received["task_2"] = msg
 

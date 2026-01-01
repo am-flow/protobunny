@@ -378,12 +378,12 @@ class TestIntegration:
     async def test_unsubscribe_results(self, backend) -> None:
         received_result: pb.results.Result | None = None
 
-        def callback_test(_: tests.TestMessage) -> None:
+        async def callback_test(_: tests.TestMessage) -> None:
             # The receiver catches the error in callback and will send a Result.FAILURE message
             # to the result topic
             raise RuntimeError("error in callback")
 
-        def callback_results(m: pb.results.Result) -> None:
+        async def callback_results(m: pb.results.Result) -> None:
             nonlocal received_result
             received_result = m
 

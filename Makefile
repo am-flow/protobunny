@@ -103,6 +103,7 @@ test-py313:
 copy-md:
 	cp ./README.md docs/source/intro.md
 	cp ./QUICK_START.md docs/source/quick_start.md
+	cp ./RECIPES.md docs/source/recipes.md
 
 docs: copy-md
 	uv run sphinx-build -b html docs/source docs/build/html

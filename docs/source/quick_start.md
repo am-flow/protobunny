@@ -33,7 +33,7 @@ messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib.codegen"
 mode = "async"  # or "sync"
-backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'mosquitto', 'python']
+backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'nats', 'mosquitto', 'python']
 ```
 
 ### Install the library with `uv`, `poetry` or `pip`
@@ -294,7 +294,7 @@ if conn.is_connected():
     conn.close()
 ```
 
-If you set the `generated-package-root` folder option, you might need to add the path to your `sys.path`.
+If you set the `generated-package-root` folder option, you might need to add that path to your `sys.path`.
 You can do it conveniently by calling `config_lib` on top of your module, before importing the library:
 
 ```python
@@ -429,10 +429,12 @@ class TestLibAsync:
         await pb_asyncio.subscribe(ml.tests.TestMessage, self.on_message)
         await pb_asyncio.subscribe_results(ml.tests.TestMessage, self.on_message_results)
         await pb_asyncio.subscribe(ml.main.MyMessage, self.on_message_mymessage)
-
+        
+        # Send a simple message
         await pb_asyncio.publish(ml.main.MyMessage(content="test"))
+        # Send a message with arbitrary json content
         await pb_asyncio.publish(ml.tests.TestMessage(number=1, content="test", data={"test": 123}))
-
+                # Send three messages to verify the load balancing between the workers
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test1"))
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test2"))
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test3"))
@@ -441,6 +443,7 @@ class TestLibAsync:
 
 
 class TestLib:
+    # Sync version
     def on_message(self, message: ml.tests.TestMessage) -> None:
         log.info("Got: %s", message)
         result = message.make_result()

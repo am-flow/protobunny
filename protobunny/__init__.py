@@ -53,12 +53,7 @@ from .registry import registry
 
 if tp.TYPE_CHECKING:
     from .core.results import Result
-    from .models import (
-        IncomingMessageProtocol,
-        LoggerCallback,
-        ProtoBunnyMessage,
-        SyncCallback,
-    )
+    from .models import PBM, IncomingMessageProtocol, LoggerCallback, SyncCallback
 
 __version__ = version(PACKAGE_NAME)
 
@@ -93,7 +88,7 @@ def reset_connection(**kwargs: tp.Any) -> "BaseSyncConnection":
     return conn.connect(**kwargs)
 
 
-def publish(message: "ProtoBunnyMessage") -> None:
+def publish(message: "PBM") -> None:
     """Synchronously publish a message to its corresponding queue.
 
     This method automatically determines the correct topic based on the
@@ -122,7 +117,7 @@ def publish_result(
 
 
 def subscribe(
-    pkg_or_msg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg_or_msg: "type[PBM] | ModuleType",
     callback: "SyncCallback",
 ) -> "BaseSyncQueue":
     """Subscribe a callback function to the topic.
@@ -151,7 +146,7 @@ def subscribe(
 
 
 def subscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     callback: "SyncCallback",
 ) -> "BaseSyncQueue":
     """Subscribe a callback function to the result topic.
@@ -169,7 +164,7 @@ def subscribe_results(
 
 
 def unsubscribe(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
@@ -191,7 +186,7 @@ def unsubscribe(
 
 
 def unsubscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
 ) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
     with registry.sync_lock:
@@ -223,7 +218,7 @@ def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
 
 
 def get_message_count(
-    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
     q = get_queue(msg_type)
     count = q.get_message_count()
@@ -231,7 +226,7 @@ def get_message_count(
 
 
 def get_consumer_count(
-    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
     q = get_queue(msg_type)
     count = q.get_consumer_count()

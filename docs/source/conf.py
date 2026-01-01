@@ -28,6 +28,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "myst_parser",
 ]
+myst_enable_extensions = ["colon_fence"]
 
 
 templates_path = ["_templates"]

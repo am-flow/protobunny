@@ -16,12 +16,6 @@ from .conf import config
 from .helpers import get_topic
 from .utils import ProtobunnyJsonEncoder
 
-# - types
-SyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Any]
-AsyncCallback: tp.TypeAlias = tp.Callable[["ProtoBunnyMessage"], tp.Awaitable[tp.Any]]
-ResultCallback: tp.TypeAlias = tp.Callable[["Result"], tp.Any]
-LoggerCallback: tp.TypeAlias = tp.Callable[[tp.Any, str], tp.Any]
-
 log = logging.getLogger(__name__)
 
 
@@ -54,8 +48,9 @@ class MessageMixin:
         if missing:
             raise MissingRequiredFields(self, missing)
 
-    @functools.cached_property
-    def json_content_fields(self: "ProtoBunnyMessage") -> list[str]:
+    # @functools.cached_property
+    @property
+    def json_content_fields(self: "ProtoBunnyMessage") -> tp.Iterable[str]:
         """Returns: the list of fieldnames that are of type commons.JsonContent."""
         return [
             field_name
@@ -74,12 +69,12 @@ class MessageMixin:
             betterproto.Message.dump(msg, stream)
             return stream.getvalue()
 
-    def from_dict(self: "ProtoBunnyMessage", value: dict) -> "ProtoBunnyMessage":
+    def from_dict(self: "ProtoBunnyMessage", value: dict) -> "PBM":
         json_fields = {field: value.pop(field, None) for field in self.json_content_fields}
         msg = betterproto.Message.from_dict(tp.cast(betterproto.Message, self), value)
         for field in json_fields:
             setattr(msg, field, json_fields[field])
-        return msg
+        return tp.cast(PBM, msg)
 
     def to_dict(
         self: "ProtoBunnyMessage",
@@ -109,7 +104,7 @@ class MessageMixin:
         return out_dict
 
     def to_pydict(
-        self: "ProtoBunnyMessage",
+        self: "PBM",
         casing: tp.Callable[[str, bool], str] = betterproto.Casing.CAMEL,
         include_default_values: bool = False,
     ) -> dict[str, tp.Any]:
@@ -127,9 +122,7 @@ class MessageMixin:
         out_dict = self._use_enum_names(casing, out_dict)
         return out_dict
 
-    def _use_enum_names(
-        self: "ProtoBunnyMessage", casing, out_dict: dict[str, tp.Any]
-    ) -> dict[str, tp.Any]:
+    def _use_enum_names(self: "PBM", casing, out_dict: dict[str, tp.Any]) -> dict[str, tp.Any]:
         """Used to reprocess betterproto.Message.to_pydict output to use names for Enum fields.
 
         Process only first level fields.
@@ -181,7 +174,7 @@ class MessageMixin:
         return updated_out_enums
 
     def to_json(
-        self: "ProtoBunnyMessage",
+        self: "PBM",
         indent: None | int | str = None,
         include_default_values: bool = False,
         casing: tp.Callable[[str, bool], str] = betterproto.Casing.CAMEL,
@@ -193,7 +186,7 @@ class MessageMixin:
             cls=ProtobunnyJsonEncoder,
         )
 
-    def parse(self: "ProtoBunnyMessage", data: bytes) -> "ProtoBunnyMessage":
+    def parse(self: "PBM", data: bytes) -> "PBM":
         # Override Message.parse() method
         # to support transparent deserialization of JsonContent fields
         json_content_fields = list(self.json_content_fields)
@@ -209,12 +202,12 @@ class MessageMixin:
         return msg
 
     @property
-    def type_url(self: "ProtoBunnyMessage") -> str:
+    def type_url(self: "PBM") -> str:
         """Return the class fqn for this message."""
         return f"{self.__class__.__module__}.{self.__class__.__name__}"
 
     @property
-    def source(self: "ProtoBunnyMessage") -> "ProtoBunnyMessage":
+    def source(self: "PBM") -> "PBM":
         """Return the source message from a Result
 
         The source message is stored as a protobuf.Any message, with its type info  and serialized value.
@@ -227,19 +220,19 @@ class MessageMixin:
         return source_message
 
     @functools.cached_property
-    def topic(self: "ProtoBunnyMessage") -> str:
+    def topic(self: "PBM") -> str:
         """Build the topic name for the message."""
         return get_topic(self)
 
     @functools.cached_property
-    def result_topic(self: "ProtoBunnyMessage") -> str:
+    def result_topic(self: "PBM") -> str:
         """
         Build the result topic name for the message.
         """
         return f"{get_topic(self)}{config.backend_config.topic_delimiter}result"
 
     def make_result(
-        self: "ProtoBunnyMessage",
+        self: "PBM",
         return_code: "ReturnCode | int | None" = None,
         error: str = "",
         return_value: dict[str, tp.Any] | None = None,
@@ -289,7 +282,7 @@ class ProtoBunnyMessage(MessageMixin, betterproto.Message):
 class MissingRequiredFields(Exception):
     """Exception raised by MessageMixin.validate_required_fields when required fields are missing."""
 
-    def __init__(self, msg: "ProtoBunnyMessage", missing_fields: list[str]) -> None:
+    def __init__(self, msg: "PBM", missing_fields: list[str]) -> None:
         self.missing_fields = missing_fields
         missing = ", ".join(missing_fields)
         super().__init__(f"Non optional fields for message {msg.topic} were not set: {missing}")
@@ -328,9 +321,7 @@ def _deserialize_content(msg: "JsonContent") -> dict | None:
     return json.loads(msg.content.decode()) if msg.content else None
 
 
-def _get_submodule(
-    package: ModuleType, paths: list[str]
-) -> "type[ProtoBunnyMessage] | ModuleType | None":
+def _get_submodule(package: ModuleType, paths: list[str]) -> "type[PBM] | ModuleType | None":
     """Import module/class from package
 
     Args:
@@ -585,6 +576,13 @@ def get_body(message: "IncomingMessageProtocol") -> str:
         )
     return str(body)
 
+
+# - types
+PBM = tp.TypeVar("PBM", bound=ProtoBunnyMessage)
+SyncCallback: tp.TypeAlias = tp.Callable[[PBM], tp.Any]
+AsyncCallback: tp.TypeAlias = tp.Callable[[PBM], tp.Coroutine[tp.Any, tp.Any, None] | tp.Any]
+ResultCallback: tp.TypeAlias = tp.Callable[["Result"], tp.Any]
+LoggerCallback: tp.TypeAlias = tp.Callable[[tp.Any, str], tp.Any]
 
 from .core.commons import JsonContent
 from .core.results import Result, ReturnCode

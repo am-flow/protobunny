@@ -63,12 +63,7 @@ if tp.TYPE_CHECKING:
     from types import ModuleType
 
     from ..core.results import Result
-    from ..models import (
-        AsyncCallback,
-        IncomingMessageProtocol,
-        LoggerCallback,
-        ProtoBunnyMessage,
-    )
+    from ..models import PBM, AsyncCallback, IncomingMessageProtocol, LoggerCallback
 
 
 from .. import config_lib as config_lib
@@ -108,7 +103,7 @@ async def reset_connection() -> "BaseAsyncConnection":
     return await connect()
 
 
-async def publish(message: "ProtoBunnyMessage") -> None:
+async def publish(message: "PBM") -> None:
     """Asynchronously publish a message to its corresponding queue.
 
     Args:
@@ -135,7 +130,7 @@ async def publish_result(
 
 
 async def subscribe(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
     """
@@ -171,7 +166,7 @@ async def subscribe(
 
 
 async def unsubscribe(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
@@ -193,7 +188,7 @@ async def unsubscribe(
 
 
 async def unsubscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
 ) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
     async with registry.lock:
@@ -225,7 +220,7 @@ async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None
 
 
 async def subscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
     """Subscribe a callback function to the result topic.
@@ -243,7 +238,7 @@ async def subscribe_results(
 
 
 async def get_message_count(
-    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
     q = get_queue(msg_type)
     count = await q.get_message_count()
@@ -251,7 +246,7 @@ async def get_message_count(
 
 
 async def get_consumer_count(
-    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
     q = get_queue(msg_type)
     count = await q.get_consumer_count()

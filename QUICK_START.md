@@ -179,13 +179,15 @@ def worker1(task: mml.main.tasks.TaskMessage) -> None:
 
 def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
-
-pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+import mymessagelib as mml
+pb.subscribe(mml.main.tasks.TasqkMessage, worker1)
 pb.subscribe(mml.main.tasks.TaskMessage, worker2)
 
 pb.publish(mml.main.tasks.TaskMessage(content="test1"))
 pb.publish(mml.main.tasks.TaskMessage(content="test2"))
 pb.publish(mml.main.tasks.TaskMessage(content="test3"))
+from protobunny.models import ProtoBunnyMessage
+print(isinstance(mml.main.tasks.TaskMessage(), ProtoBunnyMessage))
 ```
 
 You can also introspect/manage an underlying shared queue:
