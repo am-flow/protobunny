@@ -1,9 +1,19 @@
 [project]
 name = "protobunny"
 classifiers = [
-  "Development Status :: 3 - Alpha"
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Software Development :: Object Messaging",
+  "Topic :: System :: Distributed Computing"
 ]
-version = "0.1.2a2"
+version = "0.1.2"
 description = "A type-safe, sync/async Python messaging library."
 authors = [
   {name = "Domenico Nappo", email = "domenico.nappo@am-flow.com"},

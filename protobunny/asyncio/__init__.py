@@ -1,15 +1,8 @@
 """
-A module providing support for messaging and communication using RabbitMQ as the backend.
+A module providing async support for messaging and communication using the configured broker as the backend.
 
 This module includes functionality for publishing, subscribing, and managing message queues,
-as well as dynamically managing imports and configurations for RabbitMQ-based communication
-logics. It enables both synchronous and asynchronous operations, while also supporting
-connection resetting and management.
-
-Modules and functionality are primarily imported from the core RabbitMQ backend, dynamically
-generated package-specific configurations, and other base utilities. Exports are adjusted
-as per the backend configuration.
-
+as well as dynamically managing imports and configurations for the backend.
 """
 
 __all__ = [
@@ -82,7 +75,18 @@ log = logging.getLogger(PACKAGE_NAME)
 
 
 async def connect(**kwargs) -> "BaseAsyncConnection":
-    """Get the singleton async connection."""
+    """Establishes an asynchronous connection to the configured messaging broker.
+
+    This method initializes and returns a singleton async connection. Subsequent
+    calls return the existing connection instance unless it has been disconnected.
+
+    Args:
+        **kwargs: Backend-specific connection arguments (e.g., host, port,
+            credentials, or protocol-specific tuning parameters).
+
+    Returns:
+        BaseAsyncConnection: The active asynchronous connection singleton.
+    """
     connection_module = get_backend().connection
     conn = await connection_module.Connection.get_connection(
         vhost=connection_module.VHOST, **kwargs
@@ -91,23 +95,32 @@ async def connect(**kwargs) -> "BaseAsyncConnection":
 
 
 async def disconnect() -> None:
+    """Closes the active asynchronous connection to the broker.
+
+    Gracefully terminates heartbeats and background networking tasks. Safe to
+    call even if no connection is active.
+    """
     connection_module = get_backend().connection
     conn = await connection_module.Connection.get_connection(vhost=connection_module.VHOST)
     await conn.disconnect()
 
 
 async def reset_connection() -> "BaseAsyncConnection":
-    """Reset the singleton connection."""
+    """Resets the singleton connection and returns it."""
     connection = await connect()
     await connection.disconnect()
     return await connect()
 
 
 async def publish(message: "PBM") -> None:
-    """Asynchronously publish a message to its corresponding queue.
+    """Asynchronously publishes a Protobuf message to its corresponding topic.
+
+    The destination topic is automatically derived from the message class and
+    package structure. Messages within a '.tasks' package are automatically
+    treated as persistent tasks requiring reliable delivery and queuing logic.
 
     Args:
-        message: The Protobuf message instance to be published.
+        message: An instance of a class derived from ProtoBunnyMessage.
     """
     queue = get_queue(message)
     await queue.publish(message)
@@ -116,14 +129,13 @@ async def publish(message: "PBM") -> None:
 async def publish_result(
     result: "Result", topic: str | None = None, correlation_id: str | None = None
 ) -> None:
-    """
-    Asynchronously publish a result message to a specific result topic.
+    """Asynchronously publishes a processing result to the results topic of the source message.
 
     Args:
-        result: The Result object to publish.
-        topic: Optional override for the destination topic. Defaults to the
-            source message's result topic (e.g., "namespace.Message.result").
-        correlation_id: Optional ID to link the result to the original request.
+        result: The Result object containing the response payload and source message.
+        topic: Optional override for the result topic. Defaults to the
+            automatically generated '.result' topic associated with the source message.
+        correlation_id: Optional ID used to link this result to a specific request.
     """
     queue = get_queue(result.source)
     await queue.publish_result(result, topic, correlation_id)
@@ -133,21 +145,20 @@ async def subscribe(
     pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
-    """
-    Subscribe an asynchronous callback to a specific topic or namespace.
+    """Registers an async callback to consume messages from a specific topic or package.
 
-    If the module name contains '.tasks', it is treated as a shared task queue
-    allowing multiple subscribers. Otherwise, it is treated as a standard
-    subscription (exclusive queue).
+    If a message class is provided, subscribes to that specific topic. If a
+    module is provided, subscribes to all message types defined within that module.
+    For shared tasks (identified by the '.tasks' convention), Protobunny
+    automatically manages shared consumer groups and load balancing.
 
     Args:
-        pkg: The message class, instance, or module to subscribe to.
+        pkg: The message class (type[PBM]) or module to subscribe to.
         callback: An async callable that accepts the received message.
 
     Returns:
-        AsyncQueue: The queue object managing the subscription.
+        BaseAsyncQueue: The queue object managing the active subscription.
     """
-    # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
     registry_key = str(pkg)
     async with registry.lock:
@@ -170,7 +181,13 @@ async def unsubscribe(
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
-    """Remove a subscription for a message/package"""
+    """Asynchronously removes a subscription for a specific message or package.
+
+    Args:
+        pkg: The message class or module to unsubscribe from.
+        if_unused: If True, only unsubscribes if no other callbacks are attached.
+        if_empty: If True, only unsubscribes if the local message buffer is empty.
+    """
 
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
     registry_key = registry.get_key(pkg)
@@ -199,11 +216,14 @@ async def unsubscribe_results(
 
 
 async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
-    """
-    Asynchronously remove all active in-process subscriptions.
+    """Asynchronously stops all message consumption by canceling every subscription.
 
-    This clears standard subscriptions, result subscriptions, and task
-    subscriptions, effectively stopping all message consumption for this process.
+    Clears standard subscriptions, result listeners, and task workers. Typically
+    invoked during graceful application shutdown.
+
+    Args:
+        if_unused: Policy for evaluating unused standard queues.
+        if_empty: Policy for evaluating empty standard queues.
     """
     async with registry.lock:
         queues = itertools.chain(
@@ -223,11 +243,17 @@ async def subscribe_results(
     pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
-    """Subscribe a callback function to the result topic.
+    """Asynchronously subscribes to result topics for a message type or package.
+
+    Used by services that need to listen for completion signals or data
+    returned by workers processing specific message types.
 
     Args:
-        pkg:
-        callback:
+        pkg: The message class or module whose results should be monitored.
+        callback: The async function to execute when a result is received.
+
+    Returns:
+        BaseAsyncQueue: The queue object managing the result subscription.
     """
     queue = get_queue(pkg)
     await queue.subscribe_results(callback)
@@ -240,6 +266,15 @@ async def subscribe_results(
 async def get_message_count(
     msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
+    """Asynchronously retrieves the current number of pending messages in a queue.
+
+    Args:
+        msg_type: The message instance, class, or module representing the queue.
+
+    Returns:
+        int | None: The count of messages waiting to be processed, or None
+            if the backend does not support count retrieval for this type.
+    """
     q = get_queue(msg_type)
     count = await q.get_message_count()
     return count
@@ -248,6 +283,15 @@ async def get_message_count(
 async def get_consumer_count(
     msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
+    """Retrieves the number of active consumers currently attached to a shared (aka tasks) queue.
+
+    Args:
+        msg_type: The message instance, class representing the queue.
+
+    Returns:
+        int | None: The number of active subscribers/workers, or None if
+            unsupported by the current backend.
+    """
     q = get_queue(msg_type)
     count = await q.get_consumer_count()
     return count
@@ -266,6 +310,16 @@ def default_log_callback(message: "IncomingMessageProtocol", msg_content: str) -
 async def subscribe_logger(
     log_callback: "LoggerCallback | None" = None, prefix: str | None = None
 ) -> "LoggingAsyncQueue":
+    """Asynchronously subscribes a logging callback to monitor message traffic.
+
+    Args:
+        log_callback: A custom function to handle log messages. Defaults
+            to `default_log_callback`.
+        prefix: An optional subject/topic prefix to filter logged messages.
+
+    Returns:
+        LoggingAsyncQueue: The specialized async queue object for logging.
+    """
     resolved_callback = log_callback or default_log_callback
     queue, cb = LoggingAsyncQueue(prefix), resolved_callback
     await queue.subscribe(cb)
@@ -277,6 +331,15 @@ def is_module_tasks(module_name: str) -> bool:
 
 
 def run_forever(main: tp.Callable[..., tp.Awaitable[None]]) -> None:
+    """Starts the event loop and keeps the process alive to consume messages.
+
+    Installs signal handlers for SIGINT and SIGTERM to trigger an orderly
+    async shutdown.
+
+    Args:
+        main: The entry point async function to run before entering the
+            permanent wait state.
+    """
     asyncio.run(_run_forever(main))
 
 

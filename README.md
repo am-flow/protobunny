@@ -1,7 +1,9 @@
 # Protobunny
 
 > [!WARNING]
-> The project is in early development.
+> The project is in early development. 
+> The core functionality for the available backends is implemented and tested, 
+> but the public API may undergo breaking changes before the 1.0 release.
 
 
 Protobunny is the open-source evolution of [AM-Flow](https://am-flow.com)'s internal messaging library. 
@@ -95,6 +97,7 @@ Documentation home page: [https://am-flow.github.io/protobunny/](https://am-flow
 - [x] **Result workflow**: Subscribe to results topics and receive protobunny `Result` messages produced by your callbacks.
 - [x] **Cloud-Native**: NATS (Core & JetStream) integration.
 - [ ] **Cloud Providers**: AWS (SQS/SNS) and GCP Pub/Sub.
+- [ ] **OpenTelemetry** Integration (Planned)
 - [ ] **More backends**: Kafka support.
 - [ ] **gRPC** Direct Call support
 
