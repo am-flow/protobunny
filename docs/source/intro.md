@@ -82,7 +82,7 @@ While there are many messaging libraries for Python, Protobunny is built specifi
 
 ## Usage
 
-See the [Quick example on GitHub](https://github.com/am-flow/protobunny/blob/main/QUICK_START.md) or on the [docs site](https://am-flow.github.io/protobunny/quickstart.html).
+See the [Quick example on GitHub](https://github.com/am-flow/protobunny/blob/main/QUICK_START.md) or on the [docs site](https://am-flow.github.io/protobunny/quick_start.html).
 
 Documentation home page: [https://am-flow.github.io/protobunny/](https://am-flow.github.io/protobunny/).
 
