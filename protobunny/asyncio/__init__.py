@@ -1,6 +1,3 @@
-import asyncio
-import signal
-
 """
 A module providing support for messaging and communication using RabbitMQ as the backend.
 
@@ -14,6 +11,7 @@ generated package-specific configurations, and other base utilities. Exports are
 as per the backend configuration.
 
 """
+
 __all__ = [
     "get_message_count",
     "get_queue",
@@ -29,75 +27,83 @@ __all__ = [
     "GENERATED_PACKAGE_NAME",
     "PACKAGE_NAME",
     "ROOT_GENERATED_PACKAGE_NAME",
-    "default_configuration",
+    "config",
     "RequeueMessage",
     "ConnectionError",
     "reset_connection",
     "connect",
     "disconnect",
     "run_forever",
+    "config_lib",
     # from .core
     "commons",
     "results",
 ]
 
+import asyncio
 import inspect
 import itertools
 import logging
+import signal
 import textwrap
 import typing as tp
 from importlib.metadata import version
 
 #######################################################
-from ..config import (  # noqa
+from ..conf import (  # noqa
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     ROOT_GENERATED_PACKAGE_NAME,
-    default_configuration,
+    config,
 )
 from ..exceptions import ConnectionError, RequeueMessage
-from ..registry import default_registry
+from ..registry import registry
 
 if tp.TYPE_CHECKING:
     from types import ModuleType
 
     from ..core.results import Result
-    from ..models import (
-        AsyncCallback,
-        IncomingMessageProtocol,
-        LoggerCallback,
-        ProtoBunnyMessage,
-    )
+    from ..models import PBM, AsyncCallback, IncomingMessageProtocol, LoggerCallback
 
 
+from .. import config_lib as config_lib
 from ..helpers import get_backend, get_queue
-from .backends import BaseAsyncQueue, LoggingAsyncQueue
+from .backends import BaseAsyncConnection, BaseAsyncQueue, LoggingAsyncQueue
 
 __version__ = version(PACKAGE_NAME)
+
+
+log = logging.getLogger(PACKAGE_NAME)
+
 
 ############################
 # -- Async top-level methods
 ############################
 
-log = logging.getLogger(PACKAGE_NAME)
+
+async def connect(**kwargs) -> "BaseAsyncConnection":
+    """Get the singleton async connection."""
+    connection_module = get_backend().connection
+    conn = await connection_module.Connection.get_connection(
+        vhost=connection_module.VHOST, **kwargs
+    )
+    return conn
 
 
-async def reset_connection():
-    backend = get_backend()
-    return await backend.connection.reset_connection()
+async def disconnect() -> None:
+    connection_module = get_backend().connection
+    conn = await connection_module.Connection.get_connection(vhost=connection_module.VHOST)
+    await conn.disconnect()
 
 
-async def connect():
-    backend = get_backend()
-    return await backend.connection.connect()
+async def reset_connection() -> "BaseAsyncConnection":
+    """Reset the singleton connection."""
+    connection = await connect()
+    await connection.disconnect()
+    return await connect()
 
 
-async def disconnect():
-    backend = get_backend()
-    return await backend.connection.disconnect()
-
-
-async def publish(message: "ProtoBunnyMessage") -> None:
+async def publish(message: "PBM") -> None:
     """Asynchronously publish a message to its corresponding queue.
 
     Args:
@@ -124,7 +130,7 @@ async def publish_result(
 
 
 async def subscribe(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
     """
@@ -144,53 +150,52 @@ async def subscribe(
     # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
     registry_key = str(pkg)
-    async with default_registry.lock:
+    async with registry.lock:
         if is_module_tasks(module_name):
             # It's a task. Handle multiple in-process subscriptions
             queue = get_queue(pkg)
             await queue.subscribe(callback)
-            default_registry.register_task(registry_key, queue)
+            registry.register_task(registry_key, queue)
         else:
-            # exclusive queue
-            queue = default_registry.get_subscription(registry_key) or get_queue(pkg)
-            # queue already exists, but not subscribed yet (otherwise raise ValueError)
-            await queue.subscribe(callback)
-            default_registry.register_subscription(registry_key, queue)
+            # exclusive queue, cannot register more than one callback
+            queue = registry.get_subscription(registry_key) or get_queue(pkg)
+            if not queue.subscription:
+                await queue.subscribe(callback)
+                registry.register_subscription(registry_key, queue)
         return queue
 
 
 async def unsubscribe(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     if_unused: bool = True,
     if_empty: bool = True,
 ) -> None:
     """Remove a subscription for a message/package"""
 
-    # obj = type(pkg) if isinstance(pkg, betterproto.Message) else pkg
     module_name = pkg.__name__ if inspect.ismodule(pkg) else pkg.__module__
-    registry_key = default_registry.get_key(pkg)
-    async with default_registry.lock:
+    registry_key = registry.get_key(pkg)
+    async with registry.lock:
         if is_module_tasks(module_name):
-            queues = default_registry.get_tasks(registry_key)
+            queues = registry.get_tasks(registry_key)
             for q in queues:
                 await q.unsubscribe(if_unused=if_unused)
-            default_registry.unregister_tasks(registry_key)
+            registry.unregister_tasks(registry_key)
         else:
-            queue = default_registry.get_subscription(registry_key)
+            queue = registry.get_subscription(registry_key)
             if queue:
                 await queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
-            default_registry.unregister_subscription(registry_key)
+            registry.unregister_subscription(registry_key)
 
 
 async def unsubscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
 ) -> None:
     """Remove all in-process subscriptions for a message/package result topic"""
-    async with default_registry.lock:
-        queue = default_registry.get_results(pkg)
+    async with registry.lock:
+        queue = registry.get_results(pkg)
         if queue:
             await queue.unsubscribe_results()
-        default_registry.unregister_results(pkg)
+        registry.unregister_results(pkg)
 
 
 async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None:
@@ -200,23 +205,22 @@ async def unsubscribe_all(if_unused: bool = True, if_empty: bool = True) -> None
     This clears standard subscriptions, result subscriptions, and task
     subscriptions, effectively stopping all message consumption for this process.
     """
-    async with default_registry.lock:
+    async with registry.lock:
         queues = itertools.chain(
-            default_registry.get_all_subscriptions(),
-            default_registry.get_all_tasks(flat=True),
+            registry.get_all_subscriptions(), registry.get_all_tasks(flat=True)
         )
         for queue in queues:
-            await queue.unsubscribe(if_unused=False, if_empty=False)
-        default_registry.unregister_all_subscriptions()
-        default_registry.unregister_all_tasks()
-        queues = default_registry.get_all_results()
+            await queue.unsubscribe(if_unused=if_unused, if_empty=if_empty)
+        registry.unregister_all_subscriptions()
+        registry.unregister_all_tasks()
+        queues = registry.get_all_results()
         for queue in queues:
             await queue.unsubscribe_results()
-        default_registry.unregister_all_results()
+        registry.unregister_all_results()
 
 
 async def subscribe_results(
-    pkg: "type[ProtoBunnyMessage] | ModuleType",
+    pkg: "type[PBM] | ModuleType",
     callback: "AsyncCallback",
 ) -> "BaseAsyncQueue":
     """Subscribe a callback function to the result topic.
@@ -228,16 +232,24 @@ async def subscribe_results(
     queue = get_queue(pkg)
     await queue.subscribe_results(callback)
     # register subscription to unsubscribe later
-    async with default_registry.lock:
-        default_registry.register_results(pkg, queue)
+    async with registry.lock:
+        registry.register_results(pkg, queue)
     return queue
 
 
 async def get_message_count(
-    msg_type: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleType",
+    msg_type: "PBM | type[PBM] | ModuleType",
 ) -> int | None:
     q = get_queue(msg_type)
     count = await q.get_message_count()
+    return count
+
+
+async def get_consumer_count(
+    msg_type: "PBM | type[PBM] | ModuleType",
+) -> int | None:
+    q = get_queue(msg_type)
+    count = await q.get_consumer_count()
     return count
 
 
@@ -279,15 +291,15 @@ async def _run_forever(main: tp.Callable[..., tp.Awaitable[None]]) -> None:
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        # Note: add_signal_handler requires a callback, so we use a lambda
+
         def _handler(s: int) -> asyncio.Task[None]:
             return asyncio.create_task(shutdown(s))
 
         loop.add_signal_handler(sig, _handler, sig)
 
-    log.info("Started. Press Ctrl+C to exit.")
-    # Wait here forever (non-blocking) until shutdown() is called
+    log.info("Protobunny started")
     await main()
+    # Wait here forever (non-blocking) until shutdown() is called
     await stop_event.wait()
 
 
@@ -297,3 +309,5 @@ from ..core import (  # noqa
     commons,
     results,
 )
+
+#######################################################

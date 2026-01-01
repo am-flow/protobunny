@@ -21,7 +21,7 @@ You can also add it manually to pyproject.toml dependencies:
 
 ```toml
 dependencies = [
-  "protobunny[rabbitmq, numpy]>=0.1.0",
+  "protobunny[rabbitmq, numpy]>=0.1.2a2",
   # your other dependencies ...
 ]
 ```
@@ -179,12 +179,15 @@ def worker1(task: mml.main.tasks.TaskMessage) -> None:
 
 def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
-
-pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+import mymessagelib as mml
+pb.subscribe(mml.main.tasks.TasqkMessage, worker1)
 pb.subscribe(mml.main.tasks.TaskMessage, worker2)
+
 pb.publish(mml.main.tasks.TaskMessage(content="test1"))
 pb.publish(mml.main.tasks.TaskMessage(content="test2"))
 pb.publish(mml.main.tasks.TaskMessage(content="test3"))
+from protobunny.models import ProtoBunnyMessage
+print(isinstance(mml.main.tasks.TaskMessage(), ProtoBunnyMessage))
 ```
 
 You can also introspect/manage an underlying shared queue:
@@ -293,10 +296,14 @@ if conn.is_connected():
     conn.close()
 ```
 
-If you set the `generated-package-root` folder option, you might need to add the path to your `sys.path`.
+If you set the `generated-package-root` folder option, you might need to add that path to your `sys.path`.
 You can do it conveniently by calling `config_lib` on top of your module, before importing the library:
+
 ```python
-pb.config_lib() 
+import protobunny as pb
+pb.config_lib()
+# now you can import the library from the generated package root
+import mymessagelib as mml
 ```
 
 ## Complete example
@@ -310,7 +317,7 @@ version = "0.1.0"
 description = "Project to test protobunny"
 requires-python = ">=3.10"
 dependencies = [
-    "protobunny[rabbitmq,redis,numpy,mosquitto] >=0.1.2a1",
+    "protobunny[rabbitmq,redis,numpy,mosquitto]>=0.1.2a1",
 ]
 
 [tool.protobunny]
@@ -374,7 +381,6 @@ import asyncio
 import logging
 import sys
 
-
 import protobunny as pb
 from protobunny import asyncio as pb_asyncio
 
@@ -386,12 +392,11 @@ pb.config_lib()
 
 import mymessagelib as ml
 
-
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s %(levelname)s] %(name)s - %(message)s"
 )
 log = logging.getLogger(__name__)
-conf = pb.default_configuration
+conf = pb.config
 
 
 class TestLibAsync:
@@ -413,7 +418,6 @@ class TestLibAsync:
     async def on_message_mymessage(self, message: ml.main.MyMessage) -> None:
         log.info("Got main message: %s", message)
 
-
     def run_forever(self):
         asyncio.run(self.main())
 
@@ -421,7 +425,6 @@ class TestLibAsync:
         log.info(f"LOG {incoming.routing_key}: {body}")
 
     async def main(self):
-
         await pb_asyncio.subscribe_logger(self.log_callback)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker1)
         await pb_asyncio.subscribe(ml.main.tasks.TaskMessage, self.worker2)

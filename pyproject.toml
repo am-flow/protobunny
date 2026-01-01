@@ -3,24 +3,23 @@ name = "protobunny"
 classifiers = [
   "Development Status :: 3 - Alpha"
 ]
-version = "0.1.2a1"
-description = "A type-safe, sync/async Python messaging framework."
+version = "0.1.2a2"
+description = "A type-safe, sync/async Python messaging library."
 authors = [
   {name = "Domenico Nappo", email = "domenico.nappo@am-flow.com"},
   {name = "Sander Koelstra", email = "sander.koelstra@am-flow.com.com"},
   {name = "Sem Mulder", email = "sem.mulder@am-flow.com"}
 ]
 keywords = [
+  "messaging",
   "protobuf",
   "queues",
   "mqtt",
-  "messaging",
+  "amqp",
   "rabbitmq",
   "redis",
-  "amqp",
-  "aio-pika",
-  "betterproto",
-  "mosquitto"
+  "mosquitto",
+  "nats"
 ]
 requires-python = ">=3.10,<3.14"
 readme = "README.md"
@@ -29,7 +28,6 @@ dependencies = [
   "can-ada>=2.0.0",
   "click>=8.2.1",
   "grpcio-tools>=1.62.0,<2",
-  "pytest-env>=1.1.3",
   "tomli ; python_version < '3.11'",
   "typing-extensions; python_version < '3.11'"
 ]
@@ -38,9 +36,8 @@ dependencies = [
 rabbitmq = ["aio-pika>=7.1.0"]
 redis = ["redis<8"]
 numpy = ["numpy>=1.26"]
-mosquitto = [
-  "aiomqtt>=2.4.0"
-]
+mosquitto = ["aiomqtt>=2.4.0"]
+nats = ["nats-py>=2.12.0"]
 
 [project.scripts]
 protobunny = "protobunny.wrapper:main"
@@ -60,6 +57,7 @@ dev = [
   "waiting>=1.5.0,<2",
   "ipython>=8.11.0,<9",
   "pytest>=7.2.2,<8",
+  "pytest-env>=1.1.3",
   "pytest-cov>=4.0.0,<5",
   "pytest-mock>=3.14.0,<4",
   "pytest-asyncio>=0.23.7,<0.24",
@@ -97,6 +95,7 @@ force-required-fields = true
 backend = "redis"
 mode = "async"
 log-task-in-redis = true
+log-task-in-nats = true
 
 [tool.pytest.ini_options]
 addopts = "--junitxml=pytest_report.xml --cov=. --cov-report=term --cov-report=xml --cov-report html --no-success-flaky-report"
@@ -136,4 +135,4 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.setuptools]
-package-data = {"protobunny" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2", "scripts/*.py"]}
+package-data = {"protobunny" = ["protobunny/protobuf/*.proto", "protobunny/__init__.py.j2", "protobunny/asyncio/__init__.py.j2", "scripts/*.py"]}

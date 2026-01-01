@@ -6,7 +6,7 @@ from types import ModuleType
 
 import betterproto
 
-from .config import default_configuration
+from .conf import config
 
 if typing.TYPE_CHECKING:
     from .asyncio.backends import BaseAsyncQueue
@@ -25,8 +25,8 @@ def get_topic(pkg_or_msg: "ProtoBunnyMessage | type[ProtoBunnyMessage] | ModuleT
 
     Returns: topic string
     """
-    delimiter = default_configuration.backend_config.topic_delimiter
-    return f"{default_configuration.messages_prefix}{delimiter}{build_routing_key(pkg_or_msg)}"
+    delimiter = config.backend_config.topic_delimiter
+    return f"{config.messages_prefix}{delimiter}{build_routing_key(pkg_or_msg)}"
 
 
 def get_backend(backend: str | None = None) -> ModuleType:
@@ -44,8 +44,8 @@ def get_backend(backend: str | None = None) -> ModuleType:
     Returns:
         The imported backend module.
     """
-    backend = backend or default_configuration.backend
-    module = ".asyncio" if default_configuration.use_async else ""
+    backend = backend or config.backend
+    module = ".asyncio" if config.use_async else ""
     module_name = f"protobunny{module}.backends.{backend}"
     if module_name in sys.modules:
         return sys.modules[module_name]
@@ -53,8 +53,8 @@ def get_backend(backend: str | None = None) -> ModuleType:
         module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
         suggestion = ""
-        if backend not in default_configuration.available_backends:
-            suggestion = f" Invalid backend or backend not supported.\nAvailable backends: {default_configuration.available_backends}"
+        if backend not in config.available_backends:
+            suggestion = f" Invalid backend or backend not supported.\nAvailable backends: {config.available_backends}"
         else:
             suggestion = (
                 f" Install the backend with pip install protobunny[{backend}]."
@@ -82,18 +82,17 @@ def get_queue(
     Returns:
         Async/SyncQueue: A queue instance configured for the relevant topic.
     """
-    backend_name = backend_name or default_configuration.backend
-    queue_type = "AsyncQueue" if default_configuration.use_async else "SyncQueue"
+    backend_name = backend_name or config.backend
+    queue_type = "AsyncQueue" if config.use_async else "SyncQueue"
     return getattr(get_backend(backend=backend_name).queues, queue_type)(get_topic(pkg_or_msg))
 
 
 @functools.lru_cache(maxsize=100)
 def _build_routing_key(module: str, cls_name: str) -> str:
     # Build the routing key from the module and class name
-    backend = default_configuration.backend_config
+    backend = config.backend_config
     delimiter = backend.topic_delimiter
     routing_key = f"{module}.{cls_name}"
-    config = default_configuration
     if not routing_key.startswith(config.generated_package_name):
         raise ValueError(
             f"Invalid topic {routing_key}, must start with {config.generated_package_name}."
@@ -113,7 +112,7 @@ def build_routing_key(
     """Returns a routing key based on a message instance, a message class, or a module.
     The string will be later composed with the configured message-prefix to build the exact topic name.
 
-    This is the main logic that builds keys strings for topics/streaming, adding wildcards when needed
+    This is the main logic that builds keys strings for topics/streaming, adding wildcards when needed.
 
     Examples:
         build_routing_key(mymessaginglib.vision.control) -> "vision.control.#" routing with binding key
@@ -126,7 +125,7 @@ def build_routing_key(
     Returns: a routing key based on the type of message or package
 
     """
-    backend = default_configuration.backend_config
+    backend = config.backend_config
     wildcard = backend.multi_wildcard_delimiter
     module_name = ""
     class_name = ""

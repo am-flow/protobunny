@@ -12,10 +12,10 @@ from . import tests
 @pytest.fixture(autouse=True)
 def setup_config(mocker, test_config) -> None:
     test_config.mode = "sync"
-    mocker.patch.object(pb.config, "default_configuration", test_config)
-    mocker.patch.object(pb.models, "default_configuration", test_config)
-    mocker.patch.object(pb.backends, "default_configuration", test_config)
-    mocker.patch.object(pb.helpers, "default_configuration", test_config)
+    mocker.patch.object(pb.conf, "config", test_config)
+    mocker.patch.object(pb.models, "config", test_config)
+    mocker.patch.object(pb.backends, "config", test_config)
+    mocker.patch.object(pb.helpers, "config", test_config)
 
 
 def test_sync_send_message(mock_sync_rmq_connection: MagicMock) -> None:

@@ -24,7 +24,7 @@ MESSAGES_DIRECTORY = "protobuf/protobunny"
 ENV_PREFIX = "PROTOBUNNY_"
 INI_FILE = "protobunny.ini"
 
-AvailableBackends = tp.Literal["rabbitmq", "python", "redis", "mosquitto"]
+AvailableBackends = tp.Literal["rabbitmq", "python", "redis", "mosquitto", "nats"]
 
 log = logging.getLogger(__name__)
 
@@ -45,12 +45,16 @@ redis_backend_config = BackEndConfig(
 mosquitto_backend_config = BackEndConfig(
     topic_delimiter="/", multi_wildcard_delimiter="#", namespace="protobunny"
 )
+nats_backend_config = BackEndConfig(
+    topic_delimiter=".", multi_wildcard_delimiter=">", namespace="protobunny"
+)
 
 backend_configs = {
     "rabbitmq": rabbitmq_backend_config,
     "python": python_backend_config,
     "redis": redis_backend_config,
     "mosquitto": mosquitto_backend_config,
+    "nats": nats_backend_config,
 }
 
 
@@ -67,7 +71,10 @@ class Config:
     backend: "AvailableBackends" = "rabbitmq"
     backend_config: BackEndConfig = rabbitmq_backend_config
     log_task_in_redis: bool = False
-    available_backends = ("rabbitmq", "python", "redis", "mosquitto")
+    use_tasks_in_nats: bool = True  # needed to create the namespaced group stream on connect
+    log_task_in_nats: bool = False
+
+    available_backends = ("rabbitmq", "python", "redis", "mosquitto", "nats")
 
     def __post_init__(self) -> None:
         if self.mode not in ("sync", "async"):
@@ -192,4 +199,4 @@ def get_project_version() -> str:
 
 
 VERSION = get_project_version()
-default_configuration = load_config()
+config = load_config()

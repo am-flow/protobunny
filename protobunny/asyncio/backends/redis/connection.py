@@ -9,10 +9,11 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+import can_ada
 import redis.asyncio as redis
 from redis import RedisError, ResponseError
 
-from ....config import default_configuration
+from ....conf import config
 from ....exceptions import ConnectionError, PublishError, RequeueMessage
 from ....models import Envelope, IncomingMessageProtocol
 from .. import BaseAsyncConnection, is_task
@@ -20,24 +21,6 @@ from .. import BaseAsyncConnection, is_task
 log = logging.getLogger(__name__)
 
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
-
-
-async def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = await Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-async def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
 
 
 class Connection(BaseAsyncConnection):
@@ -58,7 +41,7 @@ class Connection(BaseAsyncConnection):
         worker_threads: int = 2,
         prefetch_count: int = 1,
         requeue_delay: int = 3,
-        heartbeat: int = 1200,
+        **kwargs,
     ):
         """Initialize Redis connection.
 
@@ -68,7 +51,7 @@ class Connection(BaseAsyncConnection):
             host: Redis host
             port: Redis port
             url: Redis URL. It will override username, password, host and port
-            vhost: Redis virtual host (it's used as db number string)
+            vhost: Redis virtual host (it's used as db number string if db not present)
             db: Redis database number
             worker_threads: number of concurrent callback workers to use
             prefetch_count: how many messages to prefetch from the queue
@@ -98,24 +81,28 @@ class Connection(BaseAsyncConnection):
                 url = f"redis://{username}:{password}@{host}:{port}/{vhost}?protocol=3"
             elif password:
                 url = f"redis://:{password}@{host}:{port}/{vhost}?protocol=3"
+            elif username:
+                url = f"redis://{username}@{host}:{port}/{vhost}?protocol=3"
             else:
                 url = f"redis://{host}:{port}/{vhost}?protocol=3"
+        else:
+            parsed = can_ada.parse(url)
+            url = f"redis://{parsed.username}:{parsed.password}@{parsed.host}{parsed.pathname}{parsed.search}"
 
         self._url = url
         self._connection: redis.Redis | None = None
         self.prefetch_count = prefetch_count
         self.requeue_delay = requeue_delay
-        self.heartbeat = heartbeat
         self.queues: dict[str, dict] = {}
         self.consumers: dict[str, dict[str, tp.Any]] = {}
         self.executor = ThreadPoolExecutor(max_workers=worker_threads)
         self._instance_lock: asyncio.Lock | None = None
 
-        self._delimiter = default_configuration.backend_config.topic_delimiter
-        self._exchange = default_configuration.backend_config.namespace
+        self._delimiter = config.backend_config.topic_delimiter
+        self._exchange = config.backend_config.namespace
 
-    async def __aenter__(self) -> "Connection":
-        await self.connect()
+    async def __aenter__(self, **kwargs) -> "Connection":
+        await self.connect(**kwargs)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -139,6 +126,68 @@ class Connection(BaseAsyncConnection):
     def build_topic_key(self, topic: str) -> str:
         return f"{self._exchange}:{topic}"
 
+    @property
+    def is_connected_event(self) -> asyncio.Event:
+        """Lazily create the event in the current running loop."""
+        if self._is_connected_event is None:
+            self._is_connected_event = asyncio.Event()
+        return self._is_connected_event
+
+    @property
+    def connection(self) -> "redis.Redis":
+        """Get the connection object.
+
+        Raises:
+            ConnectionError: If not connected
+        """
+        if not self._connection:
+            raise ConnectionError("Connection not initialized. Call connect() first.")
+        return self._connection
+
+    async def connect(self, **kwargs) -> "Connection":
+        """Establish Redis connection.
+
+        Args:
+
+        Raises:
+            ConnectionError: If connection fails
+            asyncio.TimeoutError: If connection times out
+        """
+        async with self.lock:
+            if self.instance_by_vhost.get(self.vhost) and self.is_connected():
+                return self.instance_by_vhost[self.vhost]
+            try:
+                # Parsing URL for logging (removing credentials)
+                log.info("Establishing Redis connection to %s", self._url.split("@")[-1])
+                # protobunny sends raw bytes with protobuf serialized payloads
+                kwargs.pop("decode_responses", None)
+                # Using from_url handles connection pooling automatically
+                self._connection = redis.from_url(
+                    self._url,
+                    decode_responses=False,
+                    **kwargs,
+                )
+
+                await asyncio.wait_for(self._connection.ping(), timeout=30)
+                self.is_connected_event.set()
+                log.info("Successfully connected to Redis")
+                self.instance_by_vhost[self.vhost] = self
+                return self
+
+            except asyncio.TimeoutError:
+                log.error("Redis connection timeout after %.1f seconds", 30)
+                self.is_connected_event.clear()
+                self._connection = None
+                raise
+            except Exception as e:
+                if self._connection:
+                    await self._connection.aclose()
+
+                self.is_connected_event.clear()
+                self._connection = None
+                log.exception("Failed to establish Redis connection")
+                raise ConnectionError(f"Failed to connect to Redis: {e}") from e
+
     async def disconnect(self, timeout: float = 10.0) -> None:
         """Close Redis connection and cleanup resources.
 
@@ -152,7 +201,6 @@ class Connection(BaseAsyncConnection):
 
             try:
                 log.info("Closing Redis connection")
-
                 # In Redis, consumers are local asyncio Tasks.
                 # We cancel them here. Note: Redis doesn't have "exclusive queues"
                 # that auto-delete, so we just clear our local registry.
@@ -181,77 +229,12 @@ class Connection(BaseAsyncConnection):
             finally:
                 # Reset state
                 self._connection = None
-                self._exchange = None  # (Stream name/prefix)
                 self.queues.clear()  # (Local queue metadata)
                 self.consumers.clear()
                 self.is_connected_event.clear()
-
-                # 5. Remove from registry
+                # Remove from registry
                 Connection.instance_by_vhost.pop(self.vhost, None)
                 log.info("Redis connection closed")
-
-    @property
-    def is_connected_event(self) -> asyncio.Event:
-        """Lazily create the event in the current running loop."""
-        if self._is_connected_event is None:
-            self._is_connected_event = asyncio.Event()
-        return self._is_connected_event
-
-    @property
-    def connection(self) -> "redis.Redis":
-        """Get the connection object.
-
-        Raises:
-            ConnectionError: If not connected
-        """
-        if not self._connection:
-            raise ConnectionError("Connection not initialized. Call connect() first.")
-        return self._connection
-
-    async def connect(self, timeout: float = 30.0) -> "Connection":
-        """Establish Redis connection.
-
-        Args:
-            timeout: Maximum time to wait for connection establishment (seconds)
-
-        Raises:
-            ConnectionError: If connection fails
-            asyncio.TimeoutError: If connection times out
-        """
-        async with self.lock:
-            if self.instance_by_vhost.get(self.vhost) and self.is_connected():
-                return self.instance_by_vhost[self.vhost]
-            try:
-                # Parsing URL for logging (removing credentials)
-                log.info("Establishing Redis connection to %s", self._url.split("@")[-1])
-
-                # Using from_url handles connection pooling automatically
-                self._connection = redis.from_url(
-                    self._url,
-                    decode_responses=False,
-                    socket_connect_timeout=timeout,
-                    health_check_interval=self.heartbeat,
-                )
-
-                await asyncio.wait_for(self._connection.ping(), timeout=timeout)
-                self.is_connected_event.set()
-                log.info("Successfully connected to Redis")
-                self.instance_by_vhost[self.vhost] = self
-                return self
-
-            except asyncio.TimeoutError:
-                log.error("Redis connection timeout after %.1f seconds", timeout)
-                self.is_connected_event.clear()
-                self._connection = None
-                raise
-            except Exception as e:
-                if self._connection:
-                    await self._connection.aclose()
-
-                self.is_connected_event.clear()
-                self._connection = None
-                log.exception("Failed to establish Redis connection")
-                raise ConnectionError(f"Failed to connect to Redis: {e}") from e
 
     async def subscribe(self, topic: str, callback: tp.Callable, shared: bool = False) -> str:
         """Subscribe to Redis.
@@ -507,11 +490,11 @@ class Connection(BaseAsyncConnection):
                 "topic": topic,  # add the topic here to implement topic exchange patterns
             }
             await self._connection.xadd(name=topic_key, fields=payload, maxlen=1000)
-            if default_configuration.log_task_in_redis:
+            if config.log_task_in_redis:
                 # Tasks messages go to streams but the logger do a simple pubsub psubscription to <prefix>.*
                 # Send the message to the same topic with redis.publish so it appears there
                 # Note: this should be used carefully (e.g. only for debugging)
-                # as it doubles the network calls for publishing tasks
+                # as it doubles the network calls when publishing tasks
                 log.debug("Publishing message to topic: %s for logger", topic_key)
                 await self._connection.publish(topic_key, message.body)
         else:
@@ -523,7 +506,7 @@ class Connection(BaseAsyncConnection):
     async def _on_message_task(
         self, stream_key: str, group_name: str, msg_id: str, payload: dict, callback: tp.Callable
     ):
-        """Wraps the user callback to simulate RabbitMQ behavior."""
+        """Wraps the user callback."""
         # Response is not decoded because we use bytes. But the keys will be bytes as well
         normalized_payload = {
             k.decode() if isinstance(k, bytes) else k: v for k, v in payload.items()
@@ -556,12 +539,12 @@ class Connection(BaseAsyncConnection):
             await asyncio.sleep(self.requeue_delay)
             await self._connection.xadd(name=stream_key, fields=payload)
             await self._connection.xack(stream_key, group_name, msg_id)
-        except Exception as e:
+        except Exception:
             log.exception("Callback failed for message %s", msg_id)
-            raise PublishError(f"Failed to publish message to topic {topic}: {e}") from e
             # Avoid poisoning messages
             # Note: In Redis, if you don't XACK, the message stays in the
             # Pending Entry List (PEL) for retry logic.
+            await self._connection.xack(stream_key, group_name, msg_id)
 
     async def unsubscribe(self, tag: str, if_unused: bool = True, if_empty: bool = True) -> None:
         task_to_cancel = None

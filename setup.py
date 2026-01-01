@@ -13,7 +13,7 @@ from setuptools.command.install import install
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "protobunny")))
 import typing as tp
 
-from config import (
+from conf import (
     GENERATED_PACKAGE_NAME,
     PACKAGE_NAME,
     PROJECT_NAME,
@@ -97,7 +97,7 @@ setup(
     cmdclass={
         "install": GenerateProtoCommand,
     },
-    python_requires=">=3.10,<3.13",
+    python_requires=">=3.10,<3.14",
     description="Protobuf messages and python mqtt messaging toolkit",
     entry_points={
         "console_scripts": [

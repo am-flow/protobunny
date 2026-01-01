@@ -3,10 +3,12 @@ import logging
 import aio_pika
 from aio_pika import DeliveryMode
 
+from protobunny import asyncio as pb
 from protobunny.asyncio.backends import (
     BaseAsyncQueue,
 )
-from protobunny.asyncio.backends.rabbitmq.connection import connect
+
+# from protobunny.asyncio.backends.rabbitmq.connection import connect
 
 log = logging.getLogger(__name__)
 
@@ -35,5 +37,5 @@ class AsyncQueue(BaseAsyncQueue):
             correlation_id=correlation_id,
             delivery_mode=DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT,
         )
-        conn = await connect()
+        conn = await pb.connect()
         await conn.publish(topic, message)

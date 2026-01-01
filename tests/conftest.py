@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aio_pika
 import aiormq
 import fakeredis
+import nats
 import pamqp
 import pytest
 import pytest_asyncio
@@ -21,8 +22,8 @@ from protobunny.backends.redis import connection as redis_connection
 
 
 @pytest_asyncio.fixture
-def test_config() -> protobunny.config.Config:
-    conf = protobunny.config.Config(
+def test_config() -> protobunny.conf.Config:
+    conf = protobunny.conf.Config(
         messages_directory="tests/proto",
         messages_prefix="acme",
         generated_package_name="tests",
@@ -31,7 +32,9 @@ def test_config() -> protobunny.config.Config:
         force_required_fields=True,
         mode="async",
         backend="rabbitmq",
-        log_task_in_redis=False,
+        log_task_in_redis=True,
+        use_tasks_in_nats=True,
+        log_task_in_nats=True,
     )
     return conf
 
@@ -45,6 +48,22 @@ class MockMQTTConnection:
         self.subscribe = AsyncMock()
         self.unsubscribe = AsyncMock()
         self.publish = AsyncMock()
+        self._is_connected = False
+
+    def is_connected(self) -> bool:
+        return self._is_connected
+
+    def connect(self, host, port, keepalive):
+        self._is_connected = True
+
+    def disconnect(self):
+        self._is_connected = False
+
+    def loop_start(self):
+        return True
+
+    def loop_stop(self):
+        return True
 
     async def __aenter__(self):
         return self
@@ -72,6 +91,18 @@ async def mock_mosquitto(mocker) -> tp.AsyncGenerator[MockMQTTConnection, None]:
 
 
 @pytest.fixture
+async def mock_sync_mosquitto(mocker) -> tp.AsyncGenerator[MockMQTTConnection, None]:
+    mock_client = MockMQTTConnection()
+    mocker.spy(mock_client, "publish")
+    mocker.spy(mock_client, "subscribe")
+    mocker.spy(mock_client, "unsubscribe")
+
+    with patch("paho.mqtt.client.Client") as mock_client_class:
+        mock_client_class.return_value = mock_client
+        yield mock_client
+
+
+@pytest.fixture
 async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedis, None]:
     server = fakeredis.FakeServer()
     client = fakeredis.FakeAsyncRedis(decode_responses=False)
@@ -83,6 +114,21 @@ async def mock_redis_client(mocker) -> tp.AsyncGenerator[fakeredis.FakeAsyncRedi
     # Explicitly clear internal fakeredis blocking listeners
     server.connected = False
     await client.aclose()
+
+
+@pytest.fixture
+async def mock_nats(mocker):
+    mock_nc = AsyncMock(spec=nats.aio.client.Client)
+    mock_js = AsyncMock()
+    mock_nc.jetstream.return_value = mock_js
+    mock_jsm = AsyncMock()
+    mock_nc.jsm.return_value = mock_jsm
+    mocker.patch("nats.connect", return_value=mock_nc)
+    yield {
+        "client": mock_nc,
+        "js": mock_js,
+        "jsm": mock_jsm,
+    }
 
 
 @pytest.fixture
@@ -120,7 +166,7 @@ async def mock_aio_pika():
 def mock_sync_rmq_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=rabbitmq_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.connect", return_value=mock)
+    mocker.patch("protobunny.connect", return_value=mock)
     yield mock
 
 
@@ -135,7 +181,7 @@ async def mock_rmq_connection(mocker: MockerFixture) -> tp.AsyncGenerator[AsyncM
 def mock_sync_redis_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=redis_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.rabbitmq.connection.connect", return_value=mock)
+    mocker.patch("protobunny.connect", return_value=mock)
     yield mock
 
 
@@ -150,7 +196,7 @@ async def mock_redis_connection(mocker: MockerFixture) -> tp.AsyncGenerator[Asyn
 def mock_sync_mqtt_connection(mocker: MockerFixture) -> tp.Generator[MagicMock, None, None]:
     mock = mocker.MagicMock(spec=mosquitto_connection.Connection)
     mocker.patch("protobunny.backends.BaseSyncQueue.get_connection", return_value=mock)
-    mocker.patch("protobunny.backends.mosquitto.connection.connect", return_value=mock)
+    mocker.patch("protobunny.connect", return_value=mock)
     yield mock
 
 

@@ -11,29 +11,10 @@ from concurrent.futures import ThreadPoolExecutor
 import can_ada
 import paho.mqtt.client as mqtt
 
-from ...config import default_configuration
+from ...conf import config
 from ...exceptions import ConnectionError, PublishError, RequeueMessage
 from ...models import Envelope, IncomingMessageProtocol
 from .. import BaseConnection
-
-
-def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = connect()
-    connection.disconnect()
-    return connect()
-
-
-def disconnect() -> None:
-    connection = connect()
-    connection.disconnect()
-
 
 log = logging.getLogger(__name__)
 
@@ -123,20 +104,21 @@ class Connection(BaseConnection):
 
         self._main_client: mqtt.Client | None = None
 
-        self._delimiter = default_configuration.backend_config.topic_delimiter
-        self._exchange = default_configuration.backend_config.namespace
+        self._delimiter = config.backend_config.topic_delimiter
+        self._exchange = config.backend_config.namespace
 
     def build_topic_key(self, topic: str) -> str:
         return f"{self._exchange}{self._delimiter}{topic}"
 
-    def connect(self, timeout: float = 10.0) -> "Connection":
+    def connect(self, **kwargs) -> "Connection":
         with self._lock:
             if self.is_connected():
                 return self
             try:
                 # Use MQTT v5 for shared subscriptions support
+                kwargs.pop("callback_api_version", None)
                 self._main_client = mqtt.Client(
-                    callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+                    callback_api_version=mqtt.CallbackAPIVersion.VERSION2, **kwargs
                 )
                 if self.username:
                     self._main_client.username_pw_set(self.username, self.password)

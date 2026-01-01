@@ -9,6 +9,7 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
 import aio_pika
+import can_ada
 from aio_pika.abc import (
     AbstractChannel,
     AbstractExchange,
@@ -22,24 +23,6 @@ from .. import BaseAsyncConnection
 log = logging.getLogger(__name__)
 
 VHOST = os.environ.get("RABBITMQ_VHOST", "/")
-
-
-async def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = await Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-async def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
 
 
 class Connection(BaseAsyncConnection):
@@ -97,7 +80,8 @@ class Connection(BaseAsyncConnection):
         if not url:
             self._url = f"amqp://{username}:{password}@{host}:{port}/{clean_vhost}?heartbeat={heartbeat}&timeout={timeout}&fail_fast=no"
         else:
-            self._url = url
+            parsed = can_ada.parse(url)
+            self._url = f"amqp://{parsed.username}:{parsed.password}@{parsed.host}{parsed.pathname}{parsed.search}"
         self._exchange_name = exchange_name
         self._dl_exchange = dl_exchange
         self._dl_queue = dl_queue

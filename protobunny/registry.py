@@ -77,4 +77,4 @@ class SubscriptionRegistry:
 
 
 # Then create a default instance
-default_registry = SubscriptionRegistry()
+registry = SubscriptionRegistry()

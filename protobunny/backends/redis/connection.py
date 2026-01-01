@@ -13,24 +13,6 @@ log = logging.getLogger(__name__)
 VHOST = os.environ.get("REDIS_VHOST") or os.environ.get("REDIS_DB", "0")
 
 
-def connect() -> "Connection":
-    """Get the singleton async connection."""
-    conn = Connection.get_connection(vhost=VHOST)
-    return conn
-
-
-def reset_connection() -> "Connection":
-    """Reset the singleton connection."""
-    connection = connect()
-    connection.disconnect()
-    return connect()
-
-
-def disconnect() -> None:
-    connection = connect()
-    connection.disconnect()
-
-
 class Connection(BaseSyncConnection):
     """Synchronous wrapper around the async connection
 

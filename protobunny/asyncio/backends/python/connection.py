@@ -7,7 +7,7 @@ from abc import ABC
 from collections import defaultdict
 from queue import Empty, Queue
 
-from ....config import default_configuration
+from ....conf import config
 from ....models import AsyncCallback, Envelope
 from ... import RequeueMessage
 from .. import BaseConnection, is_task
@@ -125,7 +125,7 @@ class BaseLocalConnection(BaseConnection, ABC):
         self.requeue_delay = requeue_delay
         self._is_connected = False
         self._subscriptions: dict[str, dict] = {}
-        self.logger_prefix = default_configuration.logger_prefix
+        self.logger_prefix = config.logger_prefix
 
 
 class Connection(BaseLocalConnection):
@@ -327,19 +327,3 @@ class Connection(BaseLocalConnection):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.disconnect()
-
-
-# Convenience functions
-async def connect() -> Connection:
-    return await Connection.get_connection(vhost=VHOST)
-
-
-async def reset_connection() -> Connection:
-    connection = await connect()
-    await connection.disconnect()
-    return await connect()
-
-
-async def disconnect() -> None:
-    connection = await connect()
-    await connection.disconnect()
