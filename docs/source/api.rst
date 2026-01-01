@@ -6,6 +6,9 @@ Core Package
 
   .. automodule:: protobunny
        :members:
+  .. automodule:: protobunny.asyncio
+       :members:
+       :no-index:
 
 Models
 -----------

@@ -1,7 +1,7 @@
 # Protobunny
 
 ::: {warning}
-**Warning**: The project is in early development.
+The project is in early development.
 :::
 
 Protobunny is the open-source evolution of [AM-Flow](https://am-flow.com)'s internal messaging library. 
@@ -27,8 +27,8 @@ Supported backends in the current version are:
 - Python "backend" with Queue/asyncio.Queue for local in-processing testing
 
 ::: {note}
-**Note**: Protobunny handles backend-specific logic internally to provide a consistent experience and a lean interface. 
-Direct access to the internal NATS or Redis clients is intentionally restricted. 
+Protobunny handles backend-specific logic internally to provide a consistent experience and a lean interface.
+Direct access to the internal NATS or Redis clients is intentionally restricted.
 If your project depends on specialized backend parameters not covered by our API, you may find the abstraction too restrictive.
 :::
 
@@ -70,13 +70,13 @@ While there are many messaging libraries for Python, Protobunny is built specifi
 
 ### Feature Comparison with some existing libraries
 
-| Feature                | **Protobunny**           | **FastStream**          | **Celery**              |
-|:-----------------------|:-------------------------|:------------------------|:------------------------|
-| **Multi-Backend**      | ✅ Yes                    | ✅ Yes                   | ⚠️ (Tasks only)         |
-| **Typed Protobufs**    | ✅ Native (Betterproto)   | ⚠️ Manual/Pydantic      | ❌ No                    |
-| **Sync + Async**       | ✅ Yes                    | ✅ Yes                   | ❌ Sync focus            |
-| **Pattern Routing**    | ✅ Auto (`tasks` pkg)     | ❌ Manual Config         | ✅ Fixed                 |
-| **Framework Agnostic** | ✅ Yes                    | ⚠️ FastAPI-like focus   | ❌ Heavyweight           |
+| Feature                | **Protobunny**           | **FastStream**     | **Celery**              |
+|:-----------------------|:-------------------------|:-------------------|:------------------------|
+| **Multi-Backend**      | ✅ Yes                    | ✅ Yes              | ⚠️ (Tasks only)         |
+| **Typed Protobufs**    | ✅ Native (Betterproto)   | ⚠️ Manual/Pydantic | ❌ No                    |
+| **Sync + Async**       | ✅ Yes                    | ✅ Yes              | ❌ Sync focus            |
+| **Pattern Routing**    | ✅ Auto (`tasks` pkg)     | ❌ Manual Config    | ✅ Fixed                 |
+| **Framework Agnostic** | ✅ Yes                    | ✅ Yes              | ❌ Heavyweight           |
 
 ---
 
@@ -96,6 +96,7 @@ Documentation home page: [https://am-flow.github.io/protobunny/](https://am-flow
 - [x] **Cloud-Native**: NATS (Core & JetStream) integration.
 - [ ] **Cloud Providers**: AWS (SQS/SNS) and GCP Pub/Sub.
 - [ ] **More backends**: Kafka support.
+- [ ] **gRPC** Direct Call support
 
 ---
 

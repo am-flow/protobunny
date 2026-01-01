@@ -57,7 +57,7 @@ A result typically contains:
 --------------
 
 Task-style queues
------------------
+~~~~~~~~~~~~~~~~~
 
 All messages that are under a ``tasks`` package are treated as shared
 queues.

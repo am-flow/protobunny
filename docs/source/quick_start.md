@@ -33,7 +33,7 @@ messages-directory = "messages"
 messages-prefix = "acme"
 generated-package-name = "mymessagelib.codegen"
 mode = "async"  # or "sync"
-backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'nats', 'mosquitto', 'python']
+backend = "rabbitmq"  #  available backends are ['rabbitmq', 'redis', 'mosquitto', 'python']
 ```
 
 ### Install the library with `uv`, `poetry` or `pip`
@@ -179,13 +179,15 @@ def worker1(task: mml.main.tasks.TaskMessage) -> None:
 
 def worker2(task: mml.main.tasks.TaskMessage) -> None:
     print("2- Working on:", task)
-
-pb.subscribe(mml.main.tasks.TaskMessage, worker1)
+import mymessagelib as mml
+pb.subscribe(mml.main.tasks.TasqkMessage, worker1)
 pb.subscribe(mml.main.tasks.TaskMessage, worker2)
 
 pb.publish(mml.main.tasks.TaskMessage(content="test1"))
 pb.publish(mml.main.tasks.TaskMessage(content="test2"))
 pb.publish(mml.main.tasks.TaskMessage(content="test3"))
+from protobunny.models import ProtoBunnyMessage
+print(isinstance(mml.main.tasks.TaskMessage(), ProtoBunnyMessage))
 ```
 
 You can also introspect/manage an underlying shared queue:
@@ -429,12 +431,10 @@ class TestLibAsync:
         await pb_asyncio.subscribe(ml.tests.TestMessage, self.on_message)
         await pb_asyncio.subscribe_results(ml.tests.TestMessage, self.on_message_results)
         await pb_asyncio.subscribe(ml.main.MyMessage, self.on_message_mymessage)
-        
-        # Send a simple message
+
         await pb_asyncio.publish(ml.main.MyMessage(content="test"))
-        # Send a message with arbitrary json content
         await pb_asyncio.publish(ml.tests.TestMessage(number=1, content="test", data={"test": 123}))
-                # Send three messages to verify the load balancing between the workers
+
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test1"))
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test2"))
         await pb_asyncio.publish(ml.main.tasks.TaskMessage(content="test3"))
@@ -443,7 +443,6 @@ class TestLibAsync:
 
 
 class TestLib:
-    # Sync version
     def on_message(self, message: ml.tests.TestMessage) -> None:
         log.info("Got: %s", message)
         result = message.make_result()

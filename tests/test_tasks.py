@@ -170,6 +170,11 @@ class TestTasksSync:
 
     @pytest.mark.flaky(max_runs=3)
     def test_tasks(self, backend) -> None:
+        """
+        Assert load balancing between worker callbacks
+        and that tasks callbacks don't receive duplicated messages
+        """
+
         def predicate_1() -> bool:
             return self.received.get("task_1") is not None
 
@@ -196,8 +201,10 @@ class TestTasksSync:
         pb_sync.publish(self.msg)
         pb_sync.publish(self.msg)
         pb_sync.publish(self.msg)
-        assert sync_wait(predicate_1) or sync_wait(predicate_2)
-        assert sync_wait(predicate_2) or sync_wait(predicate_1)
+        pb_sync.publish(self.msg)
+        # this is a bit flaky because of the backend load balancing
+        assert sync_wait(predicate_1, timeout=2) or sync_wait(predicate_2, timeout=2)
+        assert sync_wait(predicate_2, timeout=2) or sync_wait(predicate_1, timeout=2)
         assert self.received["task_1"] == self.msg
         assert self.received["task_2"] == self.msg
         self.received["task_1"] = None

@@ -729,7 +729,6 @@ class TestIntegrationSync:
             nonlocal received_result
             received_result = m
 
-        pb_base.unsubscribe_all()
         q1 = pb_base.subscribe(tests.TestMessage, callback_1)
         q2 = pb_base.subscribe(tests.tasks.TaskMessage, callback_2)
         assert q1.topic == "acme.tests.TestMessage".replace(".", self.topic_delimiter)
@@ -740,8 +739,8 @@ class TestIntegrationSync:
         pb_base.subscribe_results(tests.TestMessage, callback_results_2)
         pb_base.publish(tests.TestMessage(number=2, content="test"))
         pb_base.publish(tests.tasks.TaskMessage(content="test", bbox=[1, 2, 3, 4]))
-        assert sync_wait(lambda: received_message is not None)
-        assert sync_wait(lambda: received_result is not None)
+        assert sync_wait(lambda: received_message is not None, timeout=2)
+        assert sync_wait(lambda: received_result is not None, timeout=2)
         assert received_result.source == tests.TestMessage(number=2, content="test")
 
         pb_base.unsubscribe_all()

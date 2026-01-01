@@ -14,4 +14,5 @@ Protobunny
    intro
    quick_start
    concepts
+   recipes
    api

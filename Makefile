@@ -101,7 +101,6 @@ test-py313:
 # Releasing
 .PHONY: docs clean build-package publish-test publish-pypi copy-md
 copy-md:
-	cp ./README.md docs/source/intro.md
 	cp ./QUICK_START.md docs/source/quick_start.md
 	cp ./RECIPES.md docs/source/recipes.md
 
