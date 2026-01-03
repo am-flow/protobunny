@@ -63,17 +63,8 @@ Available backends are:
 - RabbitMQ
 - Redis
 - Mosquitto
+- NATS
 - Python for local testing (in-process)
-
-- For docker-compose or pipelines yaml:
-```yaml
-env:
-  RABBITMQ_HOST: localhost
-  RABBITMQ_PORT: 5672
-  RABBITMQ_USER: guest
-  RABBITMQ_PASS: guest
-  RABBITMQ_VHOST: /test
-```
 
 ---
 
